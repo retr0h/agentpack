@@ -81,11 +81,15 @@ type Author struct {
 
 // MCPEntry describes a Model Context Protocol server bundled with a plugin.
 type MCPEntry struct {
-	Type      string   `yaml:"type"`
-	Src       string   `yaml:"src"`
-	Config    string   `yaml:"config"`
-	Package   string   `yaml:"package"`
-	Platforms []string `yaml:"platforms"`
+	Type      string            `yaml:"type"`
+	Name      string            `yaml:"name"`
+	Src       string            `yaml:"src"`
+	Config    string            `yaml:"config"`
+	URL       string            `yaml:"url"`
+	Package   string            `yaml:"package"`
+	Args      []string          `yaml:"args"`
+	Env       map[string]string `yaml:"env"`
+	Platforms []string          `yaml:"platforms"`
 }
 
 // Entry describes a file or glob that is part of a plugin. A bare YAML string

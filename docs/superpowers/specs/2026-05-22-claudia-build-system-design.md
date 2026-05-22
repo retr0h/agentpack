@@ -52,13 +52,17 @@ agents:
 
 mcp:
   - type: binary
+    name: my-server
     src: bin/my-server
     platforms: [darwin-arm64, darwin-amd64, linux-amd64]
+    args: ["--port", "3000"]
 
   - type: remote
-    config: .mcp.json
+    name: my-remote
+    url: "https://mcp.example.com/v1"
 
   - type: ux
+    name: my-ux-server
     package: "@mycompany/my-mcp-server"
 
 binaries:
@@ -162,16 +166,96 @@ full path (e.g. `skills/review.md`), the file is renamed.
 
 ### MCP entry types
 
-**binary** -- A pre-built MCP server executable. `src` points to the binary.
-`platforms` lists `os-arch` pairs the binary supports. The binary is included
-in the archive as-is (no compilation).
+Each MCP entry type causes claudia to **generate** the `.mcp.json` that
+Claude Code needs to launch the server. You do not write this file yourself
+-- claudia creates it from the manifest fields. This is critical because the
+developer's `.mcp.json` (e.g., `go run github.com/retr0h/foo`) won't work
+on a system without Go -- the packaged version must reference the pre-built
+binary.
 
-**remote** -- An `.mcp.json` config file pointing to a remote MCP endpoint.
-No binary needed; the config tells Claude Code how to connect.
+**binary** -- A pre-built MCP server executable. You cross-compile the
+binary yourself (via `go build`, goreleaser, CI, etc.) and point `src` at
+the result. Claudia packages the binary and generates a `.mcp.json` that
+launches it using `${CLAUDE_PLUGIN_ROOT}` path substitution -- the same
+mechanism Claude Code uses natively (e.g., `claude-notifications-go`).
+
+```yaml
+mcp:
+  - type: binary
+    src: bin/my-server-darwin-arm64
+    name: my-server
+    platforms: [darwin-arm64]
+    args: ["--port", "3000"]
+    env:
+      MY_VAR: "value"
+```
+
+Generated `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/mcp/my-server-darwin-arm64",
+      "args": ["--port", "3000"],
+      "env": {
+        "MY_VAR": "value"
+      }
+    }
+  }
+}
+```
+
+**remote** -- An MCP server hosted at a remote endpoint. No binary needed.
+Claudia generates a `.mcp.json` with the URL.
+
+```yaml
+mcp:
+  - type: remote
+    name: my-remote-server
+    url: "https://mcp.example.com/v1"
+```
+
+Generated `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "my-remote-server": {
+      "url": "https://mcp.example.com/v1"
+    }
+  }
+}
+```
+
+Alternatively, if you already have a hand-written `.mcp.json`, use the
+`config` field to include it as-is:
+
+```yaml
+mcp:
+  - type: remote
+    config: .mcp.json
+```
 
 **ux** -- A config referencing a UX/npx package. The end user must have
-UX installed, but no binary ships in the archive. The config tells Claude Code
-to run the package via `npx` or equivalent.
+the package runner installed, but no binary ships in the archive.
+
+```yaml
+mcp:
+  - type: ux
+    name: my-ux-server
+    package: "@mycompany/my-mcp-server"
+    args: ["--verbose"]
+```
+
+Generated `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "my-ux-server": {
+      "command": "npx",
+      "args": ["@mycompany/my-mcp-server", "--verbose"]
+    }
+  }
+}
 
 ## Archive format
 
@@ -500,11 +584,15 @@ type Author struct {
 }
 
 type MCPEntry struct {
-    Type      string   `yaml:"type"`
-    Src       string   `yaml:"src"`
-    Config    string   `yaml:"config"`
-    Package   string   `yaml:"package"`
-    Platforms []string `yaml:"platforms"`
+    Type      string            `yaml:"type"`
+    Name      string            `yaml:"name"`
+    Src       string            `yaml:"src"`
+    Config    string            `yaml:"config"`
+    URL       string            `yaml:"url"`
+    Package   string            `yaml:"package"`
+    Args      []string          `yaml:"args"`
+    Env       map[string]string `yaml:"env"`
+    Platforms []string          `yaml:"platforms"`
 }
 ```
 
@@ -619,8 +707,21 @@ Subsequent updates are just re-running the same `tar` command. The
 
 ## Future phases
 
-- **Phase 2: `claudia install`** -- unpack archive into `~/.claude/plugins/`,
-  update `installed_plugins.json` and `settings.json` automatically
-- **Phase 3: pluggable backends** -- fetch archives from Google Drive, S3,
-  URLs
-- **Phase 4: `claudia update`** -- re-run install with version comparison
+- **Phase 2: `claudia install` + `claudia list`** -- unpack archive into
+  `~/.claude/plugins/`, update `installed_plugins.json` and `settings.json`
+  automatically. `claudia list` shows installed packages with styled output.
+- **Phase 3: `claudia-packages.yaml` declarative installs** -- a lockfile
+  declaring what should be installed, enabling `claudia sync` to install or
+  update everything in one shot:
+  ```yaml
+  packages:
+    - name: zeek-pros
+      source: ~/Downloads/zeek-pros-1.0.0.claudia
+    - name: git-commands
+      source: https://drive.google.com/...
+    - name: my-mcp-server
+      source: ./my-mcp-server-0.5.0.claudia
+  ```
+- **Phase 4: pluggable backends** -- fetch archives from Google Drive, S3,
+  URLs directly in `claudia install` and `claudia sync`
+- **Phase 5: `claudia update`** -- re-run install with version comparison
