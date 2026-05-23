@@ -20,3 +20,71 @@
 
 // Package metadata captures git SHA, version, and timestamp for archives.
 package metadata
+
+import (
+	"bytes"
+	"fmt"
+	"os/exec"
+	"runtime"
+	"strings"
+	"time"
+)
+
+// Metadata holds build and source-control information for a plugin archive.
+type Metadata struct {
+	Name           string `json:"name"`
+	Version        string `json:"version"`
+	GitCommitSha   string `json:"gitCommitSha"`
+	GitBranch      string `json:"gitBranch"`
+	BuildTimestamp string `json:"buildTimestamp"`
+	BuilderVersion string `json:"builderVersion"`
+	Platform       string `json:"platform"`
+}
+
+// Capture collects git state and build information from dir and returns a
+// populated Metadata. name and version are passed through unchanged.
+//
+// Returns an error containing "not a git repository" when dir is not inside a
+// git repository.
+func Capture(dir string, name string, version string) (*Metadata, error) {
+	sha, err := gitOutput(dir, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("git rev-parse HEAD: %w", err)
+	}
+
+	branch, err := gitOutput(dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("git rev-parse --abbrev-ref HEAD: %w", err)
+	}
+
+	return &Metadata{
+		Name:           name,
+		Version:        version,
+		GitCommitSha:   sha,
+		GitBranch:      branch,
+		BuildTimestamp: time.Now().UTC().Format(time.RFC3339),
+		BuilderVersion: "dev",
+		Platform:       runtime.GOOS + "-" + runtime.GOARCH,
+	}, nil
+}
+
+// gitOutput runs git with args inside dir and returns trimmed stdout.
+// It surfaces "not a git repository" from stderr when git exits non-zero.
+func gitOutput(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if strings.Contains(msg, "not a git repository") {
+			return "", fmt.Errorf("not a git repository: %s", dir)
+		}
+		return "", fmt.Errorf("%s: %w", msg, err)
+	}
+
+	return strings.TrimSpace(stdout.String()), nil
+}
