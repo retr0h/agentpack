@@ -44,6 +44,12 @@ type Result struct {
 	Err  string
 }
 
+// ComputeBytes returns the SHA256 hash of data as a 64-char hex string.
+func ComputeBytes(data []byte) string {
+	h := sha256.Sum256(data)
+	return hex.EncodeToString(h[:])
+}
+
 // ComputeFile reads the file at path and returns its SHA256 hash as a 64-char
 // hex string.
 func ComputeFile(path string) (string, error) {

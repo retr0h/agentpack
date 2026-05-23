@@ -28,6 +28,48 @@ import (
 	"github.com/retr0h/claudia/internal/checksum"
 )
 
+func TestComputeBytes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		data    []byte
+		wantLen int
+	}{
+		{
+			name:    "non-empty data produces 64-char hex hash",
+			data:    []byte("hello, claudia"),
+			wantLen: 64,
+		},
+		{
+			name:    "empty data produces 64-char hex hash",
+			data:    []byte{},
+			wantLen: 64,
+		},
+		{
+			name:    "same input produces same hash",
+			data:    []byte("deterministic"),
+			wantLen: 64,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := checksum.ComputeBytes(tt.data)
+			if len(got) != tt.wantLen {
+				t.Errorf("hash length = %d, want %d (hash = %q)", len(got), tt.wantLen, got)
+			}
+
+			again := checksum.ComputeBytes(tt.data)
+			if got != again {
+				t.Errorf("non-deterministic: %q != %q", got, again)
+			}
+		})
+	}
+}
+
 func TestComputeFile(t *testing.T) {
 	t.Parallel()
 

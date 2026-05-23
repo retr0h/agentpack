@@ -363,9 +363,9 @@ func TestEntryUnmarshalYAML(t *testing.T) {
 			wantDest: "docs/README.md",
 		},
 		{
-			name:     "object with only src",
-			input:    `{src: "hook.sh"}`,
-			wantSrc:  "hook.sh",
+			name:    "object with only src",
+			input:   `{src: "hook.sh"}`,
+			wantSrc: "hook.sh",
 		},
 	}
 

@@ -135,9 +135,9 @@ func TestCapture(t *testing.T) {
 			},
 		},
 		{
-			name:    "fails outside git repo",
+			name:     "fails outside git repo",
 			setupDir: nil, // plain temp dir, no git init
-			wantErr: "not a git repository",
+			wantErr:  "not a git repository",
 		},
 		{
 			name: "detached HEAD branch is HEAD",
