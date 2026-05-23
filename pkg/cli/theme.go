@@ -49,11 +49,11 @@ var faint = lipgloss.NewStyle().Faint(true)
 var ThemeMaxheadroom = Theme{
 	Name:      "maxheadroom",
 	Mute:      faint,
-	Accent:    fg("#ffb86c"), // mhOrange — Claude Code brand
+	Accent:    fg("#cc7c5e"), // Claude Code orange (R:204 G:124 B:94)
 	OK:        fg("#50fa7b"),
 	Err:       fg("#ff6ec7"),
 	BannerTop: faint,
-	BannerBot: fg("#ffb86c"), // mhOrange
+	BannerBot: fg("#cc7c5e"), // Claude Code orange
 }
 
 var active = &ThemeMaxheadroom
