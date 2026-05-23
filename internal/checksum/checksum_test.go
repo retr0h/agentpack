@@ -138,19 +138,47 @@ func TestComputeFile(t *testing.T) {
 	}
 }
 
-func TestWriteAndReadFile(t *testing.T) {
+func TestWriteFile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		entries []checksum.Entry
+		name      string
+		path      func(dir string) string // returns the path to write to
+		entries   []checksum.Entry
+		wantErr   bool
+		checkRead func(t *testing.T, path string, want []checksum.Entry)
 	}{
 		{
-			name: "write two entries and read them back",
+			name: "writes two entries readable by ReadFile",
+			path: func(dir string) string { return filepath.Join(dir, "checksums.txt") },
 			entries: []checksum.Entry{
 				{Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd", Path: "file1.txt"},
 				{Hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210", Path: "subdir/file2.txt"},
 			},
+			checkRead: func(t *testing.T, path string, want []checksum.Entry) {
+				t.Helper()
+				got, err := checksum.ReadFile(path)
+				if err != nil {
+					t.Fatalf("ReadFile: %v", err)
+				}
+				if len(got) != len(want) {
+					t.Fatalf("entry count = %d, want %d", len(got), len(want))
+				}
+				for i, w := range want {
+					if got[i].Hash != w.Hash {
+						t.Errorf("entry[%d].Hash = %q, want %q", i, got[i].Hash, w.Hash)
+					}
+					if got[i].Path != w.Path {
+						t.Errorf("entry[%d].Path = %q, want %q", i, got[i].Path, w.Path)
+					}
+				}
+			},
+		},
+		{
+			name:    "fails when directory does not exist",
+			path:    func(dir string) string { return filepath.Join(dir, "nonexistent", "checksums.txt") },
+			entries: []checksum.Entry{{Hash: "abc", Path: "f.txt"}},
+			wantErr: true,
 		},
 	}
 
@@ -158,28 +186,99 @@ func TestWriteAndReadFile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			checksumFile := filepath.Join(t.TempDir(), "checksums.txt")
+			p := tt.path(t.TempDir())
+			err := checksum.WriteFile(p, tt.entries)
 
-			if err := checksum.WriteFile(checksumFile, tt.entries); err != nil {
-				t.Fatalf("WriteFile: %v", err)
-			}
-
-			got, err := checksum.ReadFile(checksumFile)
-			if err != nil {
-				t.Fatalf("ReadFile: %v", err)
-			}
-
-			if len(got) != len(tt.entries) {
-				t.Fatalf("entry count = %d, want %d", len(got), len(tt.entries))
-			}
-
-			for i, want := range tt.entries {
-				if got[i].Hash != want.Hash {
-					t.Errorf("entry[%d].Hash = %q, want %q", i, got[i].Hash, want.Hash)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
 				}
+				return
+			}
 
-				if got[i].Path != want.Path {
-					t.Errorf("entry[%d].Path = %q, want %q", i, got[i].Path, want.Path)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.checkRead != nil {
+				tt.checkRead(t, p, tt.entries)
+			}
+		})
+	}
+}
+
+func TestReadFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		content string // file content to write; empty means no file
+		want    []checksum.Entry
+		wantErr bool
+	}{
+		{
+			name:    "parses two valid entries",
+			content: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd  file1.txt\nfedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210  subdir/file2.txt\n",
+			want: []checksum.Entry{
+				{Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd", Path: "file1.txt"},
+				{Hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210", Path: "subdir/file2.txt"},
+			},
+		},
+		{
+			name:    "skips blank lines",
+			content: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd  file.txt\n\n",
+			want: []checksum.Entry{
+				{Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd", Path: "file.txt"},
+			},
+		},
+		{
+			name:    "returns error for malformed line",
+			content: "badhash file.txt\n",
+			wantErr: true,
+		},
+		{
+			name:    "missing file returns error",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var p string
+			if tt.content != "" {
+				p = filepath.Join(t.TempDir(), "checksums.txt")
+				if err := os.WriteFile(p, []byte(tt.content), 0o600); err != nil {
+					t.Fatalf("setup: write file: %v", err)
+				}
+			} else {
+				p = filepath.Join(t.TempDir(), "nonexistent.txt")
+			}
+
+			got, err := checksum.ReadFile(p)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("entry count = %d, want %d", len(got), len(tt.want))
+			}
+
+			for i, w := range tt.want {
+				if got[i].Hash != w.Hash {
+					t.Errorf("entry[%d].Hash = %q, want %q", i, got[i].Hash, w.Hash)
+				}
+				if got[i].Path != w.Path {
+					t.Errorf("entry[%d].Path = %q, want %q", i, got[i].Path, w.Path)
 				}
 			}
 		})

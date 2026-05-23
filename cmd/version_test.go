@@ -21,19 +21,49 @@
 package cmd
 
 import (
-	"github.com/spf13/cobra"
+	"bytes"
+	"strings"
+	"testing"
 )
 
-var version = "dev"
+func TestVersionCmd(t *testing.T) {
+	// Not parallel: mutates global version variable and cobra command state.
 
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print version",
-	Run: func(cmd *cobra.Command, _ []string) {
-		cmd.Println(version)
-	},
-}
+	tests := []struct {
+		name        string
+		setVersion  string
+		wantContain string
+	}{
+		{
+			name:        "prints dev version by default",
+			setVersion:  "dev",
+			wantContain: "dev",
+		},
+		{
+			name:        "prints custom semver",
+			setVersion:  "1.2.3",
+			wantContain: "1.2.3",
+		},
+	}
 
-func init() {
-	rootCmd.AddCommand(versionCmd)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orig := version
+			version = tt.setVersion
+			t.Cleanup(func() { version = orig })
+
+			var buf bytes.Buffer
+			rootCmd.SetOut(&buf)
+			rootCmd.SetArgs([]string{"version"})
+
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+
+			out := buf.String()
+			if !strings.Contains(out, tt.wantContain) {
+				t.Errorf("output %q does not contain %q", out, tt.wantContain)
+			}
+		})
+	}
 }

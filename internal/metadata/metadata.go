@@ -34,7 +34,7 @@ import (
 type Metadata struct {
 	Name           string `json:"name"`
 	Version        string `json:"version"`
-	GitCommitSha   string `json:"gitCommitSha"`
+	GitCommitSHA   string `json:"gitCommitSha"`
 	GitBranch      string `json:"gitBranch"`
 	BuildTimestamp string `json:"buildTimestamp"`
 	BuilderVersion string `json:"builderVersion"`
@@ -60,7 +60,7 @@ func Capture(dir string, name string, version string) (*Metadata, error) {
 	return &Metadata{
 		Name:           name,
 		Version:        version,
-		GitCommitSha:   sha,
+		GitCommitSHA:   sha,
 		GitBranch:      branch,
 		BuildTimestamp: time.Now().UTC().Format(time.RFC3339),
 		BuilderVersion: "dev",

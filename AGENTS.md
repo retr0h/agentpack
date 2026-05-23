@@ -4,7 +4,7 @@ Canonical guidance for any AI coding agent working in this repository.
 
 > **Read [`docs/development.md`](docs/development.md) before writing code.**
 
-## Project
+## What is this?
 
 claudia is a git-free package manager for Claude Code plugins. It builds,
 checksums, and distributes plugin archives (`.claudia` tarballs) so
@@ -21,6 +21,14 @@ jot (magenta), meshx (green), stack (cyan), claudia (violet).
 
 Skunkworks workflow — commits land directly on `main`.
 
+## Hard rules
+
+1. **`just ready` before committing.** Runs fmt, vet, lint.
+2. **Table-driven tests.** One table per public function. Happy + failure rows
+   in the same table.
+3. **Never expose `internal/` types in `cmd/`** beyond what cobra needs.
+4. **Never `//nolint:errcheck`.** Handle errors properly — helpers, log, return.
+
 ## Architecture
 
 ```
@@ -33,14 +41,6 @@ internal/plugin/   Claude Code plugin structure generation
 ```
 
 Key deps: cobra, yaml.v3, crypto/sha256, archive/tar, compress/gzip.
-
-## Hard rules
-
-1. **`just ready` before committing.** Runs fmt, vet, lint.
-2. **Table-driven tests.** One table per public function. Happy + failure rows
-   in the same table.
-3. **Never expose `internal/` types in `cmd/`** beyond what cobra needs.
-4. **Never `//nolint:errcheck`.** Handle errors properly — helpers, log, return.
 
 ## Package contents
 

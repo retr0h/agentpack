@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -77,17 +78,22 @@ func WriteFile(path string, entries []Entry) error {
 	if err != nil {
 		return fmt.Errorf("create %s: %w", path, err)
 	}
-	defer f.Close()
 
 	w := bufio.NewWriter(f)
 	for _, e := range entries {
 		if _, err := fmt.Fprintf(w, "%s  %s\n", e.Hash, e.Path); err != nil {
+			_ = f.Close()
 			return fmt.Errorf("write entry: %w", err)
 		}
 	}
 
 	if err := w.Flush(); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("flush %s: %w", path, err)
+	}
+
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", path, err)
 	}
 
 	return nil
@@ -136,7 +142,7 @@ func Verify(baseDir string, entries []Entry) ([]Result, error) {
 	results := make([]Result, 0, len(entries))
 
 	for _, e := range entries {
-		fullPath := baseDir + "/" + e.Path
+		fullPath := filepath.Join(baseDir, e.Path)
 
 		got, err := ComputeFile(fullPath)
 		if err != nil {

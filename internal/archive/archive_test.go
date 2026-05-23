@@ -23,6 +23,8 @@ package archive_test
 import (
 	"archive/tar"
 	"compress/gzip"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -346,7 +348,7 @@ func readTarFile(t *testing.T, archivePath, name string) []byte {
 		}
 		if hdr.Name == name {
 			buf := make([]byte, hdr.Size)
-			if _, err := tr.Read(buf); err != nil && err.Error() != "EOF" {
+			if _, err := tr.Read(buf); err != nil && !errors.Is(err, io.EOF) {
 				t.Fatalf("read %s: %v", name, err)
 			}
 			return buf

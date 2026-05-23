@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -110,9 +111,9 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 	meta.Name = p.Name
 	meta.Version = p.Version
 
-	prefix := "marketplaces/" + p.Name + "/"
+	prefix := path.Join("marketplaces", p.Name) + "/"
 
-	fmt.Printf("claudia: building %s v%s (%s)\n\n", p.Name, p.Version, shortSHA(meta.GitCommitSha))
+	fmt.Printf("claudia: building %s v%s (%s)\n\n", p.Name, p.Version, shortSHA(meta.GitCommitSHA))
 
 	var files []archive.FileEntry
 	totalFiles := 0
@@ -148,10 +149,9 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 		totalFiles += len(pairs)
 
 		for _, fp := range pairs {
-			archivePath := prefix + fp.Dest
 			files = append(files, archive.FileEntry{
 				Src:         fp.Src,
-				ArchivePath: archivePath,
+				ArchivePath: path.Join(prefix, fp.Dest),
 			})
 
 			if s.label == "commands" {
@@ -175,7 +175,7 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 		return fmt.Errorf("generating marketplace.json: %w", err)
 	}
 	files = append(files, archive.FileEntry{
-		ArchivePath: prefix + ".claude-plugin/marketplace.json",
+		ArchivePath: path.Join(prefix, ".claude-plugin/marketplace.json"),
 		Content:     marketplaceJSON,
 	})
 	totalFiles++
@@ -185,7 +185,7 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 		return fmt.Errorf("generating plugin.json: %w", err)
 	}
 	files = append(files, archive.FileEntry{
-		ArchivePath: prefix + ".claude-plugin/plugin.json",
+		ArchivePath: path.Join(prefix, ".claude-plugin/plugin.json"),
 		Content:     pluginJSON,
 	})
 	totalFiles++
@@ -195,7 +195,7 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 		return fmt.Errorf("marshaling metadata: %w", err)
 	}
 	files = append(files, archive.FileEntry{
-		ArchivePath: prefix + ".claudia/metadata.json",
+		ArchivePath: path.Join(prefix, ".claudia/metadata.json"),
 		Content:     metaJSON,
 	})
 	totalFiles++
@@ -205,7 +205,7 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 		return fmt.Errorf("marshaling claudia.yaml: %w", err)
 	}
 	files = append(files, archive.FileEntry{
-		ArchivePath: prefix + ".claudia/claudia.yaml",
+		ArchivePath: path.Join(prefix, ".claudia/claudia.yaml"),
 		Content:     manifestYAML,
 	})
 	totalFiles++
@@ -216,7 +216,7 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 	}
 	checksumContent := formatChecksums(checksumEntries)
 	files = append(files, archive.FileEntry{
-		ArchivePath: prefix + ".claudia/checksums.txt",
+		ArchivePath: path.Join(prefix, ".claudia/checksums.txt"),
 		Content:     checksumContent,
 	})
 
@@ -268,7 +268,7 @@ func buildMCPEntries(
 			}
 			files = append(files, archive.FileEntry{
 				Src:         srcPath,
-				ArchivePath: prefix + "mcp/" + filepath.Base(mcp.Src),
+				ArchivePath: path.Join(prefix, "mcp", filepath.Base(mcp.Src)),
 			})
 			count++
 		}
@@ -283,7 +283,7 @@ func buildMCPEntries(
 			}
 			files = append(files, archive.FileEntry{
 				Src:         srcPath,
-				ArchivePath: prefix + "mcp/.mcp.json",
+				ArchivePath: path.Join(prefix, "mcp/.mcp.json"),
 			})
 			count++
 		}
@@ -302,7 +302,7 @@ func buildMCPEntries(
 	}
 	if mcpJSON != nil {
 		files = append(files, archive.FileEntry{
-			ArchivePath: prefix + "mcp/.mcp.json",
+			ArchivePath: path.Join(prefix, "mcp/.mcp.json"),
 			Content:     mcpJSON,
 		})
 		count++
@@ -316,15 +316,15 @@ func computeArchiveChecksums(files []archive.FileEntry) ([]checksum.Entry, error
 
 	for _, f := range files {
 		var hash string
-		var err error
 
 		if f.Src != "" {
+			var err error
 			hash, err = checksum.ComputeFile(f.Src)
 			if err != nil {
 				return nil, fmt.Errorf("checksum %s: %w", f.Src, err)
 			}
 		} else {
-			hash = hashBytes(f.Content)
+			hash = checksum.ComputeBytes(f.Content)
 		}
 
 		entries = append(entries, checksum.Entry{
@@ -334,10 +334,6 @@ func computeArchiveChecksums(files []archive.FileEntry) ([]checksum.Entry, error
 	}
 
 	return entries, nil
-}
-
-func hashBytes(data []byte) string {
-	return checksum.ComputeBytes(data)
 }
 
 func formatChecksums(entries []checksum.Entry) []byte {

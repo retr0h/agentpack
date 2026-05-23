@@ -23,6 +23,7 @@ package manifest_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -167,7 +168,7 @@ plugins:
 				if err == nil {
 					t.Fatalf("expected error containing %q, got nil", tc.wantErr)
 				}
-				if got := err.Error(); !containsStr(got, tc.wantErr) {
+				if got := err.Error(); !strings.Contains(got, tc.wantErr) {
 					t.Fatalf("error %q does not contain %q", got, tc.wantErr)
 				}
 				return
@@ -389,19 +390,4 @@ func TestEntryUnmarshalYAML(t *testing.T) {
 			}
 		})
 	}
-}
-
-// --------------------------------------------------------------------------
-// helpers
-// --------------------------------------------------------------------------
-
-func containsStr(s, sub string) bool {
-	return len(sub) == 0 || (len(s) >= len(sub) && func() bool {
-		for i := 0; i <= len(s)-len(sub); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
-			}
-		}
-		return false
-	}())
 }

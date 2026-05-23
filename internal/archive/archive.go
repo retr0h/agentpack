@@ -24,6 +24,7 @@ package archive
 import (
 	"archive/tar"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -49,27 +50,39 @@ func Create(outputPath string, files []FileEntry) error {
 	defer f.Close()
 
 	gw := gzip.NewWriter(f)
-	defer gw.Close()
-
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
 
 	dirs := make(map[string]bool)
 
 	for _, fe := range files {
 		if err := ensureDirs(tw, fe.ArchivePath, dirs); err != nil {
+			_ = tw.Close()
+			_ = gw.Close()
 			return err
 		}
 
 		if fe.Src != "" {
 			if err := addFileFromDisk(tw, fe); err != nil {
+				_ = tw.Close()
+				_ = gw.Close()
 				return err
 			}
 		} else {
 			if err := addVirtualFile(tw, fe); err != nil {
+				_ = tw.Close()
+				_ = gw.Close()
 				return err
 			}
 		}
+	}
+
+	if err := tw.Close(); err != nil {
+		_ = gw.Close()
+		return fmt.Errorf("close tar writer: %w", err)
+	}
+
+	if err := gw.Close(); err != nil {
+		return fmt.Errorf("close gzip writer: %w", err)
 	}
 
 	return nil
@@ -95,7 +108,7 @@ func Extract(archivePath string, destDir string) error {
 
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

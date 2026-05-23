@@ -278,3 +278,92 @@ settings:
 		t.Fatalf("verify: %v", err)
 	}
 }
+
+func TestShortSHA(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		sha  string
+		want string
+	}{
+		{
+			name: "full 40-char SHA returns first 7 chars",
+			sha:  "abc1234def5678901234567890123456789abcde",
+			want: "abc1234",
+		},
+		{
+			name: "exactly 7 chars returns as-is",
+			sha:  "abc1234",
+			want: "abc1234",
+		},
+		{
+			name: "fewer than 7 chars returns as-is",
+			sha:  "abc",
+			want: "abc",
+		},
+		{
+			name: "empty string returns empty string",
+			sha:  "",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := shortSHA(tt.sha)
+			if got != tt.want {
+				t.Errorf("shortSHA(%q) = %q, want %q", tt.sha, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHumanSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		bytes int64
+		want  string
+	}{
+		{
+			name:  "zero bytes",
+			bytes: 0,
+			want:  "0 B",
+		},
+		{
+			name:  "1023 bytes stays in B",
+			bytes: 1023,
+			want:  "1023 B",
+		},
+		{
+			name:  "1024 bytes is 1 KB",
+			bytes: 1024,
+			want:  "1 KB",
+		},
+		{
+			name:  "2048 bytes is 2 KB",
+			bytes: 2048,
+			want:  "2 KB",
+		},
+		{
+			name:  "1536 bytes is 1 KB (truncated)",
+			bytes: 1536,
+			want:  "1 KB",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := humanSize(tt.bytes)
+			if got != tt.want {
+				t.Errorf("humanSize(%d) = %q, want %q", tt.bytes, got, tt.want)
+			}
+		})
+	}
+}

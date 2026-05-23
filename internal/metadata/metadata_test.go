@@ -116,8 +116,8 @@ func TestCapture(t *testing.T) {
 				if m.Version != "1.0.0" {
 					t.Errorf("Version = %q, want %q", m.Version, "1.0.0")
 				}
-				if len(m.GitCommitSha) != 40 {
-					t.Errorf("GitCommitSha length = %d, want 40; got %q", len(m.GitCommitSha), m.GitCommitSha)
+				if len(m.GitCommitSHA) != 40 {
+					t.Errorf("GitCommitSHA length = %d, want 40; got %q", len(m.GitCommitSHA), m.GitCommitSHA)
 				}
 				if m.GitBranch != "main" {
 					t.Errorf("GitBranch = %q, want %q", m.GitBranch, "main")
@@ -150,8 +150,8 @@ func TestCapture(t *testing.T) {
 				if m.GitBranch != "HEAD" {
 					t.Errorf("GitBranch = %q, want %q", m.GitBranch, "HEAD")
 				}
-				if len(m.GitCommitSha) != 40 {
-					t.Errorf("GitCommitSha length = %d, want 40", len(m.GitCommitSha))
+				if len(m.GitCommitSHA) != 40 {
+					t.Errorf("GitCommitSHA length = %d, want 40", len(m.GitCommitSHA))
 				}
 			},
 		},
