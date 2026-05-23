@@ -16,8 +16,11 @@ Two personas, one binary:
 - **Installer** — run by anyone to unpack archives into `~/.claude/plugins/`
 
 Replicates Claude Code's native marketplace directory structure so installed
-packages are indistinguishable from git-cloned plugins. Family: grind (orange),
-jot (magenta), meshx (green), stack (cyan), claudia (violet).
+packages are indistinguishable from git-cloned plugins.
+
+Brand color: Claude Code orange `#cc7c5e` (R:204 G:124 B:94). The `claude`
+theme in `pkg/cli/` uses this as the primary accent. Future `install.sh`
+must use the same color for consistent branding across CLI and curl|bash.
 
 Skunkworks workflow — commits land directly on `main`.
 

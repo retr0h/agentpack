@@ -45,9 +45,10 @@ func fg(c string) lipgloss.Style {
 
 var faint = lipgloss.NewStyle().Faint(true)
 
-// ThemeMaxheadroom is claudia's default — Claude Code orange accent.
-var ThemeMaxheadroom = Theme{
-	Name:      "maxheadroom",
+// ThemeClaude uses the Claude Code brand palette — the warm terracotta
+// orange (#cc7c5e) sampled from code.claude.com as the primary accent.
+var ThemeClaude = Theme{
+	Name:      "claude",
 	Mute:      faint,
 	Accent:    fg("#cc7c5e"), // Claude Code orange (R:204 G:124 B:94)
 	OK:        fg("#50fa7b"),
@@ -56,7 +57,7 @@ var ThemeMaxheadroom = Theme{
 	BannerBot: fg("#cc7c5e"), // Claude Code orange
 }
 
-var active = &ThemeMaxheadroom
+var active = &ThemeClaude
 
 func rendererFor(w io.Writer) *lipgloss.Renderer {
 	if f, ok := w.(*os.File); ok {
