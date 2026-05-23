@@ -21,12 +21,16 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/avfs/avfs/vfs/osfs"
+
 	"github.com/retr0h/claudia/internal/archive"
+	"github.com/retr0h/claudia/internal/checksum"
 )
 
 func TestRunVerify(t *testing.T) {
@@ -41,6 +45,8 @@ func TestRunVerify(t *testing.T) {
 			name: "valid archive passes verification",
 			buildArchive: func(t *testing.T) string {
 				t.Helper()
+				ctx := context.Background()
+				vfs := osfs.NewWithNoIdm()
 				dir := t.TempDir()
 				initTestRepo(t, dir)
 				writeFile(t, filepath.Join(dir, "claudia.yaml"), `
@@ -53,11 +59,80 @@ skills:
 				writeFile(t, filepath.Join(dir, "skills", "hello.md"), "# Hello")
 				commitAll(t, dir)
 
-				if err := runBuild(dir, nil); err != nil {
+				if err := runBuild(ctx, vfs, dir, nil); err != nil {
 					t.Fatalf("build: %v", err)
 				}
 				return filepath.Join(dir, "verify-test-0.1.0.claudia")
 			},
+		},
+		{
+			name: "tampered archive fails verification",
+			buildArchive: func(t *testing.T) string {
+				t.Helper()
+				ctx := context.Background()
+				vfs := osfs.NewWithNoIdm()
+				dir := t.TempDir()
+				initTestRepo(t, dir)
+				writeFile(t, filepath.Join(dir, "claudia.yaml"), `
+name: tamper-test
+version: 0.1.0
+description: "Tamper test plugin"
+skills:
+  - skills/hello.md
+`)
+				writeFile(t, filepath.Join(dir, "skills", "hello.md"), "# Hello")
+				commitAll(t, dir)
+
+				if err := runBuild(ctx, vfs, dir, nil); err != nil {
+					t.Fatalf("build: %v", err)
+				}
+				archivePath := filepath.Join(dir, "tamper-test-0.1.0.claudia")
+
+				// Extract archive, tamper a file, then build a new checksums.txt
+				// that references the tampered content with a wrong hash.
+				// Simplest approach: extract the archive, then rebuild it with a
+				// file whose content changed but the checksum in checksums.txt
+				// still references the old hash.
+				tmpDir := t.TempDir()
+				if err := archive.Extract(archivePath, tmpDir); err != nil {
+					t.Fatalf("extract: %v", err)
+				}
+
+				// Tamper: overwrite a skill file with different content.
+				skillPath := filepath.Join(tmpDir, "marketplaces", "tamper-test", "skills", "hello.md")
+				if err := os.WriteFile(skillPath, []byte("# TAMPERED"), 0o644); err != nil {
+					t.Fatalf("tamper: %v", err)
+				}
+
+				// Re-pack the tampered directory as a new archive.
+				tamperedPath := filepath.Join(t.TempDir(), "tampered.claudia")
+				var entries []archive.FileEntry
+
+				// Walk the extracted dir and pack everything back.
+				if err := filepath.WalkDir(tmpDir, func(path string, d os.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+					if d.IsDir() {
+						return nil
+					}
+					rel, _ := filepath.Rel(tmpDir, path)
+					entries = append(entries, archive.FileEntry{
+						Src:         path,
+						ArchivePath: rel,
+					})
+					return nil
+				}); err != nil {
+					t.Fatalf("walk: %v", err)
+				}
+
+				if err := archive.Create(ctx, vfs, tamperedPath, entries); err != nil {
+					t.Fatalf("create tampered archive: %v", err)
+				}
+
+				return tamperedPath
+			},
+			wantErr: "failed verification",
 		},
 		{
 			name: "missing archive returns error",
@@ -71,8 +146,10 @@ skills:
 			name: "archive without checksums.txt returns error",
 			buildArchive: func(t *testing.T) string {
 				t.Helper()
+				ctx := context.Background()
+				vfs := osfs.NewWithNoIdm()
 				outPath := filepath.Join(t.TempDir(), "no-checksums.claudia")
-				if err := archive.Create(outPath, []archive.FileEntry{
+				if err := archive.Create(ctx, vfs, outPath, []archive.FileEntry{
 					{ArchivePath: "marketplaces/p/skills/hello.md", Content: []byte("# Hi")},
 				}); err != nil {
 					t.Fatalf("create archive: %v", err)
@@ -167,5 +244,56 @@ func TestFindChecksums(t *testing.T) {
 				t.Errorf("path %q does not have suffix %q", got, tt.wantSuffix)
 			}
 		})
+	}
+}
+
+// TestComputeArchiveChecksums exercises both the Src and Content paths.
+func TestComputeArchiveChecksums(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	vfs := osfs.NewWithNoIdm()
+
+	// Write a real file to use as Src.
+	srcDir := t.TempDir()
+	srcFile := filepath.Join(srcDir, "hello.txt")
+	if err := os.WriteFile(srcFile, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	files := []archive.FileEntry{
+		{Src: srcFile, ArchivePath: "a/hello.txt"},
+		{ArchivePath: "b/virtual.txt", Content: []byte("virtual")},
+		{Src: filepath.Join(srcDir, "missing.txt"), ArchivePath: "c/missing.txt"},
+	}
+
+	// Only the first two should be processed; the third causes an error.
+	entries, err := computeArchiveChecksums(ctx, vfs, files[:2])
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("entries count = %d, want 2", len(entries))
+	}
+
+	// Verify the hash for the Src file.
+	wantHash := checksum.ComputeBytes([]byte("hello"))
+	if entries[0].Hash != wantHash {
+		t.Errorf("entry[0].Hash = %q, want %q", entries[0].Hash, wantHash)
+	}
+	if entries[0].Path != "a/hello.txt" {
+		t.Errorf("entry[0].Path = %q, want %q", entries[0].Path, "a/hello.txt")
+	}
+
+	// Verify hash for virtual content.
+	wantVirtHash := checksum.ComputeBytes([]byte("virtual"))
+	if entries[1].Hash != wantVirtHash {
+		t.Errorf("entry[1].Hash = %q, want %q", entries[1].Hash, wantVirtHash)
+	}
+
+	// Now test the error path.
+	_, err = computeArchiveChecksums(ctx, vfs, files[2:])
+	if err == nil {
+		t.Fatal("expected error for missing Src file, got nil")
 	}
 }

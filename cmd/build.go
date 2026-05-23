@@ -21,12 +21,15 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 
+	"github.com/avfs/avfs"
+	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
@@ -43,12 +46,14 @@ var buildCmd = &cobra.Command{
 	Long: `Build checksummed .claudia archives for one or more plugins defined in
 claudia.yaml. When plugin names are given as arguments, only those plugins
 are built. Otherwise all plugins in the manifest are built.`,
-	RunE: func(_ *cobra.Command, args []string) error {
+	RunE: func(c *cobra.Command, args []string) error {
+		ctx := c.Context()
 		dir, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("getwd: %w", err)
 		}
-		return runBuild(dir, args)
+		vfs := osfs.NewWithNoIdm()
+		return runBuild(ctx, vfs, dir, args)
 	},
 }
 
@@ -56,8 +61,8 @@ func init() {
 	rootCmd.AddCommand(buildCmd)
 }
 
-func runBuild(dir string, names []string) error {
-	m, err := manifest.Load(dir)
+func runBuild(ctx context.Context, vfs avfs.VFS, dir string, names []string) error {
+	m, err := manifest.Load(ctx, vfs, dir)
 	if err != nil {
 		return err
 	}
@@ -71,13 +76,13 @@ func runBuild(dir string, names []string) error {
 		}
 	}
 
-	meta, err := metadata.Capture(dir, "", "")
+	meta, err := metadata.Capture(ctx, dir, "", "")
 	if err != nil {
 		return err
 	}
 
 	for _, p := range plugins {
-		if err := buildPlugin(dir, p, meta); err != nil {
+		if err := buildPlugin(ctx, vfs, dir, p, meta); err != nil {
 			return fmt.Errorf("plugin %q: %w", p.Name, err)
 		}
 	}
@@ -107,7 +112,7 @@ func filterPlugins(plugins []manifest.Plugin, names []string) ([]manifest.Plugin
 	return result, nil
 }
 
-func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
+func buildPlugin(ctx context.Context, vfs avfs.VFS, dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 	meta.Name = p.Name
 	meta.Version = p.Version
 
@@ -140,7 +145,7 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 			continue
 		}
 
-		pairs, err := manifest.ResolveEntries(dir, s.entries)
+		pairs, err := manifest.ResolveEntries(ctx, vfs, dir, s.entries)
 		if err != nil {
 			return fmt.Errorf("%s: %w", s.label, err)
 		}
@@ -160,7 +165,7 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 		}
 	}
 
-	mcpFiles, mcpCount, err := buildMCPEntries(dir, p, prefix)
+	mcpFiles, mcpCount, err := buildMCPEntries(ctx, vfs, dir, p, prefix)
 	if err != nil {
 		return err
 	}
@@ -210,7 +215,7 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 	})
 	totalFiles++
 
-	checksumEntries, err := computeArchiveChecksums(files)
+	checksumEntries, err := computeArchiveChecksums(ctx, vfs, files)
 	if err != nil {
 		return err
 	}
@@ -225,16 +230,16 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 	outputName := fmt.Sprintf("%s-%s.claudia", p.Name, p.Version)
 	outputPath := filepath.Join(dir, outputName)
 
-	if err := archive.Create(outputPath, files); err != nil {
+	if err := archive.Create(ctx, vfs, outputPath, files); err != nil {
 		return fmt.Errorf("creating archive: %w", err)
 	}
 
-	info, err := os.Stat(outputPath)
+	info, err := vfs.Stat(outputPath)
 	if err != nil {
 		return fmt.Errorf("stat archive: %w", err)
 	}
 
-	archiveHash, err := checksum.ComputeFile(outputPath)
+	archiveHash, err := checksum.ComputeFile(ctx, vfs, outputPath)
 	if err != nil {
 		return fmt.Errorf("hashing archive: %w", err)
 	}
@@ -246,6 +251,8 @@ func buildPlugin(dir string, p manifest.Plugin, meta *metadata.Metadata) error {
 }
 
 func buildMCPEntries(
+	ctx context.Context,
+	vfs avfs.VFS,
 	dir string,
 	p manifest.Plugin,
 	prefix string,
@@ -260,8 +267,8 @@ func buildMCPEntries(
 	for _, mcp := range p.MCP {
 		if mcp.Type == "binary" && mcp.Src != "" {
 			srcPath := filepath.Join(dir, mcp.Src)
-			if _, err := os.Stat(srcPath); err != nil {
-				if os.IsNotExist(err) {
+			if _, err := vfs.Stat(srcPath); err != nil {
+				if avfs.IsNotExist(err) {
 					return nil, 0, fmt.Errorf("mcp binary not found: %s", mcp.Src)
 				}
 				return nil, 0, fmt.Errorf("stat mcp binary: %w", err)
@@ -275,8 +282,8 @@ func buildMCPEntries(
 
 		if mcp.Config != "" {
 			srcPath := filepath.Join(dir, mcp.Config)
-			if _, err := os.Stat(srcPath); err != nil {
-				if os.IsNotExist(err) {
+			if _, err := vfs.Stat(srcPath); err != nil {
+				if avfs.IsNotExist(err) {
 					return nil, 0, fmt.Errorf("mcp config not found: %s", mcp.Config)
 				}
 				return nil, 0, fmt.Errorf("stat mcp config: %w", err)
@@ -311,7 +318,7 @@ func buildMCPEntries(
 	return files, count, nil
 }
 
-func computeArchiveChecksums(files []archive.FileEntry) ([]checksum.Entry, error) {
+func computeArchiveChecksums(ctx context.Context, vfs avfs.VFS, files []archive.FileEntry) ([]checksum.Entry, error) {
 	var entries []checksum.Entry
 
 	for _, f := range files {
@@ -319,7 +326,7 @@ func computeArchiveChecksums(files []archive.FileEntry) ([]checksum.Entry, error
 
 		if f.Src != "" {
 			var err error
-			hash, err = checksum.ComputeFile(f.Src)
+			hash, err = checksum.ComputeFile(ctx, vfs, f.Src)
 			if err != nil {
 				return nil, fmt.Errorf("checksum %s: %w", f.Src, err)
 			}

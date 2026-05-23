@@ -21,10 +21,12 @@
 package manifest
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/avfs/avfs"
 )
 
 // FilePair holds an absolute source path and its relative destination path
@@ -35,7 +37,7 @@ type FilePair struct {
 }
 
 // ResolveEntries expands a slice of Entry values into concrete FilePair
-// mappings. Each entry is resolved relative to baseDir.
+// mappings. Each entry is resolved relative to baseDir using vfs.
 //
 // Rules:
 //   - Glob entry: expand the glob relative to baseDir; the relative path from
@@ -47,7 +49,7 @@ type FilePair struct {
 //     destination.
 //   - An entry with neither Glob nor Src is an error.
 //   - Empty or nil entries returns an empty slice with no error.
-func ResolveEntries(baseDir string, entries []Entry) ([]FilePair, error) {
+func ResolveEntries(ctx context.Context, vfs avfs.VFS, baseDir string, entries []Entry) ([]FilePair, error) {
 	if len(entries) == 0 {
 		return []FilePair{}, nil
 	}
@@ -57,14 +59,14 @@ func ResolveEntries(baseDir string, entries []Entry) ([]FilePair, error) {
 	for _, e := range entries {
 		switch {
 		case e.Glob != "":
-			got, err := resolveGlob(baseDir, e.Glob)
+			got, err := resolveGlob(vfs, baseDir, e.Glob)
 			if err != nil {
 				return nil, err
 			}
 			pairs = append(pairs, got...)
 
 		case e.Src != "":
-			got, err := resolveSrcDest(baseDir, e.Src, e.Dest)
+			got, err := resolveSrcDest(vfs, baseDir, e.Src, e.Dest)
 			if err != nil {
 				return nil, err
 			}
@@ -78,12 +80,12 @@ func ResolveEntries(baseDir string, entries []Entry) ([]FilePair, error) {
 	return pairs, nil
 }
 
-// resolveGlob expands a glob pattern relative to baseDir and returns one
-// FilePair per matched file, using the relative path from baseDir as the
+// resolveGlob expands a glob pattern relative to baseDir using vfs and returns
+// one FilePair per matched file, using the relative path from baseDir as the
 // destination.
-func resolveGlob(baseDir, pattern string) ([]FilePair, error) {
+func resolveGlob(vfs avfs.VFS, baseDir, pattern string) ([]FilePair, error) {
 	abs := filepath.Join(baseDir, pattern)
-	matches, err := filepath.Glob(abs)
+	matches, err := vfs.Glob(abs)
 	if err != nil {
 		return nil, fmt.Errorf("invalid glob pattern %q: %w", pattern, err)
 	}
@@ -93,7 +95,7 @@ func resolveGlob(baseDir, pattern string) ([]FilePair, error) {
 
 	pairs := make([]FilePair, 0, len(matches))
 	for _, m := range matches {
-		rel, err := filepath.Rel(baseDir, m)
+		rel, err := vfs.Rel(baseDir, m)
 		if err != nil {
 			return nil, fmt.Errorf("computing relative path for %q: %w", m, err)
 		}
@@ -110,14 +112,14 @@ func resolveGlob(baseDir, pattern string) ([]FilePair, error) {
 //   - Otherwise dest is used as-is (rename).
 //   - If src contains no glob metacharacters and the resolved file does not
 //     exist, an error is returned.
-func resolveSrcDest(baseDir, src, dest string) ([]FilePair, error) {
+func resolveSrcDest(vfs avfs.VFS, baseDir, src, dest string) ([]FilePair, error) {
 	absSrc := filepath.Join(baseDir, src)
 
 	// Determine whether src is a glob.
 	isGlob := strings.ContainsAny(src, "*?[")
 
 	if isGlob {
-		matches, err := filepath.Glob(absSrc)
+		matches, err := vfs.Glob(absSrc)
 		if err != nil {
 			return nil, fmt.Errorf("invalid glob pattern %q: %w", src, err)
 		}
@@ -134,8 +136,8 @@ func resolveSrcDest(baseDir, src, dest string) ([]FilePair, error) {
 	}
 
 	// Non-glob: the file must exist.
-	if _, err := os.Stat(absSrc); err != nil {
-		if os.IsNotExist(err) {
+	if _, err := vfs.Stat(absSrc); err != nil {
+		if avfs.IsNotExist(err) {
 			return nil, fmt.Errorf("src file not found: %s", src)
 		}
 		return nil, fmt.Errorf("stat %q: %w", src, err)

@@ -23,6 +23,7 @@ package checksum
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -30,6 +31,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/avfs/avfs"
 )
 
 // Entry holds a file path and its expected SHA256 hash.
@@ -51,10 +54,10 @@ func ComputeBytes(data []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-// ComputeFile reads the file at path and returns its SHA256 hash as a 64-char
-// hex string.
-func ComputeFile(path string) (string, error) {
-	f, err := os.Open(path)
+// ComputeFile reads the file at path using vfs and returns its SHA256 hash as
+// a 64-char hex string.
+func ComputeFile(ctx context.Context, vfs avfs.VFS, path string) (string, error) {
+	f, err := vfs.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("open %s: %w", path, err)
 	}
@@ -73,8 +76,8 @@ func ComputeFile(path string) (string, error) {
 //	{hash}  {path}\n
 //
 // (two spaces between hash and path, matching the sha256sum(1) convention).
-func WriteFile(path string, entries []Entry) error {
-	f, err := os.Create(path)
+func WriteFile(ctx context.Context, vfs avfs.VFS, path string, entries []Entry) error {
+	f, err := vfs.Create(path)
 	if err != nil {
 		return fmt.Errorf("create %s: %w", path, err)
 	}
@@ -144,7 +147,7 @@ func Verify(baseDir string, entries []Entry) ([]Result, error) {
 	for _, e := range entries {
 		fullPath := filepath.Join(baseDir, e.Path)
 
-		got, err := ComputeFile(fullPath)
+		got, err := computeFileOS(fullPath)
 		if err != nil {
 			results = append(results, Result{
 				Path: e.Path,
@@ -169,4 +172,22 @@ func Verify(baseDir string, entries []Entry) ([]Result, error) {
 	}
 
 	return results, nil
+}
+
+// computeFileOS reads the file at path using the real OS and returns its
+// SHA256 hash. Used by Verify which always operates on extracted archives
+// in real temp dirs.
+func computeFileOS(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", fmt.Errorf("hash %s: %w", path, err)
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

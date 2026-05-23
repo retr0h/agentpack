@@ -21,12 +21,116 @@
 package checksum_test
 
 import (
+	"context"
+	"errors"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/avfs/avfs"
+	"github.com/avfs/avfs/vfs/memfs"
+
 	"github.com/retr0h/claudia/internal/checksum"
 )
+
+// --------------------------------------------------------------------------
+// Error-injecting VFS helpers
+// --------------------------------------------------------------------------
+
+// openErrorVFS wraps avfs.VFS and returns an error from Open.
+type openErrorVFS struct {
+	avfs.VFS
+}
+
+func (openErrorVFS) Open(string) (avfs.File, error) {
+	return nil, errors.New("simulated open error")
+}
+
+// copyErrorFile wraps avfs.File so that Read returns an error to trigger the
+// io.Copy path in ComputeFile.
+type copyErrorFile struct {
+	avfs.File
+}
+
+func (copyErrorFile) Read([]byte) (int, error) {
+	return 0, errors.New("simulated read error")
+}
+
+func (copyErrorFile) Close() error { return nil }
+
+// copyErrorVFS returns a copyErrorFile from Open.
+type copyErrorVFS struct {
+	avfs.VFS
+}
+
+func (v copyErrorVFS) Open(name string) (avfs.File, error) {
+	f, err := v.VFS.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	_ = f.Close()
+	return copyErrorFile{}, nil
+}
+
+// createErrorVFS wraps avfs.VFS and returns an error from Create.
+type createErrorVFS struct {
+	avfs.VFS
+}
+
+func (createErrorVFS) Create(string) (avfs.File, error) {
+	return nil, errors.New("simulated create error")
+}
+
+// flushErrorFile is an avfs.File whose underlying writer fails on Flush.
+type flushErrorFile struct {
+	avfs.File
+}
+
+func (flushErrorFile) Write([]byte) (int, error) {
+	return 0, errors.New("simulated write error")
+}
+
+func (flushErrorFile) Close() error { return nil }
+
+// flushErrorVFS returns a flushErrorFile from Create.
+type flushErrorVFS struct {
+	avfs.VFS
+}
+
+func (v flushErrorVFS) Create(string) (avfs.File, error) {
+	return flushErrorFile{}, nil
+}
+
+// successWriteCloseErrorFile writes successfully but Close returns an error.
+// This exercises the f.Close() error branch in WriteFile.
+type successWriteCloseErrorFile struct {
+	avfs.File
+	buf []byte
+}
+
+func (f *successWriteCloseErrorFile) Write(p []byte) (int, error) {
+	f.buf = append(f.buf, p...)
+	return len(p), nil
+}
+
+func (*successWriteCloseErrorFile) Close() error {
+	return errors.New("simulated close error")
+}
+
+// closeErrorVFS returns a successWriteCloseErrorFile from Create.
+type closeErrorVFS struct {
+	avfs.VFS
+}
+
+func (closeErrorVFS) Create(string) (avfs.File, error) {
+	return &successWriteCloseErrorFile{}, nil
+}
+
+// --------------------------------------------------------------------------
+// Tests
+// --------------------------------------------------------------------------
 
 func TestComputeBytes(t *testing.T) {
 	t.Parallel()
@@ -73,32 +177,80 @@ func TestComputeBytes(t *testing.T) {
 func TestComputeFile(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	tests := []struct {
 		name        string
-		content     []byte
-		missingFile bool
+		setupVFS    func(t *testing.T) (avfs.VFS, string)
 		wantLen     int
 		wantErr     bool
+		wantErrFrag string
 	}{
 		{
-			name:    "non-empty file produces 64-char hex hash",
-			content: []byte("hello, claudia"),
+			name: "non-empty file produces 64-char hex hash",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				vfs := memfs.New()
+				if err := vfs.WriteFile("/input.bin", []byte("hello, claudia"), fs.FileMode(0o600)); err != nil {
+					t.Fatal(err)
+				}
+				return vfs, "/input.bin"
+			},
 			wantLen: 64,
 		},
 		{
-			name:    "empty file produces 64-char hex hash",
-			content: []byte{},
+			name: "empty file produces 64-char hex hash",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				vfs := memfs.New()
+				if err := vfs.WriteFile("/empty.bin", []byte{}, fs.FileMode(0o600)); err != nil {
+					t.Fatal(err)
+				}
+				return vfs, "/empty.bin"
+			},
 			wantLen: 64,
 		},
 		{
-			name:    "binary-like content produces 64-char hex hash",
-			content: []byte{0x00, 0xFF, 0x1A, 0x2B, 0x3C, 0xDE, 0xAD, 0xBE, 0xEF},
+			name: "binary-like content produces 64-char hex hash",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				vfs := memfs.New()
+				if err := vfs.WriteFile("/bin.bin", []byte{0x00, 0xFF, 0x1A, 0x2B, 0x3C, 0xDE, 0xAD, 0xBE, 0xEF}, fs.FileMode(0o600)); err != nil {
+					t.Fatal(err)
+				}
+				return vfs, "/bin.bin"
+			},
 			wantLen: 64,
 		},
 		{
-			name:        "missing file returns error",
-			missingFile: true,
+			name: "missing file returns error",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfs.New(), "/nonexistent.txt"
+			},
+			wantErr: true,
+		},
+		{
+			name: "open error returns error",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return openErrorVFS{VFS: memfs.New()}, "/any.txt"
+			},
 			wantErr:     true,
+			wantErrFrag: "simulated open error",
+		},
+		{
+			name: "io.Copy error returns error",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				vfs := memfs.New()
+				if err := vfs.WriteFile("/data.bin", []byte("data"), fs.FileMode(0o600)); err != nil {
+					t.Fatal(err)
+				}
+				return copyErrorVFS{VFS: vfs}, "/data.bin"
+			},
+			wantErr:     true,
+			wantErrFrag: "simulated read error",
 		},
 	}
 
@@ -106,24 +258,18 @@ func TestComputeFile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var path string
-
-			if tt.missingFile {
-				path = filepath.Join(t.TempDir(), "nonexistent.txt")
-			} else {
-				path = filepath.Join(t.TempDir(), "input.bin")
-				if err := os.WriteFile(path, tt.content, 0o600); err != nil {
-					t.Fatalf("setup: write file: %v", err)
-				}
-			}
-
-			got, err := checksum.ComputeFile(path)
+			vfs, path := tt.setupVFS(t)
+			got, err := checksum.ComputeFile(ctx, vfs, path)
 
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
 				}
-
+				if tt.wantErrFrag != "" {
+					if err.Error() == "" {
+						t.Errorf("expected error containing %q, got empty", tt.wantErrFrag)
+					}
+				}
 				return
 			}
 
@@ -141,16 +287,22 @@ func TestComputeFile(t *testing.T) {
 func TestWriteFile(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	tests := []struct {
-		name      string
-		path      func(dir string) string // returns the path to write to
-		entries   []checksum.Entry
-		wantErr   bool
-		checkRead func(t *testing.T, path string, want []checksum.Entry)
+		name        string
+		setupVFS    func(t *testing.T) (avfs.VFS, string)
+		entries     []checksum.Entry
+		wantErr     bool
+		wantErrFrag string
+		checkRead   func(t *testing.T, path string, want []checksum.Entry)
 	}{
 		{
 			name: "writes two entries readable by ReadFile",
-			path: func(dir string) string { return filepath.Join(dir, "checksums.txt") },
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfs.New(), "/checksums.txt"
+			},
 			entries: []checksum.Entry{
 				{Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd", Path: "file1.txt"},
 				{Hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210", Path: "subdir/file2.txt"},
@@ -175,10 +327,46 @@ func TestWriteFile(t *testing.T) {
 			},
 		},
 		{
-			name:    "fails when directory does not exist",
-			path:    func(dir string) string { return filepath.Join(dir, "nonexistent", "checksums.txt") },
+			name: "fails when create returns error",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return createErrorVFS{VFS: memfs.New()}, "/checksums.txt"
+			},
 			entries: []checksum.Entry{{Hash: "abc", Path: "f.txt"}},
 			wantErr: true,
+		},
+		{
+			name: "fails when write returns error",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return flushErrorVFS{VFS: memfs.New()}, "/checksums.txt"
+			},
+			entries:     []checksum.Entry{{Hash: "abc", Path: "f.txt"}},
+			wantErr:     true,
+			wantErrFrag: "write entry",
+		},
+		{
+			name: "fails when directory does not exist on real OS",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				// Use the real OS filesystem via a path that doesn't exist.
+				// We need an OS-backed VFS for this test since memfs doesn't
+				// enforce parent directory existence the same way.
+				vfs := memfs.New()
+				return vfs, "/nonexistent/dir/checksums.txt"
+			},
+			entries: []checksum.Entry{{Hash: "abc", Path: "f.txt"}},
+			wantErr: true,
+		},
+		{
+			name: "fails when file close returns error",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return closeErrorVFS{VFS: memfs.New()}, "/checksums.txt"
+			},
+			entries:     []checksum.Entry{{Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd", Path: "f.txt"}},
+			wantErr:     true,
+			wantErrFrag: "close",
 		},
 	}
 
@@ -186,8 +374,8 @@ func TestWriteFile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			p := tt.path(t.TempDir())
-			err := checksum.WriteFile(p, tt.entries)
+			vfs, path := tt.setupVFS(t)
+			err := checksum.WriteFile(ctx, vfs, path, tt.entries)
 
 			if tt.wantErr {
 				if err == nil {
@@ -200,8 +388,23 @@ func TestWriteFile(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
+			// For the round-trip check, write to OS temp dir then read from there.
 			if tt.checkRead != nil {
-				tt.checkRead(t, p, tt.entries)
+				// Write to a real OS file so ReadFile (which uses os.Open) can read it.
+				osPath := filepath.Join(t.TempDir(), "checksums.txt")
+				osVFS := memfs.New()
+				if err2 := checksum.WriteFile(ctx, osVFS, "/checksums.txt", tt.entries); err2 != nil {
+					t.Fatalf("write to memfs: %v", err2)
+				}
+				// Read from memfs and write to real OS file for ReadFile to consume.
+				data, err2 := osVFS.ReadFile("/checksums.txt")
+				if err2 != nil {
+					t.Fatalf("read from memfs: %v", err2)
+				}
+				if err2 := os.WriteFile(osPath, data, 0o600); err2 != nil {
+					t.Fatalf("write to OS: %v", err2)
+				}
+				tt.checkRead(t, osPath, tt.entries)
 			}
 		})
 	}
@@ -364,3 +567,7 @@ func TestVerify(t *testing.T) {
 		})
 	}
 }
+
+// Compile-time interface checks.
+var _ io.Reader = copyErrorFile{}
+var _ io.Writer = flushErrorFile{}

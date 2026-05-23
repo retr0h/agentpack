@@ -21,6 +21,7 @@
 package metadata_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,16 +89,60 @@ func initDetachedRepo(t *testing.T, dir string) {
 	}
 }
 
+// initEmptyGitRepo creates a git repo with no commits (so rev-parse HEAD
+// fails) but the directory is still a valid git repo.
+func initEmptyGitRepo(t *testing.T, dir string) {
+	t.Helper()
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), gitEnv...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+}
+
+// makeFakeGitDir creates a temporary directory containing a fake "git" script
+// that returns a commit SHA for "rev-parse HEAD" but fails for
+// "rev-parse --abbrev-ref HEAD". Returns the directory path.
+func makeFakeGitDir(t *testing.T) string {
+	t.Helper()
+
+	fakeGitDir := t.TempDir()
+	fakeGit := filepath.Join(fakeGitDir, "git")
+
+	script := `#!/bin/sh
+for arg in "$@"; do
+  case "$arg" in
+    --abbrev-ref)
+      echo "simulated branch error" >&2
+      exit 1
+      ;;
+  esac
+done
+echo "aabbccddaabbccddaabbccddaabbccddaabbccdd"
+exit 0
+`
+	if err := os.WriteFile(fakeGit, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake git: %v", err)
+	}
+	return fakeGitDir
+}
+
 // --------------------------------------------------------------------------
 // Capture
 // --------------------------------------------------------------------------
 
+// TestCapture is not parallel because the "branch rev-parse fails" row uses
+// t.Setenv to inject a fake git, which is incompatible with t.Parallel.
 func TestCapture(t *testing.T) {
-	t.Parallel()
+	ctx := context.Background()
 
 	tests := []struct {
 		name        string
 		setupDir    func(t *testing.T, dir string) // nil means no git repo
+		setupEnv    func(t *testing.T)             // optional env manipulation
 		wantErr     string                         // substring; empty = success
 		checkResult func(t *testing.T, m *metadata.Metadata)
 	}{
@@ -136,7 +181,7 @@ func TestCapture(t *testing.T) {
 		},
 		{
 			name:     "fails outside git repo",
-			setupDir: nil, // plain temp dir, no git init
+			setupDir: nil,
 			wantErr:  "not a git repository",
 		},
 		{
@@ -155,18 +200,38 @@ func TestCapture(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "empty git repo fails rev-parse HEAD",
+			setupDir: func(t *testing.T, dir string) {
+				t.Helper()
+				initEmptyGitRepo(t, dir)
+			},
+			wantErr: "git rev-parse HEAD",
+		},
+		{
+			name: "branch rev-parse fails",
+			setupEnv: func(t *testing.T) {
+				t.Helper()
+				fakeGitDir := makeFakeGitDir(t)
+				origPath := os.Getenv("PATH")
+				t.Setenv("PATH", fakeGitDir+string(os.PathListSeparator)+origPath)
+			},
+			wantErr: "git rev-parse --abbrev-ref HEAD",
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			if tc.setupEnv != nil {
+				tc.setupEnv(t)
+			}
 
 			dir := t.TempDir()
 			if tc.setupDir != nil {
 				tc.setupDir(t, dir)
 			}
 
-			m, err := metadata.Capture(dir, "my-plugin", "1.0.0")
+			m, err := metadata.Capture(ctx, dir, "my-plugin", "1.0.0")
 
 			if tc.wantErr != "" {
 				if err == nil {

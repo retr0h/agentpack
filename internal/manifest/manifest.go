@@ -22,10 +22,11 @@
 package manifest
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
+	"github.com/avfs/avfs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -112,15 +113,15 @@ func (e *Entry) UnmarshalYAML(value *yaml.Node) error {
 	return value.Decode((*raw)(e))
 }
 
-// Load reads claudia.yaml from dir, unmarshals it, and validates it.
+// Load reads claudia.yaml from dir using vfs, unmarshals it, and validates it.
 // It returns an error when the file is missing, malformed, or fails
 // validation.
-func Load(dir string) (*Manifest, error) {
+func Load(ctx context.Context, vfs avfs.VFS, dir string) (*Manifest, error) {
 	path := filepath.Join(dir, "claudia.yaml")
 
-	data, err := os.ReadFile(path)
+	data, err := vfs.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if avfs.IsNotExist(err) {
 			return nil, fmt.Errorf("claudia.yaml not found in %s", dir)
 		}
 		return nil, fmt.Errorf("reading claudia.yaml: %w", err)

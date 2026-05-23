@@ -21,28 +21,52 @@
 package manifest_test
 
 import (
-	"os"
+	"context"
+	"errors"
+	"io/fs"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/avfs/avfs"
+	"github.com/avfs/avfs/vfs/memfs"
 
 	"github.com/retr0h/claudia/internal/manifest"
 )
 
-// makeFixtures creates a temporary directory tree with the given relative file
-// paths (all written with empty content) and returns the base directory.
-func makeFixtures(t *testing.T, files []string) string {
+// --------------------------------------------------------------------------
+// Error-injecting VFS helpers for resolve tests
+// --------------------------------------------------------------------------
+
+// statErrorVFS wraps avfs.VFS and injects an error from Stat that is NOT
+// an IsNotExist error.
+type statErrorVFS struct {
+	avfs.VFS
+}
+
+func (statErrorVFS) Stat(string) (fs.FileInfo, error) {
+	return nil, errors.New("permission denied: stat failed")
+}
+
+// makeFixtures creates a memfs with the given relative file paths (written
+// with empty content) rooted at /base and returns the VFS and base path.
+func makeFixtures(t *testing.T, files []string) (avfs.VFS, string) {
 	t.Helper()
-	base := t.TempDir()
+	vfs := memfs.New()
+	base := "/base"
+	if err := vfs.MkdirAll(base, 0o755); err != nil {
+		t.Fatalf("makeFixtures mkdir base: %v", err)
+	}
 	for _, f := range files {
 		full := filepath.Join(base, f)
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		if err := vfs.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			t.Fatalf("makeFixtures mkdir: %v", err)
 		}
-		if err := os.WriteFile(full, []byte(""), 0o644); err != nil {
+		if err := vfs.WriteFile(full, []byte(""), fs.FileMode(0o644)); err != nil {
 			t.Fatalf("makeFixtures write: %v", err)
 		}
 	}
-	return base
+	return vfs, base
 }
 
 // --------------------------------------------------------------------------
@@ -52,80 +76,196 @@ func makeFixtures(t *testing.T, files []string) string {
 func TestResolveEntries(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	tests := []struct {
-		name    string
-		files   []string         // fixture files to create relative to baseDir
-		entries []manifest.Entry // input entries
-		wantN   int              // expected number of FilePairs on success
-		wantErr string           // non-empty means we expect an error containing this
+		name      string
+		setup     func(t *testing.T) (avfs.VFS, string)
+		entries   []manifest.Entry
+		wantN     int
+		wantDests []string // if set, verify destination paths
+		wantErr   string
+		exactErr  bool
 	}{
 		{
-			name:  "glob matches two files",
-			files: []string{"skills/a.md", "skills/b.md"},
+			name: "glob matches two files",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{"skills/a.md", "skills/b.md"})
+			},
 			entries: []manifest.Entry{
 				{Glob: "skills/*.md"},
 			},
 			wantN: 2,
 		},
 		{
-			name:  "glob matches no files returns error",
-			files: []string{},
+			name: "glob matches no files returns error",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{})
+			},
 			entries: []manifest.Entry{
 				{Glob: "skills/*.md"},
 			},
-			wantErr: "pattern 'skills/*.md' matched no files",
+			wantErr:  "pattern 'skills/*.md' matched no files",
+			exactErr: true,
 		},
 		{
-			name:  "src/dest with directory dest",
-			files: []string{"prompts/hello.md"},
+			name: "src with empty dest uses filename",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{"prompts/hello.md"})
+			},
+			entries: []manifest.Entry{
+				{Src: "prompts/hello.md", Dest: ""},
+			},
+			wantN: 1,
+		},
+		{
+			name: "src/dest with directory dest",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{"prompts/hello.md"})
+			},
 			entries: []manifest.Entry{
 				{Src: "prompts/hello.md", Dest: "skills/"},
 			},
 			wantN: 1,
 		},
 		{
-			name:  "src/dest with file dest rename",
-			files: []string{"prompts/review.md"},
+			name: "src/dest with file dest rename",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{"prompts/review.md"})
+			},
 			entries: []manifest.Entry{
 				{Src: "prompts/review.md", Dest: "skills/renamed.md"},
 			},
 			wantN: 1,
 		},
 		{
-			name:  "src/dest with glob src",
-			files: []string{"prompts/a.md", "prompts/b.md"},
+			name: "src/dest with glob src",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{"prompts/a.md", "prompts/b.md"})
+			},
 			entries: []manifest.Entry{
 				{Src: "prompts/*.md", Dest: "skills/"},
 			},
 			wantN: 2,
 		},
 		{
-			name:  "src file not found returns error",
-			files: []string{},
+			name: "src file not found returns error",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{})
+			},
 			entries: []manifest.Entry{
 				{Src: "prompts/missing.md", Dest: "skills/missing.md"},
 			},
-			wantErr: "src file not found: prompts/missing.md",
+			wantErr:  "src file not found: prompts/missing.md",
+			exactErr: true,
 		},
 		{
-			name:    "empty entries returns empty slice",
-			files:   []string{},
+			name: "empty entries returns empty slice",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{})
+			},
 			entries: []manifest.Entry{},
 			wantN:   0,
 		},
 		{
-			name:    "nil entries returns empty slice",
-			files:   []string{},
+			name: "nil entries returns empty slice",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{})
+			},
 			entries: nil,
 			wantN:   0,
 		},
 		{
-			name:  "entry with neither glob nor src returns error",
-			files: []string{},
+			name: "entry with neither glob nor src returns error",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{})
+			},
 			entries: []manifest.Entry{
 				{},
 			},
-			wantErr: "entry has neither glob nor src",
+			wantErr:  "entry has neither glob nor src",
+			exactErr: true,
+		},
+		{
+			name: "non-IsNotExist stat error in resolveSrcDest",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				vfs := statErrorVFS{VFS: memfs.New()}
+				return vfs, "/base"
+			},
+			entries: []manifest.Entry{
+				{Src: "somefile.txt", Dest: "dest.txt"},
+			},
+			wantErr: "stat",
+		},
+		{
+			name: "bad glob pattern in resolveGlob",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				// memfs.Glob returns a syntax error for an unclosed bracket.
+				return makeFixtures(t, []string{})
+			},
+			entries: []manifest.Entry{
+				{Glob: "["}, // unclosed bracket — Glob returns syntax error
+			},
+			wantErr: "invalid glob pattern",
+		},
+		{
+			name: "bad glob src pattern in resolveSrcDest",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{})
+			},
+			entries: []manifest.Entry{
+				{Src: "[", Dest: "out/"},
+			},
+			wantErr: "invalid glob pattern",
+		},
+		{
+			name: "glob preserves relative path in dest",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{"skills/intro.md", "skills/review.md"})
+			},
+			entries: []manifest.Entry{
+				{Glob: "skills/*.md"},
+			},
+			wantN:     2,
+			wantDests: []string{"skills/intro.md", "skills/review.md"},
+		},
+		{
+			name: "src/dest dir preserves filename in dest",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{"prompts/hello.md"})
+			},
+			entries: []manifest.Entry{
+				{Src: "prompts/hello.md", Dest: "skills/"},
+			},
+			wantN:     1,
+			wantDests: []string{"skills/hello.md"},
+		},
+		{
+			name: "src/dest file renames in dest",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{"prompts/review.md"})
+			},
+			entries: []manifest.Entry{
+				{Src: "prompts/review.md", Dest: "skills/renamed.md"},
+			},
+			wantN:     1,
+			wantDests: []string{"skills/renamed.md"},
 		},
 	}
 
@@ -133,15 +273,21 @@ func TestResolveEntries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			base := makeFixtures(t, tc.files)
-			got, err := manifest.ResolveEntries(base, tc.entries)
+			vfs, base := tc.setup(t)
+			got, err := manifest.ResolveEntries(ctx, vfs, base, tc.entries)
 
 			if tc.wantErr != "" {
 				if err == nil {
 					t.Fatalf("expected error %q, got nil", tc.wantErr)
 				}
-				if msg := err.Error(); msg != tc.wantErr {
-					t.Fatalf("error = %q, want %q", msg, tc.wantErr)
+				if tc.exactErr {
+					if err.Error() != tc.wantErr {
+						t.Fatalf("error = %q, want %q", err.Error(), tc.wantErr)
+					}
+				} else {
+					if !strings.Contains(err.Error(), tc.wantErr) {
+						t.Fatalf("error = %q, want it to contain %q", err.Error(), tc.wantErr)
+					}
 				}
 				return
 			}
@@ -152,78 +298,21 @@ func TestResolveEntries(t *testing.T) {
 			if len(got) != tc.wantN {
 				t.Fatalf("len(pairs) = %d, want %d", len(got), tc.wantN)
 			}
-		})
-	}
-}
 
-// --------------------------------------------------------------------------
-// ResolveEntries — destination path shape
-// --------------------------------------------------------------------------
-
-func TestResolveEntriesDestPaths(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		files     []string
-		entries   []manifest.Entry
-		wantDests []string // expected Dest values, in any order
-	}{
-		{
-			name:  "glob preserves relative path",
-			files: []string{"skills/intro.md", "skills/review.md"},
-			entries: []manifest.Entry{
-				{Glob: "skills/*.md"},
-			},
-			wantDests: []string{"skills/intro.md", "skills/review.md"},
-		},
-		{
-			name:  "src/dest dir preserves filename",
-			files: []string{"prompts/hello.md"},
-			entries: []manifest.Entry{
-				{Src: "prompts/hello.md", Dest: "skills/"},
-			},
-			wantDests: []string{"skills/hello.md"},
-		},
-		{
-			name:  "src/dest file renames destination",
-			files: []string{"prompts/review.md"},
-			entries: []manifest.Entry{
-				{Src: "prompts/review.md", Dest: "skills/renamed.md"},
-			},
-			wantDests: []string{"skills/renamed.md"},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			base := makeFixtures(t, tc.files)
-			got, err := manifest.ResolveEntries(base, tc.entries)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if len(got) != len(tc.wantDests) {
-				t.Fatalf("len(pairs) = %d, want %d", len(got), len(tc.wantDests))
-			}
-
-			// Build a set of actual dest values for order-independent comparison.
-			actual := make(map[string]bool, len(got))
-			for _, fp := range got {
-				actual[fp.Dest] = true
-			}
-			for _, want := range tc.wantDests {
-				if !actual[want] {
-					t.Errorf("missing dest %q in results %v", want, got)
+			if len(tc.wantDests) > 0 {
+				actual := make(map[string]bool, len(got))
+				for _, fp := range got {
+					actual[fp.Dest] = true
 				}
-			}
-
-			// Every Src must be an absolute path.
-			for _, fp := range got {
-				if !filepath.IsAbs(fp.Src) {
-					t.Errorf("Src %q is not absolute", fp.Src)
+				for _, want := range tc.wantDests {
+					if !actual[want] {
+						t.Errorf("missing dest %q in results %v", want, got)
+					}
+				}
+				for _, fp := range got {
+					if !filepath.IsAbs(fp.Src) {
+						t.Errorf("Src %q is not absolute", fp.Src)
+					}
 				}
 			}
 		})

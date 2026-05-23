@@ -23,6 +23,7 @@ package metadata
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -46,13 +47,13 @@ type Metadata struct {
 //
 // Returns an error containing "not a git repository" when dir is not inside a
 // git repository.
-func Capture(dir string, name string, version string) (*Metadata, error) {
-	sha, err := gitOutput(dir, "rev-parse", "HEAD")
+func Capture(ctx context.Context, dir string, name string, version string) (*Metadata, error) {
+	sha, err := gitOutput(ctx, dir, "rev-parse", "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("git rev-parse HEAD: %w", err)
 	}
 
-	branch, err := gitOutput(dir, "rev-parse", "--abbrev-ref", "HEAD")
+	branch, err := gitOutput(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("git rev-parse --abbrev-ref HEAD: %w", err)
 	}
@@ -70,8 +71,9 @@ func Capture(dir string, name string, version string) (*Metadata, error) {
 
 // gitOutput runs git with args inside dir and returns trimmed stdout.
 // It surfaces "not a git repository" from stderr when git exits non-zero.
-func gitOutput(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+// The context is used for cancellation via exec.CommandContext.
+func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 
 	var stdout, stderr bytes.Buffer

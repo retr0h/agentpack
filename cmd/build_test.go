@@ -21,11 +21,14 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/avfs/avfs/vfs/osfs"
 
 	"github.com/retr0h/claudia/internal/archive"
 )
@@ -179,6 +182,146 @@ plugins:
 			},
 		},
 		{
+			name: "multiple plugins builds summary line",
+			manifest: `
+author:
+  name: Test Author
+  email: test@example.com
+license: MIT
+plugins:
+  - name: plugin-a
+    version: 1.0.0
+    description: "Plugin A"
+    skills:
+      - skills/a.md
+  - name: plugin-b
+    version: 2.0.0
+    description: "Plugin B"
+    skills:
+      - skills/b.md
+`,
+			setupFiles: func(t *testing.T, dir string) {
+				t.Helper()
+				writeFile(t, filepath.Join(dir, "skills", "a.md"), "# A")
+				writeFile(t, filepath.Join(dir, "skills", "b.md"), "# B")
+			},
+			checkBuild: func(t *testing.T, dir string) {
+				t.Helper()
+				if _, err := os.Stat(filepath.Join(dir, "plugin-a-1.0.0.claudia")); err != nil {
+					t.Error("plugin-a archive not created")
+				}
+				if _, err := os.Stat(filepath.Join(dir, "plugin-b-2.0.0.claudia")); err != nil {
+					t.Error("plugin-b archive not created")
+				}
+			},
+		},
+		{
+			name: "plugin with mcp binary entry",
+			manifest: `
+name: mcp-plugin
+version: 1.0.0
+description: "Plugin with MCP binary"
+mcp:
+  - type: binary
+    name: my-server
+    src: bin/my-server
+`,
+			setupFiles: func(t *testing.T, dir string) {
+				t.Helper()
+				writeFile(t, filepath.Join(dir, "bin", "my-server"), "#!/bin/sh\necho hi")
+			},
+			checkBuild: func(t *testing.T, dir string) {
+				t.Helper()
+				if _, err := os.Stat(filepath.Join(dir, "mcp-plugin-1.0.0.claudia")); err != nil {
+					t.Error("mcp-plugin archive not created")
+				}
+			},
+		},
+		{
+			name: "plugin with mcp remote entry",
+			manifest: `
+name: remote-plugin
+version: 1.0.0
+description: "Plugin with remote MCP"
+mcp:
+  - type: remote
+    name: my-remote
+    url: https://mcp.example.com/v1
+`,
+			checkBuild: func(t *testing.T, dir string) {
+				t.Helper()
+				if _, err := os.Stat(filepath.Join(dir, "remote-plugin-1.0.0.claudia")); err != nil {
+					t.Error("remote-plugin archive not created")
+				}
+			},
+		},
+		{
+			name: "plugin with mcp ux entry",
+			manifest: `
+name: ux-plugin
+version: 1.0.0
+description: "Plugin with UX MCP"
+mcp:
+  - type: ux
+    name: my-ux
+    package: "@mycompany/my-server"
+`,
+			checkBuild: func(t *testing.T, dir string) {
+				t.Helper()
+				if _, err := os.Stat(filepath.Join(dir, "ux-plugin-1.0.0.claudia")); err != nil {
+					t.Error("ux-plugin archive not created")
+				}
+			},
+		},
+		{
+			name: "plugin with mcp config entry",
+			manifest: `
+name: config-plugin
+version: 1.0.0
+description: "Plugin with config MCP"
+mcp:
+  - type: remote
+    name: my-config-server
+    config: .mcp.json
+`,
+			setupFiles: func(t *testing.T, dir string) {
+				t.Helper()
+				writeFile(t, filepath.Join(dir, ".mcp.json"), `{"mcpServers":{}}`)
+			},
+			checkBuild: func(t *testing.T, dir string) {
+				t.Helper()
+				if _, err := os.Stat(filepath.Join(dir, "config-plugin-1.0.0.claudia")); err != nil {
+					t.Error("config-plugin archive not created")
+				}
+			},
+		},
+		{
+			name: "mcp binary src not found returns error",
+			manifest: `
+name: bad-mcp
+version: 1.0.0
+description: "Plugin with missing MCP binary"
+mcp:
+  - type: binary
+    name: my-server
+    src: bin/nonexistent
+`,
+			wantErr: "mcp binary not found",
+		},
+		{
+			name: "mcp config not found returns error",
+			manifest: `
+name: bad-config-mcp
+version: 1.0.0
+description: "Plugin with missing MCP config"
+mcp:
+  - type: remote
+    name: my-server
+    config: nonexistent.mcp.json
+`,
+			wantErr: "mcp config not found",
+		},
+		{
 			name: "unknown plugin name returns error",
 			manifest: `
 name: test-plugin
@@ -196,14 +339,71 @@ description: "A test plugin"
 			},
 			wantErr: "claudia.yaml not found",
 		},
+		{
+			name: "end-to-end build and verify round-trip",
+			manifest: `
+name: integration-test
+version: 0.1.0
+description: "End-to-end integration test plugin"
+author:
+  name: Test Author
+  email: test@example.com
+license: MIT
+skills:
+  - skills/*.md
+commands:
+  - commands/*.md
+settings:
+  - settings/settings.json
+`,
+			setupFiles: func(t *testing.T, dir string) {
+				t.Helper()
+				writeFile(t, filepath.Join(dir, "skills", "analyze.md"), "# Analyze\nA skill.")
+				writeFile(t, filepath.Join(dir, "skills", "review.md"), "# Review\nAnother skill.")
+				writeFile(t, filepath.Join(dir, "commands", "init.md"), "# Init\nA command.")
+				writeFile(t, filepath.Join(dir, "settings", "settings.json"), `{"key":"value"}`)
+			},
+			checkBuild: func(t *testing.T, dir string) {
+				t.Helper()
+				archivePath := filepath.Join(dir, "integration-test-0.1.0.claudia")
+				if _, err := os.Stat(archivePath); err != nil {
+					t.Fatalf("archive not created: %v", err)
+				}
+				if err := runVerify(archivePath); err != nil {
+					t.Fatalf("verify: %v", err)
+				}
+			},
+		},
+		{
+			name: "metadata capture error when not a git repo",
+			manifest: `
+name: test-plugin
+version: 1.0.0
+description: "A test plugin"
+`,
+			// We set up the manifest but do NOT init a git repo (no initTestRepo).
+			// Since runBuild is called with a plain tempdir that has no git repo,
+			// metadata.Capture will fail.
+			// NOTE: this test skips commitAll since there's no git repo.
+			wantErr: "not a git repository",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			ctx := context.Background()
+			vfs := osfs.NewWithNoIdm()
+
 			dir := t.TempDir()
-			initTestRepo(t, dir)
+
+			// For the "metadata capture error" test, don't init a git repo.
+			isNoGitTest := tt.name == "metadata capture error when not a git repo"
+
+			if !isNoGitTest {
+				initTestRepo(t, dir)
+			}
 
 			if tt.manifest != "" {
 				writeFile(t, filepath.Join(dir, "claudia.yaml"), tt.manifest)
@@ -213,9 +413,11 @@ description: "A test plugin"
 				tt.setupFiles(t, dir)
 			}
 
-			commitAll(t, dir)
+			if !isNoGitTest {
+				commitAll(t, dir)
+			}
 
-			err := runBuild(dir, tt.names)
+			err := runBuild(ctx, vfs, dir, tt.names)
 
 			if tt.wantErr != "" {
 				if err == nil {
@@ -235,47 +437,6 @@ description: "A test plugin"
 				tt.checkBuild(t, dir)
 			}
 		})
-	}
-}
-
-func TestRunBuildAndVerify(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	initTestRepo(t, dir)
-
-	writeFile(t, filepath.Join(dir, "claudia.yaml"), `
-name: integration-test
-version: 0.1.0
-description: "End-to-end integration test plugin"
-author:
-  name: Test Author
-  email: test@example.com
-license: MIT
-skills:
-  - skills/*.md
-commands:
-  - commands/*.md
-settings:
-  - settings/settings.json
-`)
-	writeFile(t, filepath.Join(dir, "skills", "analyze.md"), "# Analyze\nA skill.")
-	writeFile(t, filepath.Join(dir, "skills", "review.md"), "# Review\nAnother skill.")
-	writeFile(t, filepath.Join(dir, "commands", "init.md"), "# Init\nA command.")
-	writeFile(t, filepath.Join(dir, "settings", "settings.json"), `{"key":"value"}`)
-	commitAll(t, dir)
-
-	if err := runBuild(dir, nil); err != nil {
-		t.Fatalf("build: %v", err)
-	}
-
-	archivePath := filepath.Join(dir, "integration-test-0.1.0.claudia")
-	if _, err := os.Stat(archivePath); err != nil {
-		t.Fatalf("archive not created: %v", err)
-	}
-
-	if err := runVerify(archivePath); err != nil {
-		t.Fatalf("verify: %v", err)
 	}
 }
 

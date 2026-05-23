@@ -24,12 +24,15 @@ package archive
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/avfs/avfs"
 )
 
 // FileEntry describes a single file to include in an archive.
@@ -42,8 +45,9 @@ type FileEntry struct {
 }
 
 // Create writes a gzipped tarball at outputPath containing the given files.
-func Create(outputPath string, files []FileEntry) error {
-	f, err := os.Create(outputPath)
+// It uses vfs for creating the output file and reading source files from disk.
+func Create(ctx context.Context, vfs avfs.VFS, outputPath string, files []FileEntry) error {
+	f, err := vfs.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("create archive: %w", err)
 	}
@@ -62,7 +66,7 @@ func Create(outputPath string, files []FileEntry) error {
 		}
 
 		if fe.Src != "" {
-			if err := addFileFromDisk(tw, fe); err != nil {
+			if err := addFileFromDisk(vfs, tw, fe); err != nil {
 				_ = tw.Close()
 				_ = gw.Close()
 				return err
@@ -90,6 +94,8 @@ func Create(outputPath string, files []FileEntry) error {
 
 // Extract unpacks a gzipped tarball at archivePath into destDir.
 // Symlinks and paths that escape destDir are rejected.
+// It uses the real OS filesystem for extraction since archives are always
+// extracted to real disk locations.
 func Extract(archivePath string, destDir string) error {
 	f, err := os.Open(archivePath)
 	if err != nil {
@@ -142,8 +148,8 @@ func Extract(archivePath string, destDir string) error {
 	return nil
 }
 
-func addFileFromDisk(tw *tar.Writer, fe FileEntry) error {
-	info, err := os.Stat(fe.Src)
+func addFileFromDisk(vfs avfs.VFS, tw *tar.Writer, fe FileEntry) error {
+	info, err := vfs.Stat(fe.Src)
 	if err != nil {
 		return fmt.Errorf("stat %s: %w", fe.Src, err)
 	}
@@ -163,7 +169,7 @@ func addFileFromDisk(tw *tar.Writer, fe FileEntry) error {
 		return fmt.Errorf("write header %s: %w", fe.ArchivePath, err)
 	}
 
-	f, err := os.Open(fe.Src)
+	f, err := vfs.Open(fe.Src)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", fe.Src, err)
 	}

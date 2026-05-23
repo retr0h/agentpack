@@ -21,22 +21,49 @@
 package manifest_test
 
 import (
-	"os"
-	"path/filepath"
+	"context"
+	"errors"
+	"io/fs"
 	"strings"
 	"testing"
 
+	"github.com/avfs/avfs"
+	"github.com/avfs/avfs/vfs/memfs"
 	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/claudia/internal/manifest"
 )
 
-// writeYAML creates a claudia.yaml in dir with the given content.
-func writeYAML(t *testing.T, dir, content string) {
+// --------------------------------------------------------------------------
+// Helpers
+// --------------------------------------------------------------------------
+
+// memfsWithYAML creates a memfs, writes content as claudia.yaml under /dir,
+// and returns the VFS and the directory path "/dir".
+func memfsWithYAML(t *testing.T, content string) (avfs.VFS, string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, "claudia.yaml"), []byte(content), 0o644); err != nil {
-		t.Fatalf("writeYAML: %v", err)
+	vfs := memfs.New()
+	if err := vfs.MkdirAll("/dir", 0o755); err != nil {
+		t.Fatalf("MkdirAll /dir: %v", err)
 	}
+	if err := vfs.WriteFile("/dir/claudia.yaml", []byte(content), fs.FileMode(0o644)); err != nil {
+		t.Fatalf("WriteFile claudia.yaml: %v", err)
+	}
+	return vfs, "/dir"
+}
+
+// --------------------------------------------------------------------------
+// Error-injecting VFS helpers
+// --------------------------------------------------------------------------
+
+// readFileErrorVFS wraps avfs.VFS and returns an error from ReadFile for any
+// path that exists. Used to trigger the "reading claudia.yaml" error branch.
+type readFileErrorVFS struct {
+	avfs.VFS
+}
+
+func (readFileErrorVFS) ReadFile(string) ([]byte, error) {
+	return nil, errors.New("permission denied")
 }
 
 // --------------------------------------------------------------------------
@@ -46,25 +73,32 @@ func writeYAML(t *testing.T, dir, content string) {
 func TestLoad(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	tests := []struct {
 		name      string
-		yaml      string // empty means no file is written
+		setupVFS  func(t *testing.T) (avfs.VFS, string)
 		wantErr   string // substring that must appear in error; empty = no error
 		wantName  string
 		wantPlugs int // number of plugins (Plugins field), 0 for single-plugin form
 	}{
 		{
 			name: "single plugin valid",
-			yaml: `
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfsWithYAML(t, `
 name: my-plugin
 version: "1.0.0"
 description: A test plugin
-`,
+`)
+			},
 			wantName: "my-plugin",
 		},
 		{
 			name: "multi plugin valid",
-			yaml: `
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfsWithYAML(t, `
 plugins:
   - name: plugin-a
     version: "1.0.0"
@@ -72,36 +106,48 @@ plugins:
   - name: plugin-b
     version: "2.0.0"
     description: Second plugin
-`,
+`)
+			},
 			wantPlugs: 2,
 		},
 		{
 			name: "missing name single plugin",
-			yaml: `
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfsWithYAML(t, `
 version: "1.0.0"
 description: A test plugin
-`,
+`)
+			},
 			wantErr: "name is required",
 		},
 		{
 			name: "missing version single plugin",
-			yaml: `
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfsWithYAML(t, `
 name: my-plugin
 description: A test plugin
-`,
+`)
+			},
 			wantErr: "version is required",
 		},
 		{
 			name: "missing description single plugin",
-			yaml: `
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfsWithYAML(t, `
 name: my-plugin
 version: "1.0.0"
-`,
+`)
+			},
 			wantErr: "description is required",
 		},
 		{
 			name: "both top-level name and plugins",
-			yaml: `
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfsWithYAML(t, `
 name: my-plugin
 version: "1.0.0"
 description: A test plugin
@@ -109,47 +155,85 @@ plugins:
   - name: plugin-a
     version: "1.0.0"
     description: First plugin
-`,
+`)
+			},
 			wantErr: "manifest has both top-level 'name' and 'plugins'; use one or the other",
 		},
 		{
 			name: "empty plugins list",
-			yaml: `
-plugins: []
-`,
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfsWithYAML(t, "plugins: []\n")
+			},
 			wantErr: "no plugins defined in claudia.yaml",
 		},
 		{
 			name: "multi plugin missing name",
-			yaml: `
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfsWithYAML(t, `
 plugins:
   - version: "1.0.0"
     description: First plugin
-`,
+`)
+			},
 			wantErr: "name is required",
 		},
 		{
 			name: "multi plugin missing version",
-			yaml: `
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfsWithYAML(t, `
 plugins:
   - name: plugin-a
     description: First plugin
-`,
+`)
+			},
 			wantErr: "version is required",
 		},
 		{
 			name: "multi plugin missing description",
-			yaml: `
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return memfsWithYAML(t, `
 plugins:
   - name: plugin-a
     version: "1.0.0"
-`,
+`)
+			},
 			wantErr: "description is required",
 		},
 		{
-			name:    "file not found",
-			yaml:    "", // no file written
+			name: "file not found",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				// Return an empty memfs with no claudia.yaml — triggers IsNotExist.
+				vfs := memfs.New()
+				if err := vfs.MkdirAll("/dir", 0o755); err != nil {
+					t.Fatal(err)
+				}
+				return vfs, "/dir"
+			},
 			wantErr: "claudia.yaml not found in",
+		},
+		{
+			name: "non-IsNotExist read error triggers reading branch",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				// The readFileErrorVFS always returns "permission denied" which
+				// is not an IsNotExist error, so it hits the reading branch.
+				return readFileErrorVFS{VFS: memfs.New()}, "/dir"
+			},
+			wantErr: "reading claudia.yaml",
+		},
+		{
+			name: "malformed YAML returns parse error",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				// Write invalid YAML to trigger the yaml.Unmarshal error branch.
+				return memfsWithYAML(t, "name: [invalid yaml\n")
+			},
+			wantErr: "parsing claudia.yaml",
 		},
 	}
 
@@ -157,12 +241,8 @@ plugins:
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			dir := t.TempDir()
-			if tc.yaml != "" {
-				writeYAML(t, dir, tc.yaml)
-			}
-
-			m, err := manifest.Load(dir)
+			vfs, dir := tc.setupVFS(t)
+			m, err := manifest.Load(ctx, vfs, dir)
 
 			if tc.wantErr != "" {
 				if err == nil {
