@@ -1,0 +1,14 @@
+{
+  "hooks": [
+    {
+      "type": "PreToolUse",
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "./hooks/tf-plan-check.sh"
+        }
+      ]
+    }
+  ]
+}

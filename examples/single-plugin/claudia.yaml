@@ -1,0 +1,49 @@
+name: acme-toolkit
+version: 1.0.0
+description: "ACME Corp security toolkit for Claude Code"
+
+author:
+  name: "ACME Corp"
+  email: "security@acme.example.com"
+
+license: MIT
+homepage: "https://github.com/acme/toolkit"
+keywords: [security, scanning, review]
+category: security
+
+skills:
+  - skills/*.md
+
+commands:
+  - commands/*.md
+
+hooks:
+  - hooks/hooks.json
+  - hooks/*.sh
+
+agents:
+  - agents/*.md
+
+mcp:
+  - type: binary
+    name: acme-scanner
+    src: bin/acme-scanner
+    args: ["--port", "3000"]
+    env:
+      ACME_LOG_LEVEL: "info"
+    platforms: [darwin-arm64, darwin-amd64, linux-amd64]
+
+  - type: remote
+    name: acme-cloud
+    url: "https://mcp.acme.example.com/v1"
+
+  - type: ux
+    name: acme-ui
+    package: "@acme/mcp-ui"
+    args: ["--verbose"]
+
+binaries:
+  - bin/acme-tool
+
+settings:
+  - settings/settings.json

@@ -42,7 +42,8 @@ var verifyCmd = &cobra.Command{
 			return err
 		}
 
-		cli.Printf(out, "%s %s\n\n",
+		cli.Printf(
+			out, "%s %s\n\n",
 			cli.Mute(out, "claudia: verifying"),
 			cli.Accent(out, result.ArchiveName),
 		)

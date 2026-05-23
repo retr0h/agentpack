@@ -139,15 +139,6 @@ func buildPlugin(
 		{"settings", p.Settings},
 	}
 
-	destDirMap := map[string]string{
-		"skills":   "skills",
-		"commands": "commands",
-		"hooks":    "hooks",
-		"agents":   "agents",
-		"binaries": "bin",
-		"settings": "settings",
-	}
-
 	var commandDests []string
 
 	for _, s := range sections {
@@ -160,17 +151,14 @@ func buildPlugin(
 			return Result{}, fmt.Errorf("%s: %w", s.label, err)
 		}
 
-		destDir := destDirMap[s.label]
-
 		for _, fp := range pairs {
-			dest := path.Join(destDir, fp.Dest)
 			files = append(files, archive.FileEntry{
 				Src:         fp.Src,
-				ArchivePath: path.Join(prefix, dest),
+				ArchivePath: path.Join(prefix, fp.Dest),
 			})
 
 			if s.label == "commands" {
-				commandDests = append(commandDests, dest)
+				commandDests = append(commandDests, fp.Dest)
 			}
 		}
 	}

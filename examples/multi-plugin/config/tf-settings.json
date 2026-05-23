@@ -1,0 +1,7 @@
+{
+  "terraform": {
+    "auto_plan": true,
+    "require_approval_for_destroy": true,
+    "state_backend": "s3"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "acme": {
+    "severity_threshold": "medium",
+    "auto_scan": true,
+    "rules": ["owasp-top-10", "secrets", "crypto"]
+  }
+}

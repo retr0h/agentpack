@@ -1,0 +1,68 @@
+author:
+  name: "Ops Team"
+  email: "ops@example.com"
+license: Apache-2.0
+homepage: "https://github.com/example/ops-plugins"
+
+plugins:
+  - name: k8s-helpers
+    version: 2.0.0
+    description: "Kubernetes workflow skills and commands"
+    keywords: [kubernetes, devops, containers]
+    category: infrastructure
+
+    # Files are NOT in standard plugin layout — they live in
+    # nonstandard directories and need remapping.
+    skills:
+      - src: prompts/kubernetes/*.md
+        dest: skills/
+    commands:
+      - src: cli/k8s/deploy.md
+        dest: commands/deploy.md
+      - src: cli/k8s/rollback.md
+        dest: commands/rollback.md
+    agents:
+      - src: ai/k8s-agent.md
+        dest: agents/k8s-agent.md
+
+  - name: terraform-linter
+    version: 1.3.0
+    description: "Terraform plan review and linting"
+    keywords: [terraform, iac, linting]
+    category: infrastructure
+
+    skills:
+      - src: prompts/terraform/review.md
+        dest: skills/review.md
+      - src: prompts/terraform/drift.md
+        dest: skills/drift.md
+    hooks:
+      - src: automation/tf-hooks.json
+        dest: hooks/hooks.json
+      - src: automation/tf-plan-check.sh
+        dest: hooks/tf-plan-check.sh
+    settings:
+      - src: config/tf-settings.json
+        dest: settings/settings.json
+
+  - name: incident-responder
+    version: 0.9.0
+    description: "Incident response runbooks and escalation"
+    keywords: [incident, oncall, runbook]
+    category: operations
+
+    # Override shared author for this plugin.
+    author:
+      name: "SRE Team"
+      email: "sre@example.com"
+
+    skills:
+      - src: runbooks/*.md
+        dest: skills/
+    commands:
+      - src: cli/incident/page.md
+        dest: commands/page.md
+    mcp:
+      - type: remote
+        name: pagerduty-bridge
+        url: "https://mcp.internal.example.com/pagerduty"

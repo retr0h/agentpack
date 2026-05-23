@@ -1,0 +1,14 @@
+{
+  "hooks": [
+    {
+      "type": "PostToolUse",
+      "matcher": "Write|Edit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "./hooks/post-write.sh $CLAUDE_FILE_PATH"
+        }
+      ]
+    }
+  ]
+}

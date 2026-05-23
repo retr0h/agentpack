@@ -55,7 +55,8 @@ are built. Otherwise all plugins in the manifest are built.`,
 		}
 
 		for _, r := range results {
-			cli.Printf(out,
+			cli.Printf(
+				out,
 				"%s %s %s\n\n  %s  (%s)\n  sha256: %s\n\n",
 				cli.Mute(out, "claudia: building"),
 				cli.Accent(out, r.Name),

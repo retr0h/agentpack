@@ -8,3 +8,5 @@ docs/bun.lock
 
 /claudia
 coverage.out
+*.claudia
+examples/*/.git/
