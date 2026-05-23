@@ -131,7 +131,10 @@ description: A test plugin
 					t.Error("Size is 0")
 				}
 				if !strings.HasSuffix(r.ArchivePath, "my-plugin-1.0.0.claudia") {
-					t.Errorf("ArchivePath = %q, expected suffix my-plugin-1.0.0.claudia", r.ArchivePath)
+					t.Errorf(
+						"ArchivePath = %q, expected suffix my-plugin-1.0.0.claudia",
+						r.ArchivePath,
+					)
 				}
 			},
 		},
@@ -349,96 +352,6 @@ skills:
 
 			if tt.checkResult != nil {
 				tt.checkResult(t, results)
-			}
-		})
-	}
-}
-
-// --------------------------------------------------------------------------
-// shortSHA and humanSize are private — tested indirectly via Run results.
-// computeArchiveChecksums is tested indirectly through Run.
-// We expose thin wrappers via export_test.go for direct testing.
-// --------------------------------------------------------------------------
-
-func TestShortSHA(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		sha  string
-		want string
-	}{
-		{
-			name: "40-char sha returns first 7",
-			sha:  "aabbccddaabbccddaabbccddaabbccddaabbccdd",
-			want: "aabbccd",
-		},
-		{
-			name: "7-char sha unchanged",
-			sha:  "abcdefg",
-			want: "abcdefg",
-		},
-		{
-			name: "short sha returned as-is",
-			sha:  "abc",
-			want: "abc",
-		},
-		{
-			name: "empty sha returned as-is",
-			sha:  "",
-			want: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := build.ShortSHA(tt.sha)
-			if got != tt.want {
-				t.Errorf("ShortSHA(%q) = %q, want %q", tt.sha, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestHumanSize(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name  string
-		bytes int64
-		want  string
-	}{
-		{
-			name:  "zero bytes",
-			bytes: 0,
-			want:  "0 B",
-		},
-		{
-			name:  "under 1 KB",
-			bytes: 512,
-			want:  "512 B",
-		},
-		{
-			name:  "exactly 1 KB",
-			bytes: 1024,
-			want:  "1 KB",
-		},
-		{
-			name:  "multiple KB",
-			bytes: 5120,
-			want:  "5 KB",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := build.HumanSize(tt.bytes)
-			if got != tt.want {
-				t.Errorf("HumanSize(%d) = %q, want %q", tt.bytes, got, tt.want)
 			}
 		})
 	}

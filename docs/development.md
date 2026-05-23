@@ -55,8 +55,8 @@ just clean          # remove binary
 ## Testing conventions
 
 **Every public function and method MUST have a table-driven test.** One table
-per function, with rows covering both the happy path and every failure mode.
-No ad-hoc `Test*` functions. Every test must follow this pattern:
+per function, with rows covering both the happy path and every failure mode. No
+ad-hoc `Test*` functions. Every test must follow this pattern:
 
 ```go
 func TestFunctionName(t *testing.T) {
@@ -87,6 +87,7 @@ func TestFunctionName(t *testing.T) {
 ### Filesystem mocking
 
 Tests use [AVFS](https://github.com/avfs/avfs) for virtual filesystem:
+
 - Production: `osfs.NewWithNoIdm()` (real OS)
 - Tests: `memfs.New()` (in-memory)
 - Error injection: wrap `memfs` with a custom struct overriding methods
@@ -99,4 +100,5 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - **Body**: wrap at 72 characters, separated from subject by a blank line
 - **Format**: `type(scope): description`
 - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
-- **Scopes**: `cli`, `archive`, `build`, `checksum`, `manifest`, `metadata`, `plugin`, `theme`, `verify`
+- **Scopes**: `cli`, `archive`, `build`, `checksum`, `manifest`, `metadata`,
+  `plugin`, `theme`, `verify`

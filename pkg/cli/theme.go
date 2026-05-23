@@ -22,6 +22,7 @@
 package cli
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -78,6 +79,16 @@ func Banner(w io.Writer) string {
 		render(w, active.BannerBot, bot) + "\n"
 }
 
+// Print writes a line to w.
+func Print(w io.Writer, s string) {
+	_, _ = fmt.Fprintln(w, s)
+}
+
+// Printf writes a formatted string to w.
+func Printf(w io.Writer, format string, a ...any) {
+	_, _ = fmt.Fprintf(w, format, a...)
+}
+
 // Mute returns s rendered as secondary text.
 func Mute(w io.Writer, s string) string { return render(w, active.Mute, s) }
 
@@ -89,3 +100,12 @@ func OK(w io.Writer, s string) string { return render(w, active.OK, s) }
 
 // Err returns s in the error color.
 func Err(w io.Writer, s string) string { return render(w, active.Err, s) }
+
+// HumanSize formats a byte count for display.
+func HumanSize(bytes int64) string {
+	const kb = 1024
+	if bytes < kb {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	return fmt.Sprintf("%d KB", bytes/kb)
+}

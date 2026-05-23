@@ -304,8 +304,14 @@ func TestWriteFile(t *testing.T) {
 				return memfs.New(), "/checksums.txt"
 			},
 			entries: []checksum.Entry{
-				{Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd", Path: "file1.txt"},
-				{Hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210", Path: "subdir/file2.txt"},
+				{
+					Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd",
+					Path: "file1.txt",
+				},
+				{
+					Hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+					Path: "subdir/file2.txt",
+				},
 			},
 			checkRead: func(t *testing.T, path string, want []checksum.Entry) {
 				t.Helper()
@@ -364,7 +370,12 @@ func TestWriteFile(t *testing.T) {
 				t.Helper()
 				return closeErrorVFS{VFS: memfs.New()}, "/checksums.txt"
 			},
-			entries:     []checksum.Entry{{Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd", Path: "f.txt"}},
+			entries: []checksum.Entry{
+				{
+					Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd",
+					Path: "f.txt",
+				},
+			},
 			wantErr:     true,
 			wantErrFrag: "close",
 		},
@@ -423,15 +434,24 @@ func TestReadFile(t *testing.T) {
 			name:    "parses two valid entries",
 			content: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd  file1.txt\nfedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210  subdir/file2.txt\n",
 			want: []checksum.Entry{
-				{Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd", Path: "file1.txt"},
-				{Hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210", Path: "subdir/file2.txt"},
+				{
+					Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd",
+					Path: "file1.txt",
+				},
+				{
+					Hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+					Path: "subdir/file2.txt",
+				},
 			},
 		},
 		{
 			name:    "skips blank lines",
 			content: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd  file.txt\n\n",
 			want: []checksum.Entry{
-				{Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd", Path: "file.txt"},
+				{
+					Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd",
+					Path: "file.txt",
+				},
 			},
 		},
 		{
@@ -505,7 +525,10 @@ func TestVerify(t *testing.T) {
 			},
 			// SHA256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
 			entries: []checksum.Entry{
-				{Hash: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", Path: "file.txt"},
+				{
+					Hash: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+					Path: "file.txt",
+				},
 			},
 			wantOK: []bool{true},
 		},
@@ -515,7 +538,10 @@ func TestVerify(t *testing.T) {
 				"file.txt": []byte("hello"),
 			},
 			entries: []checksum.Entry{
-				{Hash: "0000000000000000000000000000000000000000000000000000000000000000", Path: "file.txt"},
+				{
+					Hash: "0000000000000000000000000000000000000000000000000000000000000000",
+					Path: "file.txt",
+				},
 			},
 			wantOK: []bool{false},
 		},
@@ -523,7 +549,10 @@ func TestVerify(t *testing.T) {
 			name:       "missing file fails",
 			setupFiles: map[string][]byte{},
 			entries: []checksum.Entry{
-				{Hash: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", Path: "ghost.txt"},
+				{
+					Hash: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+					Path: "ghost.txt",
+				},
 			},
 			wantOK: []bool{false},
 		},
@@ -557,7 +586,13 @@ func TestVerify(t *testing.T) {
 
 			for i, want := range tt.wantOK {
 				if results[i].OK != want {
-					t.Errorf("results[%d].OK = %v, want %v (Err=%q)", i, results[i].OK, want, results[i].Err)
+					t.Errorf(
+						"results[%d].OK = %v, want %v (Err=%q)",
+						i,
+						results[i].OK,
+						want,
+						results[i].Err,
+					)
 				}
 
 				if !want && results[i].Err == "" {
@@ -569,5 +604,7 @@ func TestVerify(t *testing.T) {
 }
 
 // Compile-time interface checks.
-var _ io.Reader = copyErrorFile{}
-var _ io.Writer = flushErrorFile{}
+var (
+	_ io.Reader = copyErrorFile{}
+	_ io.Writer = flushErrorFile{}
+)

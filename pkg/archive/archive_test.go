@@ -268,7 +268,9 @@ func TestCreate(t *testing.T) {
 				if err := archive.Extract(context.Background(), archivePath, destDir); err != nil {
 					t.Fatalf("extract: %v", err)
 				}
-				info, err := os.Stat(filepath.Join(destDir, "marketplaces", "p", "mcp", "my-server"))
+				info, err := os.Stat(
+					filepath.Join(destDir, "marketplaces", "p", "mcp", "my-server"),
+				)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -364,7 +366,9 @@ func TestExtract(t *testing.T) {
 				if string(got) != "content" {
 					t.Errorf("data.txt = %q, want %q", got, "content")
 				}
-				got2, err := os.ReadFile(filepath.Join(destDir, "marketplaces", "pkg", ".claudia", "meta.json"))
+				got2, err := os.ReadFile(
+					filepath.Join(destDir, "marketplaces", "pkg", ".claudia", "meta.json"),
+				)
 				if err != nil {
 					t.Fatalf("read meta.json: %v", err)
 				}

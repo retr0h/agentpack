@@ -108,3 +108,114 @@ func TestThemeRenders(t *testing.T) {
 		})
 	}
 }
+
+func TestPrintf(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		format string
+		args   []any
+		want   string
+	}{
+		{
+			name:   "writes formatted string",
+			format: "hello %s %d",
+			args:   []any{"world", 42},
+			want:   "hello world 42",
+		},
+		{
+			name:   "handles empty format",
+			format: "",
+			args:   nil,
+			want:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cli.Printf(&buf, tt.format, tt.args...)
+			if buf.String() != tt.want {
+				t.Errorf("Printf output = %q, want %q", buf.String(), tt.want)
+			}
+		})
+	}
+}
+
+func TestPrint(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{
+			name: "writes line with newline",
+			text: "hello",
+			want: "hello\n",
+		},
+		{
+			name: "empty string produces newline",
+			text: "",
+			want: "\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cli.Print(&buf, tt.text)
+			if buf.String() != tt.want {
+				t.Errorf("Print output = %q, want %q", buf.String(), tt.want)
+			}
+		})
+	}
+}
+
+func TestHumanSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		bytes int64
+		want  string
+	}{
+		{
+			name:  "zero bytes",
+			bytes: 0,
+			want:  "0 B",
+		},
+		{
+			name:  "under 1 KB",
+			bytes: 512,
+			want:  "512 B",
+		},
+		{
+			name:  "exactly 1 KB",
+			bytes: 1024,
+			want:  "1 KB",
+		},
+		{
+			name:  "multiple KB",
+			bytes: 5120,
+			want:  "5 KB",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := cli.HumanSize(tt.bytes)
+			if got != tt.want {
+				t.Errorf("HumanSize(%d) = %q, want %q", tt.bytes, got, tt.want)
+			}
+		})
+	}
+}

@@ -111,7 +111,13 @@ func filterPlugins(plugins []manifest.Plugin, names []string) ([]manifest.Plugin
 	return result, nil
 }
 
-func buildPlugin(ctx context.Context, vfs avfs.VFS, dir string, p manifest.Plugin, meta *metadata.Metadata) (Result, error) {
+func buildPlugin(
+	ctx context.Context,
+	vfs avfs.VFS,
+	dir string,
+	p manifest.Plugin,
+	meta *metadata.Metadata,
+) (Result, error) {
 	meta.Name = p.Name
 	meta.Version = p.Version
 
@@ -320,7 +326,11 @@ func buildMCPEntries(
 	return files, count, nil
 }
 
-func computeArchiveChecksums(ctx context.Context, vfs avfs.VFS, files []archive.FileEntry) ([]checksum.Entry, error) {
+func computeArchiveChecksums(
+	ctx context.Context,
+	vfs avfs.VFS,
+	files []archive.FileEntry,
+) ([]checksum.Entry, error) {
 	var entries []checksum.Entry
 
 	for _, f := range files {
@@ -355,19 +365,4 @@ func formatChecksums(entries []checksum.Entry) []byte {
 		buf = fmt.Appendf(buf, "%s  %s\n", e.Hash, e.Path)
 	}
 	return buf
-}
-
-func shortSHA(sha string) string {
-	if len(sha) >= 7 {
-		return sha[:7]
-	}
-	return sha
-}
-
-func humanSize(bytes int64) string {
-	const kb = 1024
-	if bytes < kb {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	return fmt.Sprintf("%d KB", bytes/kb)
 }

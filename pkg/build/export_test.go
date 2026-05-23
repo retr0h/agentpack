@@ -37,13 +37,11 @@ type FileEntry = archive.FileEntry
 // ChecksumEntry aliases checksum.Entry for use in build_test.go.
 type ChecksumEntry = checksum.Entry
 
-// ShortSHA exposes shortSHA for testing.
-func ShortSHA(sha string) string { return shortSHA(sha) }
-
-// HumanSize exposes humanSize for testing.
-func HumanSize(bytes int64) string { return humanSize(bytes) }
-
 // ComputeArchiveChecksums exposes computeArchiveChecksums for testing.
-func ComputeArchiveChecksums(ctx context.Context, vfs avfs.VFS, files []archive.FileEntry) ([]checksum.Entry, error) {
+func ComputeArchiveChecksums(
+	ctx context.Context,
+	vfs avfs.VFS,
+	files []archive.FileEntry,
+) ([]checksum.Entry, error) {
 	return computeArchiveChecksums(ctx, vfs, files)
 }

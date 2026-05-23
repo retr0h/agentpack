@@ -29,6 +29,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/claudia/pkg/build"
+	"github.com/retr0h/claudia/pkg/cli"
 )
 
 var buildCmd = &cobra.Command{
@@ -46,6 +47,7 @@ are built. Otherwise all plugins in the manifest are built.`,
 		}
 
 		vfs := osfs.NewWithNoIdm()
+		out := cmd.OutOrStdout()
 
 		results, err := build.Run(ctx, vfs, build.Options{Dir: dir, Names: args})
 		if err != nil {
@@ -53,16 +55,19 @@ are built. Otherwise all plugins in the manifest are built.`,
 		}
 
 		for _, r := range results {
-			fmt.Fprintf(cmd.OutOrStdout(),
-				"claudia: building %s v%s\n\n  %s  (%s)\n  sha256: %s\n\n",
-				r.Name, r.Version,
-				filepath.Base(r.ArchivePath), cmdHumanSize(r.Size),
-				r.SHA256,
+			cli.Printf(out,
+				"%s %s %s\n\n  %s  (%s)\n  sha256: %s\n\n",
+				cli.Mute(out, "claudia: building"),
+				cli.Accent(out, r.Name),
+				cli.Mute(out, "v"+r.Version),
+				filepath.Base(r.ArchivePath),
+				cli.Mute(out, cli.HumanSize(r.Size)),
+				cli.Mute(out, r.SHA256),
 			)
 		}
 
 		if len(results) > 1 {
-			fmt.Fprintf(cmd.OutOrStdout(), "\n%d archives built\n", len(results))
+			cli.Printf(out, "\n%d archives built\n", len(results))
 		}
 
 		return nil
@@ -71,12 +76,4 @@ are built. Otherwise all plugins in the manifest are built.`,
 
 func init() {
 	rootCmd.AddCommand(buildCmd)
-}
-
-func cmdHumanSize(bytes int64) string {
-	const kb = 1024
-	if bytes < kb {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	return fmt.Sprintf("%d KB", bytes/kb)
 }

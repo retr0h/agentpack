@@ -49,7 +49,12 @@ type FilePair struct {
 //     destination.
 //   - An entry with neither Glob nor Src is an error.
 //   - Empty or nil entries returns an empty slice with no error.
-func ResolveEntries(_ context.Context, vfs avfs.VFS, baseDir string, entries []Entry) ([]FilePair, error) {
+func ResolveEntries(
+	_ context.Context,
+	vfs avfs.VFS,
+	baseDir string,
+	entries []Entry,
+) ([]FilePair, error) {
 	if len(entries) == 0 {
 		return []FilePair{}, nil
 	}

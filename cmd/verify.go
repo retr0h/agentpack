@@ -25,6 +25,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/retr0h/claudia/pkg/cli"
 	"github.com/retr0h/claudia/pkg/verify"
 )
 
@@ -34,29 +35,33 @@ var verifyCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
+		out := cmd.OutOrStdout()
 
 		result, err := verify.Run(ctx, args[0])
 		if err != nil {
 			return err
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "claudia: verifying %s\n\n", result.ArchiveName)
+		cli.Printf(out, "%s %s\n\n",
+			cli.Mute(out, "claudia: verifying"),
+			cli.Accent(out, result.ArchiveName),
+		)
 
 		passed := 0
 		failed := 0
 
 		for _, f := range result.Files {
 			if f.OK {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %-60s OK\n", f.Path)
+				cli.Printf(out, "  %-60s %s\n", f.Path, cli.OK(out, "OK"))
 				passed++
 			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %-60s FAIL  %s\n", f.Path, f.Err)
+				cli.Printf(out, "  %-60s %s  %s\n", f.Path, cli.Err(out, "FAIL"), f.Err)
 				failed++
 			}
 		}
 
 		total := passed + failed
-		fmt.Fprintf(cmd.OutOrStdout(), "\n  %d/%d files verified\n", passed, total)
+		cli.Printf(out, "\n  %d/%d files verified\n", passed, total)
 
 		if failed > 0 {
 			return fmt.Errorf("%d file(s) failed verification", failed)

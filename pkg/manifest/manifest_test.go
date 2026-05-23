@@ -377,9 +377,12 @@ func TestNormalize(t *testing.T) {
 						Name:        "a",
 						Version:     "1.0.0",
 						Description: "first",
-						Author:      manifest.Author{Name: "Override Author", Email: "override@example.com"},
-						License:     "GPL-3.0",
-						Homepage:    "https://override.example.com",
+						Author: manifest.Author{
+							Name:  "Override Author",
+							Email: "override@example.com",
+						},
+						License:  "GPL-3.0",
+						Homepage: "https://override.example.com",
 					},
 				},
 			},
@@ -387,7 +390,10 @@ func TestNormalize(t *testing.T) {
 			check: func(t *testing.T, plugins []manifest.Plugin) {
 				t.Helper()
 				p := plugins[0]
-				wantAuthor := manifest.Author{Name: "Override Author", Email: "override@example.com"}
+				wantAuthor := manifest.Author{
+					Name:  "Override Author",
+					Email: "override@example.com",
+				}
 				if p.Author != wantAuthor {
 					t.Errorf("Author = %+v, want %+v", p.Author, wantAuthor)
 				}
