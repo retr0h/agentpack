@@ -1,0 +1,280 @@
+// Copyright (c) 2026 John Dewey
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
+package cmd
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/retr0h/claudia/internal/archive"
+)
+
+var gitEnv = []string{
+	"GIT_AUTHOR_NAME=Test Author",
+	"GIT_AUTHOR_EMAIL=test@example.com",
+	"GIT_COMMITTER_NAME=Test Committer",
+	"GIT_COMMITTER_EMAIL=test@example.com",
+}
+
+func initTestRepo(t *testing.T, dir string) {
+	t.Helper()
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), gitEnv...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	run("init")
+	run("checkout", "-b", "main")
+}
+
+func commitAll(t *testing.T, dir string) {
+	t.Helper()
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), gitEnv...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	run("add", ".")
+	run("commit", "-m", "test")
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunBuild(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		manifest   string
+		setupFiles func(t *testing.T, dir string)
+		names      []string
+		wantErr    string
+		checkBuild func(t *testing.T, dir string)
+	}{
+		{
+			name: "single plugin with skills and commands",
+			manifest: `
+name: test-plugin
+version: 1.0.0
+description: "A test plugin"
+author:
+  name: Test Author
+  email: test@example.com
+license: MIT
+skills:
+  - skills/*.md
+commands:
+  - commands/*.md
+`,
+			setupFiles: func(t *testing.T, dir string) {
+				t.Helper()
+				writeFile(t, filepath.Join(dir, "skills", "review.md"), "# Review Skill")
+				writeFile(t, filepath.Join(dir, "commands", "init.md"), "# Init Command")
+			},
+			checkBuild: func(t *testing.T, dir string) {
+				t.Helper()
+				archivePath := filepath.Join(dir, "test-plugin-1.0.0.claudia")
+				if _, err := os.Stat(archivePath); err != nil {
+					t.Fatalf("archive not created: %v", err)
+				}
+
+				extractDir := t.TempDir()
+				if err := archive.Extract(archivePath, extractDir); err != nil {
+					t.Fatalf("extract: %v", err)
+				}
+
+				expected := []string{
+					"marketplaces/test-plugin/.claude-plugin/marketplace.json",
+					"marketplaces/test-plugin/.claude-plugin/plugin.json",
+					"marketplaces/test-plugin/.claudia/metadata.json",
+					"marketplaces/test-plugin/.claudia/checksums.txt",
+					"marketplaces/test-plugin/.claudia/claudia.yaml",
+					"marketplaces/test-plugin/skills/review.md",
+					"marketplaces/test-plugin/commands/init.md",
+				}
+				for _, path := range expected {
+					fullPath := filepath.Join(extractDir, path)
+					if _, err := os.Stat(fullPath); err != nil {
+						t.Errorf("missing in archive: %s", path)
+					}
+				}
+			},
+		},
+		{
+			name: "filter by plugin name",
+			manifest: `
+author:
+  name: Test Author
+  email: test@example.com
+license: MIT
+plugins:
+  - name: plugin-a
+    version: 1.0.0
+    description: "Plugin A"
+    skills:
+      - skills/a.md
+  - name: plugin-b
+    version: 2.0.0
+    description: "Plugin B"
+    skills:
+      - skills/b.md
+`,
+			setupFiles: func(t *testing.T, dir string) {
+				t.Helper()
+				writeFile(t, filepath.Join(dir, "skills", "a.md"), "# A")
+				writeFile(t, filepath.Join(dir, "skills", "b.md"), "# B")
+			},
+			names: []string{"plugin-a"},
+			checkBuild: func(t *testing.T, dir string) {
+				t.Helper()
+				if _, err := os.Stat(filepath.Join(dir, "plugin-a-1.0.0.claudia")); err != nil {
+					t.Error("plugin-a archive not created")
+				}
+				if _, err := os.Stat(filepath.Join(dir, "plugin-b-2.0.0.claudia")); err == nil {
+					t.Error("plugin-b archive should not have been created")
+				}
+			},
+		},
+		{
+			name: "unknown plugin name returns error",
+			manifest: `
+name: test-plugin
+version: 1.0.0
+description: "A test plugin"
+`,
+			names:   []string{"nonexistent"},
+			wantErr: "not found in claudia.yaml",
+		},
+		{
+			name: "missing manifest returns error",
+			setupFiles: func(t *testing.T, dir string) {
+				t.Helper()
+				writeFile(t, filepath.Join(dir, "README.md"), "placeholder")
+			},
+			wantErr: "claudia.yaml not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			initTestRepo(t, dir)
+
+			if tt.manifest != "" {
+				writeFile(t, filepath.Join(dir, "claudia.yaml"), tt.manifest)
+			}
+
+			if tt.setupFiles != nil {
+				tt.setupFiles(t, dir)
+			}
+
+			commitAll(t, dir)
+
+			err := runBuild(dir, tt.names)
+
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.checkBuild != nil {
+				tt.checkBuild(t, dir)
+			}
+		})
+	}
+}
+
+func TestRunBuildAndVerify(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	initTestRepo(t, dir)
+
+	writeFile(t, filepath.Join(dir, "claudia.yaml"), `
+name: integration-test
+version: 0.1.0
+description: "End-to-end integration test plugin"
+author:
+  name: Test Author
+  email: test@example.com
+license: MIT
+skills:
+  - skills/*.md
+commands:
+  - commands/*.md
+settings:
+  - settings/settings.json
+`)
+	writeFile(t, filepath.Join(dir, "skills", "analyze.md"), "# Analyze\nA skill.")
+	writeFile(t, filepath.Join(dir, "skills", "review.md"), "# Review\nAnother skill.")
+	writeFile(t, filepath.Join(dir, "commands", "init.md"), "# Init\nA command.")
+	writeFile(t, filepath.Join(dir, "settings", "settings.json"), `{"key":"value"}`)
+	commitAll(t, dir)
+
+	if err := runBuild(dir, nil); err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	archivePath := filepath.Join(dir, "integration-test-0.1.0.claudia")
+	if _, err := os.Stat(archivePath); err != nil {
+		t.Fatalf("archive not created: %v", err)
+	}
+
+	if err := runVerify(archivePath); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+}
