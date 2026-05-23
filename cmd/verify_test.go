@@ -30,7 +30,6 @@ import (
 	"github.com/avfs/avfs/vfs/osfs"
 
 	"github.com/retr0h/claudia/internal/archive"
-	"github.com/retr0h/claudia/internal/checksum"
 )
 
 func TestRunVerify(t *testing.T) {
@@ -244,56 +243,5 @@ func TestFindChecksums(t *testing.T) {
 				t.Errorf("path %q does not have suffix %q", got, tt.wantSuffix)
 			}
 		})
-	}
-}
-
-// TestComputeArchiveChecksums exercises both the Src and Content paths.
-func TestComputeArchiveChecksums(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	vfs := osfs.NewWithNoIdm()
-
-	// Write a real file to use as Src.
-	srcDir := t.TempDir()
-	srcFile := filepath.Join(srcDir, "hello.txt")
-	if err := os.WriteFile(srcFile, []byte("hello"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	files := []archive.FileEntry{
-		{Src: srcFile, ArchivePath: "a/hello.txt"},
-		{ArchivePath: "b/virtual.txt", Content: []byte("virtual")},
-		{Src: filepath.Join(srcDir, "missing.txt"), ArchivePath: "c/missing.txt"},
-	}
-
-	// Only the first two should be processed; the third causes an error.
-	entries, err := computeArchiveChecksums(ctx, vfs, files[:2])
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(entries) != 2 {
-		t.Fatalf("entries count = %d, want 2", len(entries))
-	}
-
-	// Verify the hash for the Src file.
-	wantHash := checksum.ComputeBytes([]byte("hello"))
-	if entries[0].Hash != wantHash {
-		t.Errorf("entry[0].Hash = %q, want %q", entries[0].Hash, wantHash)
-	}
-	if entries[0].Path != "a/hello.txt" {
-		t.Errorf("entry[0].Path = %q, want %q", entries[0].Path, "a/hello.txt")
-	}
-
-	// Verify hash for virtual content.
-	wantVirtHash := checksum.ComputeBytes([]byte("virtual"))
-	if entries[1].Hash != wantVirtHash {
-		t.Errorf("entry[1].Hash = %q, want %q", entries[1].Hash, wantVirtHash)
-	}
-
-	// Now test the error path.
-	_, err = computeArchiveChecksums(ctx, vfs, files[2:])
-	if err == nil {
-		t.Fatal("expected error for missing Src file, got nil")
 	}
 }

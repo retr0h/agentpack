@@ -58,7 +58,7 @@ type statErrorVFS struct {
 	avfs.VFS
 }
 
-func (v statErrorVFS) Stat(name string) (fs.FileInfo, error) {
+func (statErrorVFS) Stat(string) (fs.FileInfo, error) {
 	return nil, errors.New("simulated stat error")
 }
 
@@ -106,7 +106,7 @@ func TestCreate(t *testing.T) {
 				}
 				return vfs, "/out"
 			},
-			entries: func(_ avfs.VFS, outDir string) []archive.FileEntry {
+			entries: func(_ avfs.VFS, _ string) []archive.FileEntry {
 				return []archive.FileEntry{
 					{
 						Src:         "/src/hello.txt",
@@ -126,7 +126,7 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				return memfs.New(), "/out"
 			},
-			entries: func(_ avfs.VFS, outDir string) []archive.FileEntry {
+			entries: func(_ avfs.VFS, _ string) []archive.FileEntry {
 				return []archive.FileEntry{
 					{
 						ArchivePath: "marketplaces/test/generated.json",
@@ -152,7 +152,7 @@ func TestCreate(t *testing.T) {
 				}
 				return vfs, "/out"
 			},
-			entries: func(_ avfs.VFS, outDir string) []archive.FileEntry {
+			entries: func(_ avfs.VFS, _ string) []archive.FileEntry {
 				return []archive.FileEntry{
 					{Src: "/skill.md", ArchivePath: "marketplaces/p/skills/skill.md"},
 					{ArchivePath: "marketplaces/p/.claudia/metadata.json", Content: []byte("{}")},
@@ -171,7 +171,7 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				return memfs.New(), "/out"
 			},
-			entries: func(_ avfs.VFS, outDir string) []archive.FileEntry {
+			entries: func(_ avfs.VFS, _ string) []archive.FileEntry {
 				return []archive.FileEntry{
 					{ArchivePath: "a/b/c/file.txt", Content: []byte("deep")},
 				}
@@ -190,7 +190,7 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				return memfs.New(), "/out"
 			},
-			entries: func(_ avfs.VFS, outDir string) []archive.FileEntry {
+			entries: func(_ avfs.VFS, _ string) []archive.FileEntry {
 				return []archive.FileEntry{
 					{Src: "/nonexistent.txt", ArchivePath: "test.txt"},
 				}
@@ -203,7 +203,7 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				return createErrorVFS{VFS: memfs.New()}, "/out/test.claudia"
 			},
-			entries: func(_ avfs.VFS, outDir string) []archive.FileEntry {
+			entries: func(_ avfs.VFS, _ string) []archive.FileEntry {
 				return []archive.FileEntry{
 					{ArchivePath: "file.txt", Content: []byte("data")},
 				}
@@ -217,7 +217,7 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				return statErrorVFS{VFS: memfs.New()}, "/out"
 			},
-			entries: func(_ avfs.VFS, outDir string) []archive.FileEntry {
+			entries: func(_ avfs.VFS, _ string) []archive.FileEntry {
 				return []archive.FileEntry{
 					{Src: "/somefile.txt", ArchivePath: "test.txt"},
 				}
@@ -238,7 +238,7 @@ func TestCreate(t *testing.T) {
 				}
 				return openErrorVFS{VFS: base}, "/out"
 			},
-			entries: func(_ avfs.VFS, outDir string) []archive.FileEntry {
+			entries: func(_ avfs.VFS, _ string) []archive.FileEntry {
 				return []archive.FileEntry{
 					{Src: "/src/file.txt", ArchivePath: "test.txt"},
 				}
@@ -289,9 +289,7 @@ func TestCreate(t *testing.T) {
 			if strings.HasSuffix(outDir, ".claudia") {
 				outPath = outDir
 			} else {
-				if err := vfs.MkdirAll(outDir, 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
-					// createErrorVFS doesn't support MkdirAll; skip
-				}
+				_ = vfs.MkdirAll(outDir, 0o755)
 				outPath = outDir + "/test.claudia"
 			}
 
@@ -486,13 +484,13 @@ func listTarEntries(t *testing.T, archivePath string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gr, err := gzip.NewReader(f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer gr.Close()
+	defer func() { _ = gr.Close() }()
 
 	tr := tar.NewReader(gr)
 	var names []string
@@ -515,13 +513,13 @@ func readTarFile(t *testing.T, archivePath, name string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gr, err := gzip.NewReader(f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer gr.Close()
+	defer func() { _ = gr.Close() }()
 
 	tr := tar.NewReader(gr)
 
@@ -556,13 +554,13 @@ func buildTarWithSymlink(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gw := gzip.NewWriter(f)
-	defer gw.Close()
+	defer func() { _ = gw.Close() }()
 
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 
 	if err := tw.WriteHeader(&tar.Header{
 		Name:     "evil-link",
@@ -583,13 +581,13 @@ func buildTarWithTraversal(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gw := gzip.NewWriter(f)
-	defer gw.Close()
+	defer func() { _ = gw.Close() }()
 
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 
 	content := []byte("pwned")
 	if err := tw.WriteHeader(&tar.Header{
@@ -616,13 +614,13 @@ func buildTarWithDir(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gw := gzip.NewWriter(f)
-	defer gw.Close()
+	defer func() { _ = gw.Close() }()
 
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 
 	if err := tw.WriteHeader(&tar.Header{
 		Name:     "mydir/",

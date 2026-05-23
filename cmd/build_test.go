@@ -31,6 +31,7 @@ import (
 	"github.com/avfs/avfs/vfs/osfs"
 
 	"github.com/retr0h/claudia/internal/archive"
+	"github.com/retr0h/claudia/internal/checksum"
 )
 
 var gitEnv = []string{
@@ -94,6 +95,7 @@ func TestRunBuild(t *testing.T) {
 		manifest   string
 		setupFiles func(t *testing.T, dir string)
 		names      []string
+		noGit      bool // skip git repo init when true
 		wantErr    string
 		checkBuild func(t *testing.T, dir string)
 	}{
@@ -381,10 +383,7 @@ name: test-plugin
 version: 1.0.0
 description: "A test plugin"
 `,
-			// We set up the manifest but do NOT init a git repo (no initTestRepo).
-			// Since runBuild is called with a plain tempdir that has no git repo,
-			// metadata.Capture will fail.
-			// NOTE: this test skips commitAll since there's no git repo.
+			noGit:   true,
 			wantErr: "not a git repository",
 		},
 	}
@@ -398,10 +397,7 @@ description: "A test plugin"
 
 			dir := t.TempDir()
 
-			// For the "metadata capture error" test, don't init a git repo.
-			isNoGitTest := tt.name == "metadata capture error when not a git repo"
-
-			if !isNoGitTest {
+			if !tt.noGit {
 				initTestRepo(t, dir)
 			}
 
@@ -413,7 +409,7 @@ description: "A test plugin"
 				tt.setupFiles(t, dir)
 			}
 
-			if !isNoGitTest {
+			if !tt.noGit {
 				commitAll(t, dir)
 			}
 
@@ -524,6 +520,88 @@ func TestHumanSize(t *testing.T) {
 			got := humanSize(tt.bytes)
 			if got != tt.want {
 				t.Errorf("humanSize(%d) = %q, want %q", tt.bytes, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestComputeArchiveChecksums(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	vfs := osfs.NewWithNoIdm()
+
+	srcDir := t.TempDir()
+	srcFile := filepath.Join(srcDir, "hello.txt")
+	if err := os.WriteFile(srcFile, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		files       func() []archive.FileEntry
+		wantErr     bool
+		wantCount   int
+		checkResult func(t *testing.T, entries []checksum.Entry)
+	}{
+		{
+			name: "src file and virtual content produce correct hashes",
+			files: func() []archive.FileEntry {
+				return []archive.FileEntry{
+					{Src: srcFile, ArchivePath: "a/hello.txt"},
+					{ArchivePath: "b/virtual.txt", Content: []byte("virtual")},
+				}
+			},
+			wantCount: 2,
+			checkResult: func(t *testing.T, entries []checksum.Entry) {
+				t.Helper()
+				wantHash := checksum.ComputeBytes([]byte("hello"))
+				if entries[0].Hash != wantHash {
+					t.Errorf("entry[0].Hash = %q, want %q", entries[0].Hash, wantHash)
+				}
+				if entries[0].Path != "a/hello.txt" {
+					t.Errorf("entry[0].Path = %q, want %q", entries[0].Path, "a/hello.txt")
+				}
+				wantVirtHash := checksum.ComputeBytes([]byte("virtual"))
+				if entries[1].Hash != wantVirtHash {
+					t.Errorf("entry[1].Hash = %q, want %q", entries[1].Hash, wantVirtHash)
+				}
+			},
+		},
+		{
+			name: "missing src file returns error",
+			files: func() []archive.FileEntry {
+				return []archive.FileEntry{
+					{Src: filepath.Join(srcDir, "missing.txt"), ArchivePath: "c/missing.txt"},
+				}
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			entries, err := computeArchiveChecksums(ctx, vfs, tt.files())
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(entries) != tt.wantCount {
+				t.Fatalf("entries count = %d, want %d", len(entries), tt.wantCount)
+			}
+
+			if tt.checkResult != nil {
+				tt.checkResult(t, entries)
 			}
 		})
 	}

@@ -46,12 +46,11 @@ type FileEntry struct {
 
 // Create writes a gzipped tarball at outputPath containing the given files.
 // It uses vfs for creating the output file and reading source files from disk.
-func Create(ctx context.Context, vfs avfs.VFS, outputPath string, files []FileEntry) error {
+func Create(_ context.Context, vfs avfs.VFS, outputPath string, files []FileEntry) error {
 	f, err := vfs.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("create archive: %w", err)
 	}
-	defer f.Close()
 
 	gw := gzip.NewWriter(f)
 	tw := tar.NewWriter(gw)
@@ -62,6 +61,7 @@ func Create(ctx context.Context, vfs avfs.VFS, outputPath string, files []FileEn
 		if err := ensureDirs(tw, fe.ArchivePath, dirs); err != nil {
 			_ = tw.Close()
 			_ = gw.Close()
+			_ = f.Close()
 			return err
 		}
 
@@ -69,12 +69,14 @@ func Create(ctx context.Context, vfs avfs.VFS, outputPath string, files []FileEn
 			if err := addFileFromDisk(vfs, tw, fe); err != nil {
 				_ = tw.Close()
 				_ = gw.Close()
+				_ = f.Close()
 				return err
 			}
 		} else {
 			if err := addVirtualFile(tw, fe); err != nil {
 				_ = tw.Close()
 				_ = gw.Close()
+				_ = f.Close()
 				return err
 			}
 		}
@@ -82,11 +84,17 @@ func Create(ctx context.Context, vfs avfs.VFS, outputPath string, files []FileEn
 
 	if err := tw.Close(); err != nil {
 		_ = gw.Close()
+		_ = f.Close()
 		return fmt.Errorf("close tar writer: %w", err)
 	}
 
 	if err := gw.Close(); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("close gzip writer: %w", err)
+	}
+
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close archive: %w", err)
 	}
 
 	return nil
@@ -101,13 +109,13 @@ func Extract(archivePath string, destDir string) error {
 	if err != nil {
 		return fmt.Errorf("open archive: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gr, err := gzip.NewReader(f)
 	if err != nil {
 		return fmt.Errorf("gzip reader: %w", err)
 	}
-	defer gr.Close()
+	defer func() { _ = gr.Close() }()
 
 	tr := tar.NewReader(gr)
 	cleanDest := filepath.Clean(destDir)
@@ -173,7 +181,7 @@ func addFileFromDisk(vfs avfs.VFS, tw *tar.Writer, fe FileEntry) error {
 	if err != nil {
 		return fmt.Errorf("open %s: %w", fe.Src, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := io.Copy(tw, f); err != nil {
 		return fmt.Errorf("copy %s: %w", fe.ArchivePath, err)
@@ -243,10 +251,14 @@ func extractFile(r io.Reader, target string, mode os.FileMode) error {
 	if err != nil {
 		return fmt.Errorf("create %s: %w", target, err)
 	}
-	defer f.Close()
 
 	if _, err := io.Copy(f, r); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("extract %s: %w", target, err)
+	}
+
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", target, err)
 	}
 
 	return nil

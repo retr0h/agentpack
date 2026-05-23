@@ -52,7 +52,7 @@ func runVerify(archivePath string) error {
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	if err := archive.Extract(archivePath, tmpDir); err != nil {
 		return fmt.Errorf("extract: %w", err)

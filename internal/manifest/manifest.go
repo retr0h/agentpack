@@ -116,7 +116,7 @@ func (e *Entry) UnmarshalYAML(value *yaml.Node) error {
 // Load reads claudia.yaml from dir using vfs, unmarshals it, and validates it.
 // It returns an error when the file is missing, malformed, or fails
 // validation.
-func Load(ctx context.Context, vfs avfs.VFS, dir string) (*Manifest, error) {
+func Load(_ context.Context, vfs avfs.VFS, dir string) (*Manifest, error) {
 	path := filepath.Join(dir, "claudia.yaml")
 
 	data, err := vfs.ReadFile(path)

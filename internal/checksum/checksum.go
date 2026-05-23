@@ -56,12 +56,12 @@ func ComputeBytes(data []byte) string {
 
 // ComputeFile reads the file at path using vfs and returns its SHA256 hash as
 // a 64-char hex string.
-func ComputeFile(ctx context.Context, vfs avfs.VFS, path string) (string, error) {
+func ComputeFile(_ context.Context, vfs avfs.VFS, path string) (string, error) {
 	f, err := vfs.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
@@ -76,7 +76,7 @@ func ComputeFile(ctx context.Context, vfs avfs.VFS, path string) (string, error)
 //	{hash}  {path}\n
 //
 // (two spaces between hash and path, matching the sha256sum(1) convention).
-func WriteFile(ctx context.Context, vfs avfs.VFS, path string, entries []Entry) error {
+func WriteFile(_ context.Context, vfs avfs.VFS, path string, entries []Entry) error {
 	f, err := vfs.Create(path)
 	if err != nil {
 		return fmt.Errorf("create %s: %w", path, err)
@@ -108,7 +108,7 @@ func ReadFile(path string) ([]Entry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var entries []Entry
 	scanner := bufio.NewScanner(f)
@@ -182,7 +182,7 @@ func computeFileOS(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {

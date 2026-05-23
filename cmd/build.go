@@ -121,7 +121,6 @@ func buildPlugin(ctx context.Context, vfs avfs.VFS, dir string, p manifest.Plugi
 	fmt.Printf("claudia: building %s v%s (%s)\n\n", p.Name, p.Version, shortSHA(meta.GitCommitSHA))
 
 	var files []archive.FileEntry
-	totalFiles := 0
 
 	type section struct {
 		label   string
@@ -151,7 +150,6 @@ func buildPlugin(ctx context.Context, vfs avfs.VFS, dir string, p manifest.Plugi
 		}
 
 		fmt.Printf("  %-14s %d files\n", s.label+"/", len(pairs))
-		totalFiles += len(pairs)
 
 		for _, fp := range pairs {
 			files = append(files, archive.FileEntry{
@@ -171,7 +169,6 @@ func buildPlugin(ctx context.Context, vfs avfs.VFS, dir string, p manifest.Plugi
 	}
 	if mcpCount > 0 {
 		fmt.Printf("  %-14s %d entries\n", "mcp/", mcpCount)
-		totalFiles += mcpCount
 		files = append(files, mcpFiles...)
 	}
 
@@ -183,7 +180,6 @@ func buildPlugin(ctx context.Context, vfs avfs.VFS, dir string, p manifest.Plugi
 		ArchivePath: path.Join(prefix, ".claude-plugin/marketplace.json"),
 		Content:     marketplaceJSON,
 	})
-	totalFiles++
 
 	pluginJSON, err := plugin.GeneratePlugin(p, commandDests)
 	if err != nil {
@@ -193,7 +189,6 @@ func buildPlugin(ctx context.Context, vfs avfs.VFS, dir string, p manifest.Plugi
 		ArchivePath: path.Join(prefix, ".claude-plugin/plugin.json"),
 		Content:     pluginJSON,
 	})
-	totalFiles++
 
 	metaJSON, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
@@ -203,7 +198,6 @@ func buildPlugin(ctx context.Context, vfs avfs.VFS, dir string, p manifest.Plugi
 		ArchivePath: path.Join(prefix, ".claudia/metadata.json"),
 		Content:     metaJSON,
 	})
-	totalFiles++
 
 	manifestYAML, err := yaml.Marshal(p)
 	if err != nil {
@@ -213,7 +207,6 @@ func buildPlugin(ctx context.Context, vfs avfs.VFS, dir string, p manifest.Plugi
 		ArchivePath: path.Join(prefix, ".claudia/claudia.yaml"),
 		Content:     manifestYAML,
 	})
-	totalFiles++
 
 	checksumEntries, err := computeArchiveChecksums(ctx, vfs, files)
 	if err != nil {
@@ -251,7 +244,7 @@ func buildPlugin(ctx context.Context, vfs avfs.VFS, dir string, p manifest.Plugi
 }
 
 func buildMCPEntries(
-	ctx context.Context,
+	_ context.Context,
 	vfs avfs.VFS,
 	dir string,
 	p manifest.Plugin,

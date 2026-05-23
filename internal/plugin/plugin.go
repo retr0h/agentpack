@@ -62,9 +62,9 @@ type MarketplacePlugin struct {
 	Category    string   `json:"category,omitempty"`
 }
 
-// PluginDescriptor is the Claude Code plugin descriptor written to
+// Descriptor is the Claude Code plugin descriptor written to
 // .claude-plugin/plugin.json.
-type PluginDescriptor struct {
+type Descriptor struct {
 	Name        string   `json:"name"`
 	Version     string   `json:"version"`
 	Description string   `json:"description"`
@@ -135,7 +135,7 @@ func GenerateMarketplace(p manifest.Plugin) ([]byte, error) {
 // the resolved destination paths for command files (e.g. "commands/init.md");
 // each is prefixed with "./" in the output.
 func GeneratePlugin(p manifest.Plugin, commandPaths []string) ([]byte, error) {
-	pd := PluginDescriptor{
+	pd := Descriptor{
 		Name:        p.Name,
 		Version:     p.Version,
 		Description: p.Description,
