@@ -141,10 +141,14 @@ func ReadFile(path string) ([]Entry, error) {
 // and compares against the expected hash. It returns one Result per entry.
 // A non-nil error is returned only for unexpected I/O failures unrelated to
 // individual file access; per-file failures are surfaced via Result.OK/Err.
-func Verify(baseDir string, entries []Entry) ([]Result, error) {
+func Verify(ctx context.Context, baseDir string, entries []Entry) ([]Result, error) {
 	results := make([]Result, 0, len(entries))
 
 	for _, e := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		fullPath := filepath.Join(baseDir, e.Path)
 
 		got, err := computeFileOS(fullPath)

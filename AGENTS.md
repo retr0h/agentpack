@@ -25,22 +25,37 @@ Skunkworks workflow — commits land directly on `main`.
 
 1. **`just ready` before committing.** Runs fmt, vet, lint.
 2. **Table-driven tests.** One table per public function. Happy + failure rows
-   in the same table.
-3. **Never expose `internal/` types in `cmd/`** beyond what cobra needs.
-4. **Never `//nolint:errcheck`.** Handle errors properly — helpers, log, return.
+   in the same table. No ad-hoc `Test*` functions outside a table. Every test
+   function must have `tests := []struct{...}` and `for _, tt := range tests`.
+3. **One test file per production file.** `foo.go` → `foo_test.go`. Never a
+   test file named after a non-existent source file.
+4. **`cmd/` is a thin shim.** No business logic. Parse flags, create context
+   and VFS, call `pkg/`, format output. Testable logic lives in `pkg/`.
+5. **Never expose `pkg/` types in `cmd/`** beyond what cobra needs.
+6. **Never `//nolint:errcheck`.** Handle errors properly — helpers, log, return.
+7. **Context and VFS.** Functions that iterate or do I/O accept `context.Context`
+   and `avfs.VFS`. Check `ctx.Err()` in loops. Pure functions skip both.
 
 ## Architecture
 
 ```
-cmd/               Cobra CLI (root, build, verify, version)
-internal/archive/  Tarball creation and extraction
-internal/checksum/ Per-file SHA256 checksumming and verification
-internal/manifest/ claudia.yaml parsing and validation
-internal/metadata/ Git SHA, version, timestamp capture
-internal/plugin/   Claude Code plugin structure generation
+cmd/               Cobra CLI shim (root, build, verify, version)
+pkg/archive/       Tarball creation and extraction
+pkg/build/         Build pipeline orchestration
+pkg/checksum/      Per-file SHA256 checksumming and verification
+pkg/cli/           Themed terminal output (banner, colors)
+pkg/manifest/      claudia.yaml parsing and validation
+pkg/metadata/      Git SHA, version, timestamp capture
+pkg/plugin/        Claude Code plugin structure generation
+pkg/verify/        Verify pipeline orchestration
 ```
 
-Key deps: cobra, yaml.v3, crypto/sha256, archive/tar, compress/gzip.
+- `cmd/` is a thin shim — parse flags, create context + VFS, call `pkg/`, print output
+- `pkg/` is the public library API — consumable without the CLI
+- Filesystem I/O uses `avfs.VFS` (production: `osfs`, tests: `memfs`)
+- `context.Context` threads from CLI through cancellable operations
+
+Key deps: cobra, yaml.v3, lipgloss, avfs, crypto/sha256, archive/tar, compress/gzip.
 
 ## Package contents
 
@@ -58,7 +73,7 @@ A `.claudia` archive can contain any combination of:
 ## Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/). Scopes:
-`cli`, `archive`, `checksum`, `manifest`, `metadata`, `plugin`.
+`cli`, `archive`, `build`, `checksum`, `manifest`, `metadata`, `plugin`, `theme`, `verify`.
 
 When the agent is Claude, end every commit with:
 

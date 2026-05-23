@@ -32,7 +32,7 @@ import (
 	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/memfs"
 
-	"github.com/retr0h/claudia/internal/checksum"
+	"github.com/retr0h/claudia/pkg/checksum"
 )
 
 // --------------------------------------------------------------------------
@@ -546,7 +546,7 @@ func TestVerify(t *testing.T) {
 				}
 			}
 
-			results, err := checksum.Verify(dir, tt.entries)
+			results, err := checksum.Verify(context.Background(), dir, tt.entries)
 			if err != nil {
 				t.Fatalf("Verify returned unexpected error: %v", err)
 			}

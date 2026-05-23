@@ -22,12 +22,15 @@ go test ./...
 ## Layout
 
 ```
-cmd/               Cobra CLI commands (root, build, verify, version)
-internal/archive/  Tarball creation and extraction (.claudia archives)
-internal/checksum/ Per-file SHA256 checksumming and verification
-internal/manifest/ claudia.yaml parsing and validation
-internal/metadata/ Git SHA, version, timestamp capture
-internal/plugin/   Claude Code plugin structure generation
+cmd/               Cobra CLI shim (root, build, verify, version)
+pkg/archive/       Tarball creation and extraction (.claudia archives)
+pkg/build/         Build pipeline orchestration
+pkg/checksum/      Per-file SHA256 checksumming and verification
+pkg/cli/           Themed terminal output (banner, colors)
+pkg/manifest/      claudia.yaml parsing and validation
+pkg/metadata/      Git SHA, version, timestamp capture
+pkg/plugin/        Claude Code plugin structure generation
+pkg/verify/        Verify pipeline orchestration
 ```
 
 ## Common tasks
@@ -53,11 +56,40 @@ just clean          # remove binary
 
 **Every public function and method MUST have a table-driven test.** One table
 per function, with rows covering both the happy path and every failure mode.
+No ad-hoc `Test*` functions. Every test must follow this pattern:
+
+```go
+func TestFunctionName(t *testing.T) {
+    t.Parallel()
+
+    tests := []struct {
+        name string
+        // ...fields
+    }{
+        {name: "happy path", ...},
+        {name: "failure case", ...},
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            t.Parallel()
+            // ...
+        })
+    }
+}
+```
 
 ### File naming (non-negotiable)
 
 **One test file per production file.** `archive.go` is tested by
 `archive_test.go` -- never `helpers_archive_test.go` or similar.
+
+### Filesystem mocking
+
+Tests use [AVFS](https://github.com/avfs/avfs) for virtual filesystem:
+- Production: `osfs.NewWithNoIdm()` (real OS)
+- Tests: `memfs.New()` (in-memory)
+- Error injection: wrap `memfs` with a custom struct overriding methods
 
 ## Commit messages
 
@@ -67,4 +99,4 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - **Body**: wrap at 72 characters, separated from subject by a blank line
 - **Format**: `type(scope): description`
 - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
-- **Scopes**: `cli`, `archive`, `checksum`, `manifest`, `metadata`, `plugin`
+- **Scopes**: `cli`, `archive`, `build`, `checksum`, `manifest`, `metadata`, `plugin`, `theme`, `verify`

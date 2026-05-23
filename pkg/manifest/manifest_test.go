@@ -31,7 +31,7 @@ import (
 	"github.com/avfs/avfs/vfs/memfs"
 	"gopkg.in/yaml.v3"
 
-	"github.com/retr0h/claudia/internal/manifest"
+	"github.com/retr0h/claudia/pkg/manifest"
 )
 
 // --------------------------------------------------------------------------

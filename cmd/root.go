@@ -23,11 +23,14 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/spf13/cobra"
+
+	"github.com/retr0h/claudia/pkg/cli"
 )
 
 var rootCmd = &cobra.Command{
@@ -39,6 +42,19 @@ var rootCmd = &cobra.Command{
 func Execute() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+
+	rootCmd.SilenceUsage = true
+
+	defaultHelp := rootCmd.HelpFunc()
+	rootCmd.SetHelpFunc(func(c *cobra.Command, args []string) {
+		if c == rootCmd {
+			out := c.OutOrStdout()
+			_, _ = fmt.Fprintln(out)
+			_, _ = fmt.Fprint(out, cli.Banner(out))
+			_, _ = fmt.Fprintln(out)
+		}
+		defaultHelp(c, args)
+	})
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		os.Exit(1)

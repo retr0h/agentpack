@@ -46,7 +46,7 @@ type FileEntry struct {
 
 // Create writes a gzipped tarball at outputPath containing the given files.
 // It uses vfs for creating the output file and reading source files from disk.
-func Create(_ context.Context, vfs avfs.VFS, outputPath string, files []FileEntry) error {
+func Create(ctx context.Context, vfs avfs.VFS, outputPath string, files []FileEntry) error {
 	f, err := vfs.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("create archive: %w", err)
@@ -58,6 +58,12 @@ func Create(_ context.Context, vfs avfs.VFS, outputPath string, files []FileEntr
 	dirs := make(map[string]bool)
 
 	for _, fe := range files {
+		if err := ctx.Err(); err != nil {
+			_ = tw.Close()
+			_ = gw.Close()
+			_ = f.Close()
+			return err
+		}
 		if err := ensureDirs(tw, fe.ArchivePath, dirs); err != nil {
 			_ = tw.Close()
 			_ = gw.Close()
@@ -104,7 +110,7 @@ func Create(_ context.Context, vfs avfs.VFS, outputPath string, files []FileEntr
 // Symlinks and paths that escape destDir are rejected.
 // It uses the real OS filesystem for extraction since archives are always
 // extracted to real disk locations.
-func Extract(archivePath string, destDir string) error {
+func Extract(ctx context.Context, archivePath string, destDir string) error {
 	f, err := os.Open(archivePath)
 	if err != nil {
 		return fmt.Errorf("open archive: %w", err)
@@ -121,6 +127,10 @@ func Extract(archivePath string, destDir string) error {
 	cleanDest := filepath.Clean(destDir)
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		hdr, err := tr.Next()
 		if errors.Is(err, io.EOF) {
 			break

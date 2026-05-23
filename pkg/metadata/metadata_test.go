@@ -29,7 +29,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retr0h/claudia/internal/metadata"
+	"github.com/retr0h/claudia/pkg/metadata"
 )
 
 // gitEnv returns env vars that satisfy git's author/committer requirements.

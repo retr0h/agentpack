@@ -18,52 +18,32 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package cmd
+// Package build export_test.go exposes private helpers for white-box testing.
+package build
 
 import (
-	"bytes"
-	"strings"
-	"testing"
+	"context"
+
+	"github.com/avfs/avfs"
+
+	"github.com/retr0h/claudia/pkg/archive"
+	"github.com/retr0h/claudia/pkg/checksum"
 )
 
-func TestVersionCmd(t *testing.T) {
-	// Not parallel: mutates global version variable and cobra command state.
+// FileEntry aliases archive.FileEntry for use in build_test.go without
+// importing archive directly.
+type FileEntry = archive.FileEntry
 
-	tests := []struct {
-		name        string
-		setVersion  string
-		wantContain string
-	}{
-		{
-			name:        "prints dev version by default",
-			setVersion:  "dev",
-			wantContain: "dev",
-		},
-		{
-			name:        "prints custom semver",
-			setVersion:  "1.2.3",
-			wantContain: "1.2.3",
-		},
-	}
+// ChecksumEntry aliases checksum.Entry for use in build_test.go.
+type ChecksumEntry = checksum.Entry
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			orig := version
-			version = tt.setVersion
-			t.Cleanup(func() { version = orig })
+// ShortSHA exposes shortSHA for testing.
+func ShortSHA(sha string) string { return shortSHA(sha) }
 
-			var buf bytes.Buffer
-			rootCmd.SetOut(&buf)
-			rootCmd.SetArgs([]string{"version"})
+// HumanSize exposes humanSize for testing.
+func HumanSize(bytes int64) string { return humanSize(bytes) }
 
-			if err := rootCmd.Execute(); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-
-			out := buf.String()
-			if !strings.Contains(out, tt.wantContain) {
-				t.Errorf("output %q does not contain %q", out, tt.wantContain)
-			}
-		})
-	}
+// ComputeArchiveChecksums exposes computeArchiveChecksums for testing.
+func ComputeArchiveChecksums(ctx context.Context, vfs avfs.VFS, files []archive.FileEntry) ([]checksum.Entry, error) {
+	return computeArchiveChecksums(ctx, vfs, files)
 }

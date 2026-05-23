@@ -37,7 +37,7 @@ import (
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
 
-	"github.com/retr0h/claudia/internal/archive"
+	"github.com/retr0h/claudia/pkg/archive"
 )
 
 // --------------------------------------------------------------------------
@@ -265,7 +265,7 @@ func TestCreate(t *testing.T) {
 			checkTar: func(t *testing.T, archivePath string) {
 				t.Helper()
 				destDir := t.TempDir()
-				if err := archive.Extract(archivePath, destDir); err != nil {
+				if err := archive.Extract(context.Background(), archivePath, destDir); err != nil {
 					t.Fatalf("extract: %v", err)
 				}
 				info, err := os.Stat(filepath.Join(destDir, "marketplaces", "p", "mcp", "my-server"))
@@ -450,7 +450,7 @@ func TestExtract(t *testing.T) {
 				tt.setupDest(t, destDir)
 			}
 
-			err := archive.Extract(archivePath, destDir)
+			err := archive.Extract(context.Background(), archivePath, destDir)
 
 			if tt.wantErr != "" {
 				if err == nil {
