@@ -94,6 +94,11 @@ func TestThemeRenders(t *testing.T) {
 			render: func(w *bytes.Buffer) string { return cli.Err(w, "fail") },
 			want:   "fail",
 		},
+		{
+			name:   "Info contains input text",
+			render: func(w *bytes.Buffer) string { return cli.Info(w, "2026-05-23") },
+			want:   "2026-05-23",
+		},
 	}
 
 	for _, tt := range tests {
@@ -173,6 +178,53 @@ func TestPrint(t *testing.T) {
 			cli.Print(&buf, tt.text)
 			if buf.String() != tt.want {
 				t.Errorf("Print output = %q, want %q", buf.String(), tt.want)
+			}
+		})
+	}
+}
+
+func TestPad(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		s    string
+		w    int
+		want string
+	}{
+		{
+			name: "pads short string to width",
+			s:    "hi",
+			w:    6,
+			want: "hi    ",
+		},
+		{
+			name: "returns unchanged when equal width",
+			s:    "hello",
+			w:    5,
+			want: "hello",
+		},
+		{
+			name: "returns unchanged when longer than width",
+			s:    "toolong",
+			w:    3,
+			want: "toolong",
+		},
+		{
+			name: "pads empty string",
+			s:    "",
+			w:    4,
+			want: "    ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := cli.Pad(tt.s, tt.w)
+			if got != tt.want {
+				t.Errorf("Pad(%q, %d) = %q, want %q", tt.s, tt.w, got, tt.want)
 			}
 		})
 	}

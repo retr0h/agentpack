@@ -47,9 +47,13 @@ pkg/archive/       Tarball creation and extraction
 pkg/build/         Build pipeline orchestration
 pkg/checksum/      Per-file SHA256 checksumming and verification
 pkg/cli/           Themed terminal output (banner, colors)
+pkg/fetcher/       Backend interface + drivers (file, http)
+pkg/install/       Install pipeline orchestration
+pkg/list/          List installed plugins
 pkg/manifest/      claudia.yaml parsing and validation
 pkg/metadata/      Git SHA, version, timestamp capture
 pkg/plugin/        Claude Code plugin structure generation
+pkg/sync/          Declarative sync from claudia-packages.yaml
 pkg/verify/        Verify pipeline orchestration
 ```
 
@@ -76,7 +80,7 @@ A `.claudia` archive can contain any combination of:
 ## Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/). Scopes:
-`cli`, `archive`, `build`, `checksum`, `manifest`, `metadata`, `plugin`, `theme`, `verify`.
+`cli`, `archive`, `build`, `checksum`, `fetcher`, `install`, `list`, `manifest`, `metadata`, `plugin`, `sync`, `theme`, `verify`.
 
 When the agent is Claude, end every commit with:
 

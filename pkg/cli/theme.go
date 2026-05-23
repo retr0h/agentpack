@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -36,6 +37,7 @@ type Theme struct {
 	Accent    lipgloss.Style
 	OK        lipgloss.Style
 	Err       lipgloss.Style
+	Info      lipgloss.Style
 	BannerTop lipgloss.Style
 	BannerBot lipgloss.Style
 }
@@ -54,6 +56,7 @@ var ThemeClaude = Theme{
 	Accent:    fg("#cc7c5e"), // Claude Code orange (R:204 G:124 B:94)
 	OK:        fg("#50fa7b"),
 	Err:       fg("#ff6ec7"),
+	Info:      fg("#00d4ff"), // cyan, for dates/versions
 	BannerTop: faint,
 	BannerBot: fg("#cc7c5e"), // Claude Code orange
 }
@@ -100,6 +103,18 @@ func OK(w io.Writer, s string) string { return render(w, active.OK, s) }
 
 // Err returns s in the error color.
 func Err(w io.Writer, s string) string { return render(w, active.Err, s) }
+
+// Info returns s in the info color (cyan, for dates and versions).
+func Info(w io.Writer, s string) string { return render(w, active.Info, s) }
+
+// Pad right-pads s with spaces to width w.
+// If s is already w or more characters, s is returned unchanged.
+func Pad(s string, w int) string {
+	if len(s) >= w {
+		return s
+	}
+	return s + strings.Repeat(" ", w-len(s))
+}
 
 // HumanSize formats a byte count for display.
 func HumanSize(bytes int64) string {
