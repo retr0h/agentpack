@@ -20,3 +20,141 @@
 
 // Package checksum handles per-file SHA256 checksumming and verification.
 package checksum
+
+import (
+	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+)
+
+// Entry holds a file path and its expected SHA256 hash.
+type Entry struct {
+	Hash string
+	Path string
+}
+
+// Result holds the verification outcome for a single file.
+type Result struct {
+	Path string
+	OK   bool
+	Err  string
+}
+
+// ComputeFile reads the file at path and returns its SHA256 hash as a 64-char
+// hex string.
+func ComputeFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", fmt.Errorf("hash %s: %w", path, err)
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// WriteFile writes entries to path in sha256sum format:
+//
+//	{hash}  {path}\n
+//
+// (two spaces between hash and path, matching the sha256sum(1) convention).
+func WriteFile(path string, entries []Entry) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	defer f.Close()
+
+	w := bufio.NewWriter(f)
+	for _, e := range entries {
+		if _, err := fmt.Fprintf(w, "%s  %s\n", e.Hash, e.Path); err != nil {
+			return fmt.Errorf("write entry: %w", err)
+		}
+	}
+
+	if err := w.Flush(); err != nil {
+		return fmt.Errorf("flush %s: %w", path, err)
+	}
+
+	return nil
+}
+
+// ReadFile parses a sha256sum-format file at path and returns its entries.
+func ReadFile(path string) ([]Entry, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	var entries []Entry
+	scanner := bufio.NewScanner(f)
+	lineNum := 0
+
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		// Format: "{hash}  {path}" — two spaces as separator.
+		hash, filePath, found := strings.Cut(line, "  ")
+		if !found {
+			return nil, fmt.Errorf("line %d: invalid format", lineNum)
+		}
+
+		entries = append(entries, Entry{Hash: hash, Path: filePath})
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan %s: %w", path, err)
+	}
+
+	return entries, nil
+}
+
+// Verify hashes each file described by entries (resolved relative to baseDir)
+// and compares against the expected hash. It returns one Result per entry.
+// A non-nil error is returned only for unexpected I/O failures unrelated to
+// individual file access; per-file failures are surfaced via Result.OK/Err.
+func Verify(baseDir string, entries []Entry) ([]Result, error) {
+	results := make([]Result, 0, len(entries))
+
+	for _, e := range entries {
+		fullPath := baseDir + "/" + e.Path
+
+		got, err := ComputeFile(fullPath)
+		if err != nil {
+			results = append(results, Result{
+				Path: e.Path,
+				OK:   false,
+				Err:  err.Error(),
+			})
+
+			continue
+		}
+
+		if got != e.Hash {
+			results = append(results, Result{
+				Path: e.Path,
+				OK:   false,
+				Err:  fmt.Sprintf("checksum mismatch: got %s, want %s", got, e.Hash),
+			})
+
+			continue
+		}
+
+		results = append(results, Result{Path: e.Path, OK: true})
+	}
+
+	return results, nil
+}
