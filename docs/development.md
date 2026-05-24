@@ -67,6 +67,23 @@ Tests use [AVFS](https://github.com/avfs/avfs) for virtual filesystem:
 production uses `osfs.NewWithNoIdm()`, tests use `memfs.New()`, error
 injection wraps `memfs` with a custom struct overriding methods.
 
+### Interface mocking
+
+Use [mockgen](https://github.com/uber-go/mock) for interface mocks.
+Never hand-roll mock structs. Generated mocks live in `mocks/`
+subdirectories alongside the interface they mock.
+
+Generate with `//go:generate` directives in `mocks/generate.go`:
+
+    //go:generate go tool go.uber.org/mock/mockgen -destination=target.gen.go -package=mocks github.com/retr0h/agentpack/pkg/target Target
+
+Regenerate all mocks:
+
+    go generate ./...
+
+VFS error-injecting wrappers (wrapping `avfs.VFS` to return errors)
+are NOT mocks — they are test decorators and are fine hand-rolled.
+
 ## Commit messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):

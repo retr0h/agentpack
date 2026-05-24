@@ -35,12 +35,14 @@ import (
 	"time"
 
 	"github.com/avfs/avfs/vfs/osfs"
+	"go.uber.org/mock/gomock"
 
 	"github.com/retr0h/agentpack/pkg/archive"
 	"github.com/retr0h/agentpack/pkg/build"
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/metadata"
 	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/pkg/target/mocks"
 )
 
 // --------------------------------------------------------------------------
@@ -64,28 +66,6 @@ func (c *cancelAfterN) Err() error {
 	}
 
 	return errors.New("context canceled")
-}
-
-// --------------------------------------------------------------------------
-// stub Target
-// --------------------------------------------------------------------------
-
-// stubTarget records Install calls and optionally returns an injected error.
-type stubTarget struct {
-	name        string
-	displayName string
-	installErr  error
-	installedAt string
-}
-
-func (s *stubTarget) Name() string                            { return s.name }
-func (s *stubTarget) DisplayName() string                     { return s.displayName }
-func (s *stubTarget) Detect() bool                            { return true }
-func (s *stubTarget) List() ([]target.InstalledPlugin, error) { return nil, nil }
-func (s *stubTarget) Install(_ context.Context, opts target.InstallOpts) error {
-	s.installedAt = opts.SourceDir
-
-	return s.installErr
 }
 
 // --------------------------------------------------------------------------
@@ -290,7 +270,7 @@ func TestRun(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		setup       func(t *testing.T) (archivePath string, targets []target.Target)
+		setup       func(t *testing.T, ctrl *gomock.Controller) (archivePath string, targets []target.Target)
 		cancelCtx   bool
 		noParallel  bool
 		customCtx   context.Context
@@ -300,7 +280,7 @@ func TestRun(t *testing.T) {
 	}{
 		{
 			name: "installs archive to stub target",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -309,9 +289,12 @@ name: test-plugin
 version: "1.0.0"
 description: A test plugin
 `)
-				stub := &stubTarget{name: "test", displayName: "Test"}
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("test").AnyTimes()
+				m.EXPECT().DisplayName().Return("Test").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
 
-				return archivePath, []target.Target{stub}
+				return archivePath, []target.Target{m}
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -331,7 +314,7 @@ description: A test plugin
 		},
 		{
 			name: "installs to multiple targets",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -340,12 +323,17 @@ name: multi-plugin
 version: "1.0.0"
 description: Multi-target plugin
 `)
-				stubs := []target.Target{
-					&stubTarget{name: "alpha", displayName: "Alpha"},
-					&stubTarget{name: "beta", displayName: "Beta"},
-				}
+				m1 := mocks.NewMockTarget(ctrl)
+				m1.EXPECT().Name().Return("alpha").AnyTimes()
+				m1.EXPECT().DisplayName().Return("Alpha").AnyTimes()
+				m1.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
 
-				return archivePath, stubs
+				m2 := mocks.NewMockTarget(ctrl)
+				m2.EXPECT().Name().Return("beta").AnyTimes()
+				m2.EXPECT().DisplayName().Return("Beta").AnyTimes()
+				m2.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
+
+				return archivePath, []target.Target{m1, m2}
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -357,7 +345,7 @@ description: Multi-target plugin
 		},
 		{
 			name: "succeeds with no targets (empty list)",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				archivePath := buildArchiveWithMeta(t, "empty-targets-plugin", "1.0.0")
 
@@ -373,7 +361,7 @@ description: Multi-target plugin
 		},
 		{
 			name: "returns error when source has unknown scheme",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 
 				return "gs://my-bucket/plugin.agentpack", nil
@@ -382,7 +370,7 @@ description: Multi-target plugin
 		},
 		{
 			name: "returns error when archive does not exist",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 
 				return "/nonexistent/path.agentpack", nil
@@ -391,7 +379,7 @@ description: Multi-target plugin
 		},
 		{
 			name: "returns error when context is cancelled",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -400,15 +388,19 @@ name: cancel-plugin
 version: "1.0.0"
 description: Plugin for cancel test
 `)
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("stub").AnyTimes()
+				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+				return archivePath, []target.Target{m}
 			},
 			cancelCtx: true,
 			wantErr:   "context canceled",
 		},
 		{
 			name: "returns error when context cancelled after fetch",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -417,15 +409,19 @@ name: ctx-after-fetch
 version: "1.0.0"
 description: ctx after fetch
 `)
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("stub").AnyTimes()
+				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+				return archivePath, []target.Target{m}
 			},
 			customCtx: newCancelAfterN(3),
 			wantErr:   "context canceled",
 		},
 		{
 			name: "returns error when context cancelled after extract",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -434,8 +430,12 @@ name: ctx-after-extract
 version: "1.0.0"
 description: ctx after extract
 `)
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("stub").AnyTimes()
+				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+				return archivePath, []target.Target{m}
 			},
 			// cancelAfterN(9): calls 1-9 return nil; call 10 fires at the
 			// ctx.Err() check immediately after archive.Extract returns (Run line
@@ -445,7 +445,7 @@ description: ctx after extract
 		},
 		{
 			name: "returns error when context cancelled inside checksum verification",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -454,8 +454,12 @@ name: ctx-in-verify
 version: "1.0.0"
 description: ctx in verify
 `)
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("stub").AnyTimes()
+				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+				return archivePath, []target.Target{m}
 			},
 			// N=15 is sufficient to pass the initial ctx checks and fetch but
 			// fires somewhere inside verify or shortly after — the exact call
@@ -466,7 +470,7 @@ description: ctx in verify
 		{
 			name:       "returns error when os.CreateTemp fails",
 			noParallel: true,
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 
 				return "/some/path.agentpack", nil
@@ -481,7 +485,7 @@ description: ctx in verify
 		{
 			name:       "returns error when os.MkdirTemp fails",
 			noParallel: true,
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -502,7 +506,7 @@ description: Plugin for mkdir temp test
 		},
 		{
 			name: "returns error when archive is corrupt",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				archivePath := filepath.Join(dir, "corrupt.agentpack")
@@ -517,7 +521,7 @@ description: Plugin for mkdir temp test
 		},
 		{
 			name: "returns error when archive has no checksums.txt",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 
 				return buildArchiveNoChecksums(t), nil
@@ -526,7 +530,7 @@ description: Plugin for mkdir temp test
 		},
 		{
 			name: "returns error when archive has bad checksums format",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 
 				return buildArchiveBadChecksums(t), nil
@@ -535,7 +539,7 @@ description: Plugin for mkdir temp test
 		},
 		{
 			name: "returns error when archive checksum fails",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 
 				return buildArchiveTamperedChecksum(t), nil
@@ -544,7 +548,7 @@ description: Plugin for mkdir temp test
 		},
 		{
 			name: "returns error when archive has no metadata.json",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 
 				return buildArchiveNoMetadata(t), nil
@@ -553,7 +557,7 @@ description: Plugin for mkdir temp test
 		},
 		{
 			name: "returns error when target Install fails",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -562,19 +566,19 @@ name: tgt-fail-plugin
 version: "1.0.0"
 description: target fail test
 `)
-				stub := &stubTarget{
-					name:       "fail-target",
-					installErr: errors.New("target install error"),
-				}
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("fail-target").AnyTimes()
+				m.EXPECT().DisplayName().Return("Fail Target").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(errors.New("target install error"))
 
-				return archivePath, []target.Target{stub}
+				return archivePath, []target.Target{m}
 			},
 			wantErr: "install to fail-target",
 		},
 		{
 			name:       "returns error when copyToTemp MkdirTemp fails",
 			noParallel: true,
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -583,7 +587,12 @@ name: copytotemp-mkdir-plugin
 version: "1.0.0"
 description: test copyToTemp mkdir fail
 `)
-				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("stub").AnyTimes()
+				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+				return archivePath, []target.Target{m}
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
@@ -596,7 +605,7 @@ description: test copyToTemp mkdir fail
 		},
 		{
 			name: "returns error when context cancelled during checksum verify",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -605,7 +614,12 @@ name: ctx-verify-plugin
 version: "1.0.0"
 description: ctx during verify
 `)
-				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("stub").AnyTimes()
+				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+				return archivePath, []target.Target{m}
 			},
 			// cancelAfterN(10): the first 10 ctx.Err() calls return nil.
 			// Call 11 fires inside checksum.Verify (first entry check), causing
@@ -617,7 +631,7 @@ description: ctx during verify
 		},
 		{
 			name: "returns error when context cancelled after metadata read",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -626,7 +640,12 @@ name: ctx-post-meta-plugin
 version: "1.0.0"
 description: ctx after metadata
 `)
-				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("stub").AnyTimes()
+				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+				return archivePath, []target.Target{m}
 			},
 			// cancelAfterN(12): calls 11-12 are the two Verify entries (which
 			// succeed). Call 13 fires at Run line 146 ctx.Err() check after
@@ -636,7 +655,7 @@ description: ctx after metadata
 		},
 		{
 			name: "returns error when context cancelled inside targets loop",
-			setup: func(t *testing.T) (string, []target.Target) {
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
@@ -645,7 +664,12 @@ name: ctx-loop-plugin
 version: "1.0.0"
 description: ctx inside targets loop
 `)
-				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("stub").AnyTimes()
+				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+				return archivePath, []target.Target{m}
 			},
 			// cancelAfterN(13): call 13 is the Run line 146 check (passes nil).
 			// Call 14 fires at Run line 165 (top of targets for-loop).
@@ -664,7 +688,8 @@ description: ctx inside targets loop
 				tt.injectFuncs(t)
 			}
 
-			archivePath, targets := tt.setup(t)
+			ctrl := gomock.NewController(t)
+			archivePath, targets := tt.setup(t, ctrl)
 
 			var ctx context.Context
 			var cancel context.CancelFunc

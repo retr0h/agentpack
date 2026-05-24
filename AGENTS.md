@@ -36,6 +36,8 @@ Skunkworks workflow — commits land directly on `main`.
 7. **Context and VFS.** Functions that iterate or do I/O accept `context.Context`
    and `avfs.VFS`. Check `ctx.Err()` in loops. Pure functions skip both.
 8. **All output through `pkg/cli/`.** No raw `fmt.Fprintf` in `cmd/`.
+9. **No hand-rolled mocks.** Use `go.uber.org/mock/mockgen` for interface
+   mocks. VFS error-injecting wrappers are decorators, not mocks.
 
 ## Architecture
 

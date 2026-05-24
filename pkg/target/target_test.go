@@ -21,29 +21,13 @@
 package target_test
 
 import (
-	"context"
 	"testing"
 
+	"go.uber.org/mock/gomock"
+
 	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/pkg/target/mocks"
 )
-
-// --------------------------------------------------------------------------
-// stub Target implementation
-// --------------------------------------------------------------------------
-
-type stubTarget struct {
-	name        string
-	displayName string
-	detected    bool
-}
-
-func (s *stubTarget) Name() string        { return s.name }
-func (s *stubTarget) DisplayName() string { return s.displayName }
-func (s *stubTarget) Detect() bool        { return s.detected }
-func (s *stubTarget) Install(_ context.Context, _ target.InstallOpts) error {
-	return nil
-}
-func (s *stubTarget) List() ([]target.InstalledPlugin, error) { return nil, nil }
 
 // --------------------------------------------------------------------------
 // helpers
@@ -61,23 +45,43 @@ func reset(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestRegister(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel at the suite level — all three registry tests mutate the
+	// global target registry and must not interleave with each other.
 	tests := []struct {
 		name      string
-		targets   []*stubTarget
+		targets   []func(ctrl *gomock.Controller) target.Target
 		wantNames []string
 	}{
 		{
-			name:      "registers single target",
-			targets:   []*stubTarget{{name: "alpha", displayName: "Alpha", detected: true}},
+			name: "registers single target",
+			targets: []func(ctrl *gomock.Controller) target.Target{
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("alpha").AnyTimes()
+					m.EXPECT().Detect().Return(true).AnyTimes()
+
+					return m
+				},
+			},
 			wantNames: []string{"alpha"},
 		},
 		{
 			name: "registers multiple targets in order",
-			targets: []*stubTarget{
-				{name: "first", displayName: "First", detected: false},
-				{name: "second", displayName: "Second", detected: true},
+			targets: []func(ctrl *gomock.Controller) target.Target{
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("first").AnyTimes()
+					m.EXPECT().Detect().Return(false).AnyTimes()
+
+					return m
+				},
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("second").AnyTimes()
+					m.EXPECT().Detect().Return(true).AnyTimes()
+
+					return m
+				},
 			},
 			wantNames: []string{"first", "second"},
 		},
@@ -91,10 +95,11 @@ func TestRegister(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Not parallel — mutates the global registry.
+			ctrl := gomock.NewController(t)
 			reset(t)
 
-			for _, tgt := range tt.targets {
-				target.Register(tgt)
+			for _, mkTarget := range tt.targets {
+				target.Register(mkTarget(ctrl))
 			}
 
 			all := target.All()
@@ -117,11 +122,9 @@ func TestRegister(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestAll(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name    string
-		targets []*stubTarget
+		targets []func(ctrl *gomock.Controller) target.Target
 		wantLen int
 	}{
 		{
@@ -130,18 +133,41 @@ func TestAll(t *testing.T) {
 			wantLen: 0,
 		},
 		{
-			name:    "returns all registered targets",
-			targets: []*stubTarget{{name: "a"}, {name: "b"}, {name: "c"}},
+			name: "returns all registered targets",
+			targets: []func(ctrl *gomock.Controller) target.Target{
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("a").AnyTimes()
+					m.EXPECT().Detect().Return(true).AnyTimes()
+
+					return m
+				},
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("b").AnyTimes()
+					m.EXPECT().Detect().Return(true).AnyTimes()
+
+					return m
+				},
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("c").AnyTimes()
+					m.EXPECT().Detect().Return(true).AnyTimes()
+
+					return m
+				},
+			},
 			wantLen: 3,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
 			reset(t)
 
-			for _, tgt := range tt.targets {
-				target.Register(tgt)
+			for _, mkTarget := range tt.targets {
+				target.Register(mkTarget(ctrl))
 			}
 
 			all := target.All()
@@ -158,11 +184,9 @@ func TestAll(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestDetected(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name      string
-		targets   []*stubTarget
+		targets   []func(ctrl *gomock.Controller) target.Target
 		wantNames []string
 	}{
 		{
@@ -172,26 +196,68 @@ func TestDetected(t *testing.T) {
 		},
 		{
 			name: "returns only detected targets",
-			targets: []*stubTarget{
-				{name: "installed", detected: true},
-				{name: "not-installed", detected: false},
-				{name: "also-installed", detected: true},
+			targets: []func(ctrl *gomock.Controller) target.Target{
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("installed").AnyTimes()
+					m.EXPECT().Detect().Return(true).AnyTimes()
+
+					return m
+				},
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("not-installed").AnyTimes()
+					m.EXPECT().Detect().Return(false).AnyTimes()
+
+					return m
+				},
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("also-installed").AnyTimes()
+					m.EXPECT().Detect().Return(true).AnyTimes()
+
+					return m
+				},
 			},
 			wantNames: []string{"installed", "also-installed"},
 		},
 		{
 			name: "returns empty slice when no targets detected",
-			targets: []*stubTarget{
-				{name: "missing-a", detected: false},
-				{name: "missing-b", detected: false},
+			targets: []func(ctrl *gomock.Controller) target.Target{
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("missing-a").AnyTimes()
+					m.EXPECT().Detect().Return(false).AnyTimes()
+
+					return m
+				},
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("missing-b").AnyTimes()
+					m.EXPECT().Detect().Return(false).AnyTimes()
+
+					return m
+				},
 			},
 			wantNames: nil,
 		},
 		{
 			name: "returns all targets when all detected",
-			targets: []*stubTarget{
-				{name: "x", detected: true},
-				{name: "y", detected: true},
+			targets: []func(ctrl *gomock.Controller) target.Target{
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("x").AnyTimes()
+					m.EXPECT().Detect().Return(true).AnyTimes()
+
+					return m
+				},
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("y").AnyTimes()
+					m.EXPECT().Detect().Return(true).AnyTimes()
+
+					return m
+				},
 			},
 			wantNames: []string{"x", "y"},
 		},
@@ -199,10 +265,11 @@ func TestDetected(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
 			reset(t)
 
-			for _, tgt := range tt.targets {
-				target.Register(tgt)
+			for _, mkTarget := range tt.targets {
+				target.Register(mkTarget(ctrl))
 			}
 
 			detected := target.Detected()

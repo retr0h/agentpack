@@ -21,35 +21,16 @@
 package list_test
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"testing"
 
+	"go.uber.org/mock/gomock"
+
 	"github.com/retr0h/agentpack/pkg/list"
 	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/pkg/target/mocks"
 )
-
-// --------------------------------------------------------------------------
-// stub Target
-// --------------------------------------------------------------------------
-
-type stubTarget struct {
-	name        string
-	displayName string
-	plugins     []target.InstalledPlugin
-	listErr     error
-}
-
-func (s *stubTarget) Name() string        { return s.name }
-func (s *stubTarget) DisplayName() string { return s.displayName }
-func (s *stubTarget) Detect() bool        { return true }
-func (s *stubTarget) Install(_ context.Context, _ target.InstallOpts) error {
-	return nil
-}
-func (s *stubTarget) List() ([]target.InstalledPlugin, error) {
-	return s.plugins, s.listErr
-}
 
 // --------------------------------------------------------------------------
 // TestRun
@@ -60,13 +41,19 @@ func TestRun(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		targets     []target.Target
+		targets     func(ctrl *gomock.Controller) []target.Target
 		wantErr     string
 		checkResult func(t *testing.T, entries []list.Entry)
 	}{
 		{
-			name:    "returns empty slice when no targets provided and no results",
-			targets: []target.Target{&stubTarget{name: "empty", displayName: "Empty"}},
+			name: "returns empty slice when no targets provided and no results",
+			targets: func(ctrl *gomock.Controller) []target.Target {
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("empty").AnyTimes()
+				m.EXPECT().List().Return(nil, nil)
+
+				return []target.Target{m}
+			},
 			checkResult: func(t *testing.T, entries []list.Entry) {
 				t.Helper()
 
@@ -77,21 +64,21 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "returns one entry for a single plugin",
-			targets: []target.Target{
-				&stubTarget{
-					name:        "claude-code",
-					displayName: "Claude Code",
-					plugins: []target.InstalledPlugin{
-						{
-							Name:      "acme-toolkit",
-							Version:   "1.0.0",
-							SHA:       "a1b2c3d",
-							Installed: "2026-05-23",
-							Dir:       "/home/.claude/plugins/marketplaces/acme-toolkit",
-							Target:    "Claude Code",
-						},
+			targets: func(ctrl *gomock.Controller) []target.Target {
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("claude-code").AnyTimes()
+				m.EXPECT().List().Return([]target.InstalledPlugin{
+					{
+						Name:      "acme-toolkit",
+						Version:   "1.0.0",
+						SHA:       "a1b2c3d",
+						Installed: "2026-05-23",
+						Dir:       "/home/.claude/plugins/marketplaces/acme-toolkit",
+						Target:    "Claude Code",
 					},
-				},
+				}, nil)
+
+				return []target.Target{m}
 			},
 			checkResult: func(t *testing.T, entries []list.Entry) {
 				t.Helper()
@@ -125,22 +112,21 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "aggregates plugins from multiple targets sorted by target then name",
-			targets: []target.Target{
-				&stubTarget{
-					name:        "cursor",
-					displayName: "Cursor",
-					plugins: []target.InstalledPlugin{
-						{Name: "z-skill", Version: "1.0.0", Target: "Cursor"},
-						{Name: "a-skill", Version: "1.0.0", Target: "Cursor"},
-					},
-				},
-				&stubTarget{
-					name:        "claude-code",
-					displayName: "Claude Code",
-					plugins: []target.InstalledPlugin{
-						{Name: "m-plugin", Version: "1.0.0", Target: "Claude Code"},
-					},
-				},
+			targets: func(ctrl *gomock.Controller) []target.Target {
+				m1 := mocks.NewMockTarget(ctrl)
+				m1.EXPECT().Name().Return("cursor").AnyTimes()
+				m1.EXPECT().List().Return([]target.InstalledPlugin{
+					{Name: "z-skill", Version: "1.0.0", Target: "Cursor"},
+					{Name: "a-skill", Version: "1.0.0", Target: "Cursor"},
+				}, nil)
+
+				m2 := mocks.NewMockTarget(ctrl)
+				m2.EXPECT().Name().Return("claude-code").AnyTimes()
+				m2.EXPECT().List().Return([]target.InstalledPlugin{
+					{Name: "m-plugin", Version: "1.0.0", Target: "Claude Code"},
+				}, nil)
+
+				return []target.Target{m1, m2}
 			},
 			checkResult: func(t *testing.T, entries []list.Entry) {
 				t.Helper()
@@ -169,19 +155,27 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "returns error when a target List call fails",
-			targets: []target.Target{
-				&stubTarget{
-					name:    "failing-target",
-					listErr: errors.New("disk error"),
-				},
+			targets: func(ctrl *gomock.Controller) []target.Target {
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("failing-target").AnyTimes()
+				m.EXPECT().List().Return(nil, errors.New("disk error"))
+
+				return []target.Target{m}
 			},
 			wantErr: "list failing-target",
 		},
 		{
 			name: "returns empty slice when all targets return no plugins",
-			targets: []target.Target{
-				&stubTarget{name: "t1", plugins: nil},
-				&stubTarget{name: "t2", plugins: nil},
+			targets: func(ctrl *gomock.Controller) []target.Target {
+				m1 := mocks.NewMockTarget(ctrl)
+				m1.EXPECT().Name().Return("t1").AnyTimes()
+				m1.EXPECT().List().Return(nil, nil)
+
+				m2 := mocks.NewMockTarget(ctrl)
+				m2.EXPECT().Name().Return("t2").AnyTimes()
+				m2.EXPECT().List().Return(nil, nil)
+
+				return []target.Target{m1, m2}
 			},
 			checkResult: func(t *testing.T, entries []list.Entry) {
 				t.Helper()
@@ -192,8 +186,10 @@ func TestRun(t *testing.T) {
 			},
 		},
 		{
-			name:    "uses registered targets when nil targets provided",
-			targets: nil, // triggers target.All() fallback
+			name: "uses registered targets when nil targets provided",
+			targets: func(_ *gomock.Controller) []target.Target {
+				return nil // triggers target.All() fallback
+			},
 			checkResult: func(t *testing.T, entries []list.Entry) {
 				t.Helper()
 				// We can't assert on the specific entries since the system may or
@@ -206,21 +202,21 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "passes through all Entry fields correctly",
-			targets: []target.Target{
-				&stubTarget{
-					name:        "test-target",
-					displayName: "Test Target",
-					plugins: []target.InstalledPlugin{
-						{
-							Name:      "full-plugin",
-							Version:   "2.5.0",
-							SHA:       "abc1234",
-							Installed: "2026-01-15",
-							Dir:       "/some/dir",
-							Target:    "Test Target",
-						},
+			targets: func(ctrl *gomock.Controller) []target.Target {
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("test-target").AnyTimes()
+				m.EXPECT().List().Return([]target.InstalledPlugin{
+					{
+						Name:      "full-plugin",
+						Version:   "2.5.0",
+						SHA:       "abc1234",
+						Installed: "2026-01-15",
+						Dir:       "/some/dir",
+						Target:    "Test Target",
 					},
-				},
+				}, nil)
+
+				return []target.Target{m}
 			},
 			checkResult: func(t *testing.T, entries []list.Entry) {
 				t.Helper()
@@ -246,7 +242,10 @@ func TestRun(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			entries, err := list.Run(tt.targets)
+			ctrl := gomock.NewController(t)
+			targets := tt.targets(ctrl)
+
+			entries, err := list.Run(targets)
 
 			if tt.wantErr != "" {
 				if err == nil {

@@ -211,6 +211,7 @@ require (
 	go-simpler.org/sloglint v0.12.0 // indirect
 	go.augendre.info/arangolint v0.4.0 // indirect
 	go.augendre.info/fatcontext v0.9.0 // indirect
+	go.uber.org/mock v0.6.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
@@ -234,5 +235,6 @@ require (
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/segmentio/golines
+	go.uber.org/mock/mockgen
 	mvdan.cc/gofumpt
 )
