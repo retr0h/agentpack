@@ -437,7 +437,10 @@ description: ctx after extract
 
 				return archivePath, []target.Target{&stubTarget{name: "stub"}}
 			},
-			customCtx: newCancelAfterN(14),
+			// cancelAfterN(9): calls 1-9 return nil; call 10 fires at the
+			// ctx.Err() check immediately after archive.Extract returns (Run line
+			// 114). Call path: Run(1) + Fetch(2,3) + Run(4) + Extract-loop(5-9).
+			customCtx: newCancelAfterN(9),
 			wantErr:   "context canceled",
 		},
 		{
@@ -567,6 +570,87 @@ description: target fail test
 				return archivePath, []target.Target{stub}
 			},
 			wantErr: "install to fail-target",
+		},
+		{
+			name:       "returns error when copyToTemp MkdirTemp fails",
+			noParallel: true,
+			setup: func(t *testing.T) (string, []target.Target) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+				archivePath := buildTestArchive(t, dir, `
+name: copytotemp-mkdir-plugin
+version: "1.0.0"
+description: test copyToTemp mkdir fail
+`)
+				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				// Succeed on the first osMkdirTemp call (extract temp dir) and
+				// fail on the second (inside copyToTemp).
+				restore := install.SetOsMkdirTemp(install.MkdirTempFailAfterN(1))
+				t.Cleanup(restore)
+			},
+			wantErr: "create target temp dir",
+		},
+		{
+			name: "returns error when context cancelled during checksum verify",
+			setup: func(t *testing.T) (string, []target.Target) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+				archivePath := buildTestArchive(t, dir, `
+name: ctx-verify-plugin
+version: "1.0.0"
+description: ctx during verify
+`)
+				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+			},
+			// cancelAfterN(10): the first 10 ctx.Err() calls return nil.
+			// Call 11 fires inside checksum.Verify (first entry check), causing
+			// Verify to return (nil, err) → line 131 "verify: %w".
+			// Call path: Run(1) + Fetch(2,3) + Run(4) + Extract(5-9) + Run(10)
+			// + Verify entry 1 = call 11.
+			customCtx: newCancelAfterN(10),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "returns error when context cancelled after metadata read",
+			setup: func(t *testing.T) (string, []target.Target) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+				archivePath := buildTestArchive(t, dir, `
+name: ctx-post-meta-plugin
+version: "1.0.0"
+description: ctx after metadata
+`)
+				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+			},
+			// cancelAfterN(12): calls 11-12 are the two Verify entries (which
+			// succeed). Call 13 fires at Run line 146 ctx.Err() check after
+			// findAndReadMetadata completes.
+			customCtx: newCancelAfterN(12),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "returns error when context cancelled inside targets loop",
+			setup: func(t *testing.T) (string, []target.Target) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+				archivePath := buildTestArchive(t, dir, `
+name: ctx-loop-plugin
+version: "1.0.0"
+description: ctx inside targets loop
+`)
+				return archivePath, []target.Target{&stubTarget{name: "stub"}}
+			},
+			// cancelAfterN(13): call 13 is the Run line 146 check (passes nil).
+			// Call 14 fires at Run line 165 (top of targets for-loop).
+			customCtx: newCancelAfterN(13),
+			wantErr:   "context canceled",
 		},
 	}
 

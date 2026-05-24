@@ -27,6 +27,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/avfs/avfs"
@@ -478,6 +479,11 @@ func TestReadFile(t *testing.T) {
 			name:    "missing file returns error",
 			wantErr: true,
 		},
+		{
+			name:    "returns error when scanner encounters token too long",
+			content: "placeholder", // will be replaced by a real large file in setup
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -485,7 +491,14 @@ func TestReadFile(t *testing.T) {
 			t.Parallel()
 
 			var p string
-			if tt.content != "" {
+			if tt.name == "returns error when scanner encounters token too long" {
+				// Write a line that exceeds bufio.MaxScanTokenSize (64 KiB).
+				longLine := strings.Repeat("a", 70000) + "  file.txt\n"
+				p = filepath.Join(t.TempDir(), "checksums_long.txt")
+				if err := os.WriteFile(p, []byte(longLine), 0o600); err != nil {
+					t.Fatalf("setup: write file: %v", err)
+				}
+			} else if tt.content != "" {
 				p = filepath.Join(t.TempDir(), "checksums.txt")
 				if err := os.WriteFile(p, []byte(tt.content), 0o600); err != nil {
 					t.Fatalf("setup: write file: %v", err)

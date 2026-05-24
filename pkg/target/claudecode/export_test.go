@@ -22,7 +22,13 @@
 // testing.
 package claudecode
 
-import "os"
+import (
+	"context"
+	"os"
+
+	"github.com/retr0h/agentpack/pkg/manifest"
+	"github.com/retr0h/agentpack/pkg/target"
+)
 
 // SetUserHome replaces the userHomeFunc on cc for the duration of a test.
 func SetUserHome(cc *ClaudeCode, fn func() (string, error)) {
@@ -42,4 +48,44 @@ func SetOsMkdirAll(cc *ClaudeCode, fn func(string, os.FileMode) error) {
 // SetOsRemoveAll replaces the removeAllFunc on cc for the duration of a test.
 func SetOsRemoveAll(cc *ClaudeCode, fn func(string) error) {
 	cc.removeAllFunc = fn
+}
+
+// WriteDescriptors exposes writeDescriptors for testing.
+func WriteDescriptors(cc *ClaudeCode, destDir string, opts target.InstallOpts) error {
+	return cc.writeDescriptors(destDir, opts)
+}
+
+// ReadManifestPlugin exposes readManifestPlugin for testing.
+func ReadManifestPlugin(dir string, opts target.InstallOpts) (manifest.Plugin, error) {
+	return readManifestPlugin(dir, opts)
+}
+
+// SynthPlugin exposes synthPlugin for testing.
+func SynthPlugin(opts target.InstallOpts) manifest.Plugin {
+	return synthPlugin(opts)
+}
+
+// CollectCommandPaths exposes collectCommandPaths for testing.
+func CollectCommandPaths(dir string) []string {
+	return collectCommandPaths(dir)
+}
+
+// CopyDir exposes copyDir for testing.
+func CopyDir(ctx context.Context, src string, dst string) error {
+	return copyDir(ctx, src, dst)
+}
+
+// CopyFile exposes copyFile for testing.
+func CopyFile(src string, dst string) error {
+	return copyFile(src, dst)
+}
+
+// ShortSHA exposes shortSHA for testing.
+func ShortSHA(sha string) string {
+	return shortSHA(sha)
+}
+
+// FormatDate exposes formatDate for testing.
+func FormatDate(ts string) string {
+	return formatDate(ts)
 }

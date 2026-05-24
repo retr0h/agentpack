@@ -79,3 +79,21 @@ func CreateTempAlwaysFails(_, _ string) (*os.File, error) {
 func MkdirTempAlwaysFails(_, _ string) (string, error) {
 	return "", errors.New("simulated mkdir temp failure")
 }
+
+// MkdirTempFailAfterN returns a replacement for osMkdirTemp that succeeds
+// on the first n calls and then returns an error.
+func MkdirTempFailAfterN(n int) func(string, string) (string, error) {
+	call := 0
+	return func(dir, pattern string) (string, error) {
+		call++
+		if call > n {
+			return "", errors.New("simulated mkdir temp failure after n")
+		}
+		return os.MkdirTemp(dir, pattern)
+	}
+}
+
+// CopyToTemp exposes copyToTemp for testing.
+func CopyToTemp(ctx context.Context, src string) (string, error) {
+	return copyToTemp(ctx, src)
+}

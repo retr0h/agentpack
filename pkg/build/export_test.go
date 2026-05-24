@@ -28,6 +28,8 @@ import (
 
 	"github.com/retr0h/agentpack/pkg/archive"
 	"github.com/retr0h/agentpack/pkg/checksum"
+	"github.com/retr0h/agentpack/pkg/manifest"
+	"github.com/retr0h/agentpack/pkg/metadata"
 )
 
 // FileEntry aliases archive.FileEntry for use in build_test.go without
@@ -44,4 +46,25 @@ func ComputeArchiveChecksums(
 	files []archive.FileEntry,
 ) ([]checksum.Entry, error) {
 	return computeArchiveChecksums(ctx, vfs, files)
+}
+
+// BuildPlugin exposes buildPlugin for testing.
+func BuildPlugin(
+	ctx context.Context,
+	vfs avfs.VFS,
+	dir string,
+	p manifest.Plugin,
+	meta *metadata.Metadata,
+) (Result, error) {
+	return buildPlugin(ctx, vfs, dir, p, meta)
+}
+
+// BuildMCPEntries exposes buildMCPEntries for testing.
+func BuildMCPEntries(
+	ctx context.Context,
+	vfs avfs.VFS,
+	dir string,
+	p manifest.Plugin,
+) ([]archive.FileEntry, error) {
+	return buildMCPEntries(ctx, vfs, dir, p)
 }

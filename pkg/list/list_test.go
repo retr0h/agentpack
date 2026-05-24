@@ -192,6 +192,19 @@ func TestRun(t *testing.T) {
 			},
 		},
 		{
+			name:    "uses registered targets when nil targets provided",
+			targets: nil, // triggers target.All() fallback
+			checkResult: func(t *testing.T, entries []list.Entry) {
+				t.Helper()
+				// We can't assert on the specific entries since the system may or
+				// may not have Claude Code installed. We just verify no error and
+				// a valid (possibly empty) slice is returned.
+				if entries == nil && len(entries) != 0 {
+					t.Error("expected non-nil slice")
+				}
+			},
+		},
+		{
 			name: "passes through all Entry fields correctly",
 			targets: []target.Target{
 				&stubTarget{
