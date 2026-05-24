@@ -19,20 +19,6 @@ cd claudia
 go test ./...
 ```
 
-## Layout
-
-```
-cmd/               Cobra CLI shim (root, build, verify, version)
-pkg/archive/       Tarball creation and extraction (.claudia archives)
-pkg/build/         Build pipeline orchestration
-pkg/checksum/      Per-file SHA256 checksumming and verification
-pkg/cli/           Themed terminal output (banner, colors)
-pkg/manifest/      claudia.yaml parsing and validation
-pkg/metadata/      Git SHA, version, timestamp capture
-pkg/plugin/        Claude Code plugin structure generation
-pkg/verify/        Verify pipeline orchestration
-```
-
 ## Common tasks
 
 ```bash
@@ -52,53 +38,42 @@ just run            # build and run
 just clean          # remove binary
 ```
 
-## Testing conventions
+## Layout
 
-**Every public function and method MUST have a table-driven test.** One table
-per function, with rows covering both the happy path and every failure mode. No
-ad-hoc `Test*` functions. Every test must follow this pattern:
-
-```go
-func TestFunctionName(t *testing.T) {
-    t.Parallel()
-
-    tests := []struct {
-        name string
-        // ...fields
-    }{
-        {name: "happy path", ...},
-        {name: "failure case", ...},
-    }
-
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            t.Parallel()
-            // ...
-        })
-    }
-}
+```
+cmd/               Cobra CLI shim (root, build, verify, install, list, sync, version)
+pkg/archive/       Tarball creation and extraction (.claudia archives)
+pkg/build/         Build pipeline orchestration
+pkg/checksum/      Per-file SHA256 checksumming and verification
+pkg/cli/           Themed terminal output (banner, colors)
+pkg/fetcher/       Backend interface + drivers (file, http)
+pkg/install/       Install pipeline orchestration
+pkg/list/          List installed plugins
+pkg/manifest/      claudia.yaml parsing and validation
+pkg/metadata/      Git SHA, version, timestamp capture
+pkg/plugin/        Claude Code plugin structure generation
+pkg/sync/          Declarative sync from claudia-packages.yaml
+pkg/verify/        Verify pipeline orchestration
 ```
 
-### File naming (non-negotiable)
+## Testing conventions
 
-**One test file per production file.** `archive.go` is tested by
-`archive_test.go` -- never `helpers_archive_test.go` or similar.
+**Every public function MUST have a table-driven test.** One table per
+function, with rows covering both the happy path and every failure mode.
 
-### Filesystem mocking
+**One test file per production file.** `archive.go` → `archive_test.go`.
 
 Tests use [AVFS](https://github.com/avfs/avfs) for virtual filesystem:
-
-- Production: `osfs.NewWithNoIdm()` (real OS)
-- Tests: `memfs.New()` (in-memory)
-- Error injection: wrap `memfs` with a custom struct overriding methods
+production uses `osfs.NewWithNoIdm()`, tests use `memfs.New()`, error
+injection wraps `memfs` with a custom struct overriding methods.
 
 ## Commit messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
-- **Subject line**: max 50 characters, imperative mood, capitalized, no period
-- **Body**: wrap at 72 characters, separated from subject by a blank line
 - **Format**: `type(scope): description`
+- **Subject**: max 50 chars, imperative mood, no period
+- **Body**: wrap at 72 chars, blank line after subject
 - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
-- **Scopes**: `cli`, `archive`, `build`, `checksum`, `manifest`, `metadata`,
-  `plugin`, `theme`, `verify`
+- **Scopes**: `cli`, `archive`, `build`, `checksum`, `fetcher`, `install`,
+  `list`, `manifest`, `metadata`, `plugin`, `sync`, `verify`
