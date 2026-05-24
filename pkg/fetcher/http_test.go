@@ -39,7 +39,8 @@ import (
 type httpFailOnCloseWriter struct{}
 
 func (*httpFailOnCloseWriter) Write(p []byte) (int, error) { return len(p), nil }
-func (*httpFailOnCloseWriter) Close() error                { return errors.New("simulated close error") }
+
+func (*httpFailOnCloseWriter) Close() error { return errors.New("simulated close error") }
 
 // cancelAfterHTTPResponseCtx returns nil from Err() for the first several
 // calls (to allow http.NewRequestWithContext and Do to proceed), then returns

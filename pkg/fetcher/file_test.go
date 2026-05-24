@@ -37,7 +37,8 @@ import (
 type failOnCloseWriter struct{}
 
 func (*failOnCloseWriter) Write(p []byte) (int, error) { return len(p), nil }
-func (*failOnCloseWriter) Close() error                { return errors.New("simulated close error") }
+
+func (*failOnCloseWriter) Close() error { return errors.New("simulated close error") }
 
 // cancelOnSecondCallCtx is a context.Context whose Err() returns nil on the
 // first call and context.Canceled on all subsequent calls. This allows a test

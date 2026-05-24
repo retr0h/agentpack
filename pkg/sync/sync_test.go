@@ -156,7 +156,11 @@ description: Plugin for sync test
 `)
 				cfgDir := t.TempDir()
 				pluginDir := t.TempDir()
-				configPath := writePackagesFile(t, cfgDir, "packages:\n  - name: sync-plugin\n    source: "+archivePath+"\n")
+				configPath := writePackagesFile(
+					t,
+					cfgDir,
+					"packages:\n  - name: sync-plugin\n    source: "+archivePath+"\n",
+				)
 				return configPath, pluginDir
 			},
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
@@ -219,7 +223,11 @@ description: Plugin for sync test
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				cfgDir := t.TempDir()
-				configPath := writePackagesFile(t, cfgDir, "packages:\n  - name: p\n    source: /tmp/x.claudia\n")
+				configPath := writePackagesFile(
+					t,
+					cfgDir,
+					"packages:\n  - name: p\n    source: /tmp/x.claudia\n",
+				)
 				return configPath, t.TempDir()
 			},
 			cancelCtx: true,
@@ -231,7 +239,9 @@ description: Plugin for sync test
 				t.Helper()
 				cfgDir := t.TempDir()
 				// Two packages so the loop runs at least once before cancelling.
-				configPath := writePackagesFile(t, cfgDir,
+				configPath := writePackagesFile(
+					t,
+					cfgDir,
 					"packages:\n  - name: a\n    source: /tmp/a.claudia\n  - name: b\n    source: /tmp/b.claudia\n",
 				)
 				return configPath, t.TempDir()

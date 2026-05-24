@@ -75,20 +75,23 @@ plugin into the Claude Code plugin directory.`,
 			name := cli.Accent(out, cli.Pad(r.Name, nameW+pad))
 			switch r.Status {
 			case "installed":
-				cli.Printf(out, "  %s%s  %s  %s\n",
+				cli.Printf(
+					out, "  %s%s  %s  %s\n",
 					name,
 					cli.Mute(out, "fetching..."),
 					cli.Mute(out, r.Version),
 					cli.OK(out, "installed"),
 				)
 			case "up to date":
-				cli.Printf(out, "  %s%s  %s\n",
+				cli.Printf(
+					out, "  %s%s  %s\n",
 					name,
 					cli.Mute(out, "up to date"),
 					cli.Mute(out, r.Version),
 				)
 			case "failed":
-				cli.Printf(out, "  %s%s  %s\n",
+				cli.Printf(
+					out, "  %s%s  %s\n",
 					name,
 					cli.Err(out, "failed"),
 					cli.Mute(out, r.Err.Error()),
@@ -97,7 +100,8 @@ plugin into the Claude Code plugin directory.`,
 			}
 		}
 
-		cli.Printf(out, "\n%d %s synced\n",
+		cli.Printf(
+			out, "\n%d %s synced\n",
 			len(results),
 			plural(len(results), "plugin", "plugins"),
 		)

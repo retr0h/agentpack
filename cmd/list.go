@@ -91,7 +91,8 @@ var listCmd = &cobra.Command{
 			cli.Printf(out, "%s%s%s%s\n", name, version, sha, installed)
 		}
 
-		cli.Printf(out, "\n%d %s installed\n",
+		cli.Printf(
+			out, "\n%d %s installed\n",
 			len(entries),
 			plural(len(entries), "plugin", "plugins"),
 		)

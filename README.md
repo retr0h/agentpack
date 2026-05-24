@@ -9,13 +9,16 @@
 
 # claudia
 
-Git-free package manager for Claude Code plugins.
+The first git-free package manager for [agentskills.io](https://agentskills.io).
 
 Build checksummed `.claudia` archives from any repo — skills, commands,
 hooks, agents, MCP servers, binaries, settings — and distribute them
 via Google Drive, S3, URL, or sneakernet. Non-technical users install
 with a single command. No git, Go, or build toolchain required on the
 receiving end.
+
+Works with Claude Code today. Cursor, Copilot, Gemini CLI, and other
+agentskills.io-compatible platforms coming soon.
 
 ## 📦 Install
 
@@ -49,12 +52,15 @@ claudia sync                               # sync from claudia-packages.yaml
 |---------|-------------|
 | Build | Package plugins from `claudia.yaml` into `.claudia` archives |
 | Verify | SHA256 checksum verification of every file in an archive |
-| Install | Unpack archives into `~/.claude/plugins/` (local or remote) |
+| Install | Unpack archives from local files or URLs |
 | List | Show installed plugins with version, SHA, and install date |
 | Sync | Declarative installs from `claudia-packages.yaml` |
 | Multi-plugin | One manifest, multiple plugins with src/dest remapping |
 | MCP servers | Binary, remote, and UX/npx — claudia generates `.mcp.json` |
-| Claude Code native | Same `marketplaces/` directory structure as the official marketplace |
+| Git metadata | Captures SHA, branch, timestamps at build time |
+| Pluggable backends | File and HTTP today; S3 and GCS planned |
+| Multi-agent targets | Claude Code today; Cursor, Copilot, Gemini CLI planned |
+| agentskills.io | Compatible with the open agent skills ecosystem |
 
 ## 📋 Manifest
 
