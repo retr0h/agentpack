@@ -42,30 +42,37 @@ Skunkworks workflow — commits land directly on `main`.
 ## Architecture
 
 ```
-cmd/               Cobra CLI shim (root, build, verify, install, list, sync, version)
-pkg/archive/       Tarball creation and extraction
-pkg/build/         Build pipeline orchestration
-pkg/checksum/      Per-file SHA256 checksumming and verification
-pkg/cli/           Themed terminal output (banner, colors)
-pkg/fetcher/       Backend interface + drivers (file, http, git)
-pkg/install/       Install pipeline orchestration
-pkg/list/          List installed plugins
-pkg/manifest/      agentpack.yaml parsing and validation
-pkg/metadata/      Git SHA, version, timestamp capture
-pkg/plugin/        Claude Code plugin structure generation
-pkg/sync/          Declarative sync from agentpack-packages.yaml
-pkg/verify/        Verify pipeline orchestration
+cmd/                    Cobra CLI shim
+pkg/archive/            Tarball creation and extraction
+pkg/build/              Build pipeline orchestration
+pkg/checksum/           Per-file SHA256 checksumming
+pkg/cli/                Themed terminal output (banner, colors)
+pkg/fetcher/            Fetch drivers (file, http, git/gilt)
+pkg/install/            Install pipeline orchestration
+pkg/list/               List installed plugins
+pkg/manifest/           agentpack.yaml parsing and validation
+pkg/metadata/           Git metadata capture
+pkg/plugin/             Plugin descriptor generation
+pkg/sync/               Declarative sync with injectable interfaces
+pkg/target/             Target interface + registry
+pkg/target/claudecode/  Claude Code target implementation
+pkg/verify/             Archive verification
 ```
 
-Content types: skills, commands, hooks, agents, MCP (remote/ux only), settings.
-Binary executables and binary MCP servers are not permitted (security policy).
+Three driver interfaces: `Fetcher` (how to get content), `Target` (where
+to install), and sync's `Builder`/`Installer` (testable pipeline stages).
+Generated mocks live in `mocks/` subdirectories alongside their interfaces.
 
-- `cmd/` — thin shim: parse flags, create context + VFS, call `pkg/`, print output
+No binary executables in archives — security policy. MCP remote/ux only.
+Git fetcher delegates to [gilt](https://github.com/retr0h/gilt) for
+clone caching and version checkout.
+
+- `cmd/` — thin shim: parse flags, create context + VFS, call `pkg/`
 - `pkg/` — public library API, consumable without the CLI
 - Filesystem I/O via `avfs.VFS` (production: `osfs`, tests: `memfs`)
 - `context.Context` threads from CLI through cancellable operations
 
-Key deps: cobra, yaml.v3, lipgloss, avfs, crypto/sha256, archive/tar, compress/gzip.
+Key deps: cobra, yaml.v3, lipgloss, avfs, gilt, mockgen.
 
 ## Testing
 

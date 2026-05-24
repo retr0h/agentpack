@@ -41,19 +41,24 @@ just clean          # remove binary
 ## Layout
 
 ```
-cmd/               Cobra CLI shim (root, build, verify, install, list, sync, version)
-pkg/archive/       Tarball creation and extraction (.agentpack archives)
-pkg/build/         Build pipeline orchestration
-pkg/checksum/      Per-file SHA256 checksumming and verification
-pkg/cli/           Themed terminal output (banner, colors)
-pkg/fetcher/       Backend interface + drivers (file, http)
-pkg/install/       Install pipeline orchestration
-pkg/list/          List installed plugins
-pkg/manifest/      agentpack.yaml parsing and validation
-pkg/metadata/      Git SHA, version, timestamp capture
-pkg/plugin/        Claude Code plugin structure generation
-pkg/sync/          Declarative sync from agentpack-packages.yaml
-pkg/verify/        Verify pipeline orchestration
+cmd/                       Cobra CLI shim
+pkg/archive/               Tarball creation and extraction
+pkg/build/                 Build pipeline orchestration
+pkg/checksum/              Per-file SHA256 checksumming
+pkg/cli/                   Themed terminal output (banner, colors)
+pkg/fetcher/               Fetch drivers (file, http, git/gilt)
+pkg/fetcher/mocks/         Generated MockFetcher
+pkg/install/               Install pipeline orchestration
+pkg/list/                  List installed plugins
+pkg/manifest/              agentpack.yaml parsing and validation
+pkg/metadata/              Git metadata capture
+pkg/plugin/                Plugin descriptor generation
+pkg/sync/                  Declarative sync with injectable interfaces
+pkg/sync/mocks/            Generated MockBuilder, MockInstaller
+pkg/target/                Target interface + registry
+pkg/target/mocks/          Generated MockTarget
+pkg/target/claudecode/     Claude Code target implementation
+pkg/verify/                Archive verification
 ```
 
 ## Testing conventions
@@ -93,4 +98,4 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - **Body**: wrap at 72 chars, blank line after subject
 - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
 - **Scopes**: `cli`, `archive`, `build`, `checksum`, `fetcher`, `install`,
-  `list`, `manifest`, `metadata`, `plugin`, `sync`, `verify`
+  `list`, `manifest`, `metadata`, `plugin`, `sync`, `target`, `verify`
