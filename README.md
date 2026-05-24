@@ -98,6 +98,7 @@ claudia sync
 
 ## 📖 Documentation
 
+- [Package Format][] — archive layout, generated files, MCP config
 - [Development][] — architecture, testing conventions, layout
 - [Contributing][] — commit style, lint chain, PR checklist
 
@@ -106,5 +107,6 @@ claudia sync
 [MIT][]
 
 [MIT]: LICENSE
+[Package Format]: docs/package-format.md
 [Development]: docs/development.md
 [Contributing]: docs/contributing.md
