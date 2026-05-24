@@ -29,7 +29,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -208,7 +207,7 @@ func buildArchiveNoMarketplace(t *testing.T) string {
 		if err := tw.WriteHeader(hdr); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := io.WriteString(tw, string(e.content)); err != nil {
+		if _, err := tw.Write(e.content); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1061,7 +1060,7 @@ func TestFindAndReadMetadata(t *testing.T) {
 		name    string
 		setup   func(t *testing.T) string // returns dir
 		wantErr string
-		check   func(t *testing.T, m interface{})
+		check   func(t *testing.T, m any)
 	}{
 		{
 			name: "finds and reads metadata.json inside .claudia dir",
@@ -1085,7 +1084,7 @@ func TestFindAndReadMetadata(t *testing.T) {
 				}
 				return dir
 			},
-			check: func(t *testing.T, m interface{}) {
+			check: func(t *testing.T, m any) {
 				t.Helper()
 				if m == nil {
 					t.Error("expected non-nil metadata")
