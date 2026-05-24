@@ -21,10 +21,6 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/pkg/cli"
@@ -38,38 +34,42 @@ var listCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		out := cmd.OutOrStdout()
 
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("home dir: %w", err)
-		}
-		pluginDir := filepath.Join(home, ".claude", "plugins")
-
-		entries, err := list.Run(pluginDir)
+		// Pass nil so list.Run uses all registered targets.
+		entries, err := list.Run(nil)
 		if err != nil {
 			return err
 		}
 
 		if len(entries) == 0 {
 			cli.Print(out, "no plugins installed")
+
 			return nil
 		}
 
 		// Calculate column widths.
+		targetW := len("TARGET")
 		nameW := len("NAME")
 		versionW := len("VERSION")
 		shaW := len("SHA")
 		dateW := len("INSTALLED")
 
 		for _, e := range entries {
+			if len(e.Target) > targetW {
+				targetW = len(e.Target)
+			}
+
 			if len(e.Name) > nameW {
 				nameW = len(e.Name)
 			}
+
 			if len(e.Version) > versionW {
 				versionW = len(e.Version)
 			}
+
 			if len(e.SHA) > shaW {
 				shaW = len(e.SHA)
 			}
+
 			if len(e.Installed) > dateW {
 				dateW = len(e.Installed)
 			}
@@ -77,18 +77,20 @@ var listCmd = &cobra.Command{
 
 		const pad = 2
 
-		hdr := cli.Pad("NAME", nameW+pad) +
+		hdr := cli.Pad("TARGET", targetW+pad) +
+			cli.Pad("NAME", nameW+pad) +
 			cli.Pad("VERSION", versionW+pad) +
 			cli.Pad("SHA", shaW+pad) +
 			"INSTALLED"
 		cli.Printf(out, "%s\n", cli.Mute(out, hdr))
 
 		for _, e := range entries {
+			tgt := cli.Mute(out, cli.Pad(e.Target, targetW+pad))
 			name := cli.Accent(out, cli.Pad(e.Name, nameW+pad))
 			version := cli.Pad(e.Version, versionW+pad)
 			sha := cli.Mute(out, cli.Pad(e.SHA, shaW+pad))
 			installed := cli.Info(out, e.Installed)
-			cli.Printf(out, "%s%s%s%s\n", name, version, sha, installed)
+			cli.Printf(out, "%s%s%s%s%s\n", tgt, name, version, sha, installed)
 		}
 
 		cli.Printf(
@@ -106,6 +108,7 @@ func plural(n int, singular, pluralForm string) string {
 	if n == 1 {
 		return singular
 	}
+
 	return pluralForm
 }
 

@@ -18,93 +18,62 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package list scans an installed plugin directory and returns metadata for
-// every agentpack-managed plugin found.
+// Package list aggregates installed agentpack plugins across all registered
+// targets.
 package list
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
-	"strings"
 
-	"github.com/retr0h/agentpack/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/target"
 )
 
-// Entry represents a single installed agentpack plugin.
+// Entry represents a single installed agentpack plugin found by any target.
 type Entry struct {
 	Name      string
 	Version   string
 	SHA       string
 	Installed string // build timestamp from metadata.json
-	Dir       string // path to the marketplace directory
+	Dir       string // path to the installed plugin directory
+	Target    string // which target (agent) it was found in
 }
 
-// Run scans pluginDir/marketplaces/ for installed agentpack plugins and returns
-// them sorted by name. A directory is considered an agentpack plugin when it
-// contains a .agentpack/metadata.json file.
-func Run(pluginDir string) ([]Entry, error) {
-	marketplacesDir := filepath.Join(pluginDir, "marketplaces")
-
-	dirEntries, err := os.ReadDir(marketplacesDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []Entry{}, nil
-		}
-		return nil, fmt.Errorf("read marketplaces dir: %w", err)
+// Run queries each provided target for installed plugins and returns them
+// aggregated and sorted by (Target, Name). When targets is nil or empty,
+// target.All() is used so all registered targets are scanned.
+func Run(targets []target.Target) ([]Entry, error) {
+	if len(targets) == 0 {
+		targets = target.All()
 	}
 
 	var entries []Entry
 
-	for _, de := range dirEntries {
-		if !de.IsDir() {
-			continue
-		}
-
-		dir := filepath.Join(marketplacesDir, de.Name())
-		metaPath := filepath.Join(dir, ".agentpack", "metadata.json")
-
-		data, err := os.ReadFile(metaPath)
+	for _, tgt := range targets {
+		plugins, err := tgt.List()
 		if err != nil {
-			// Not an agentpack plugin — skip silently.
-			continue
+			return nil, fmt.Errorf("list %s: %w", tgt.Name(), err)
 		}
 
-		var meta metadata.Metadata
-		if err := json.Unmarshal(data, &meta); err != nil {
-			return nil, fmt.Errorf("parse metadata.json in %s: %w", dir, err)
+		for _, p := range plugins {
+			entries = append(entries, Entry{
+				Name:      p.Name,
+				Version:   p.Version,
+				SHA:       p.SHA,
+				Installed: p.Installed,
+				Dir:       p.Dir,
+				Target:    p.Target,
+			})
 		}
-
-		entries = append(entries, Entry{
-			Name:      meta.Name,
-			Version:   meta.Version,
-			SHA:       shortSHA(meta.GitCommitSHA),
-			Installed: formatDate(meta.BuildTimestamp),
-			Dir:       dir,
-		})
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Target != entries[j].Target {
+			return entries[i].Target < entries[j].Target
+		}
+
 		return entries[i].Name < entries[j].Name
 	})
 
 	return entries, nil
-}
-
-// shortSHA returns the first 7 characters of a git commit SHA.
-func shortSHA(sha string) string {
-	if len(sha) >= 7 {
-		return sha[:7]
-	}
-	return sha
-}
-
-// formatDate trims an RFC3339 timestamp to its date portion (YYYY-MM-DD).
-func formatDate(ts string) string {
-	if idx := strings.IndexByte(ts, 'T'); idx > 0 {
-		return ts[:idx]
-	}
-	return ts
 }

@@ -21,10 +21,6 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/pkg/cli"
@@ -34,22 +30,16 @@ import (
 var installCmd = &cobra.Command{
 	Use:   "install <source>",
 	Short: "Install a .agentpack archive",
-	Long: `Install a .agentpack archive into the Claude Code plugin directory.
+	Long: `Install a .agentpack archive into all detected AI coding agents.
 Source may be a local file path or an HTTP/HTTPS URL.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("home dir: %w", err)
-		}
-		pluginDir := filepath.Join(home, ".claude", "plugins")
-
+		// Targets defaults to nil so install.Run uses target.Detected().
 		result, err := install.Run(ctx, install.Options{
-			Source:    args[0],
-			PluginDir: pluginDir,
+			Source: args[0],
 		})
 		if err != nil {
 			return err
@@ -64,8 +54,11 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 			cli.Mute(out, result.SHA),
 		)
 
-		cli.Printf(out, "  extracted to %s\n\n", cli.Mute(out, result.Dir))
-		cli.Printf(out, "  %s installed\n", cli.OK(out, result.Name))
+		for targetName, dir := range result.Dirs {
+			cli.Printf(out, "  [%s] extracted to %s\n", cli.Mute(out, targetName), cli.Mute(out, dir))
+		}
+
+		cli.Printf(out, "\n  %s installed\n", cli.OK(out, result.Name))
 
 		return nil
 	},

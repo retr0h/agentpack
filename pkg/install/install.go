@@ -33,24 +33,26 @@ import (
 	"github.com/retr0h/agentpack/pkg/checksum"
 	"github.com/retr0h/agentpack/pkg/fetcher"
 	"github.com/retr0h/agentpack/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/target"
 )
 
 // Swappable OS functions for testing.
 var (
-	// renameFunc is the function used to rename (move) a directory. It is a
-	// package-level variable so tests can override it to simulate cross-device
-	// rename failures without real filesystem manipulation.
-	renameFunc   = os.Rename
+	// osCreateTemp is a swappable wrapper so tests can inject temp-file
+	// creation failures.
 	osCreateTemp = os.CreateTemp
 	osMkdirTemp  = os.MkdirTemp
-	osMkdirAll   = os.MkdirAll
-	osRemoveAll  = os.RemoveAll
 )
 
 // Options configures an install run.
 type Options struct {
-	Source    string // local path or URL to .agentpack archive
-	PluginDir string // ~/.claude/plugins/ (target directory)
+	// Source is the local path or URL to the .agentpack archive.
+	Source string
+
+	// Targets is the list of agent targets to install into. When nil or empty
+	// the global target registry is consulted and only detected targets are
+	// used.
+	Targets []target.Target
 }
 
 // Result holds the outcome of a successful install.
@@ -58,17 +60,18 @@ type Result struct {
 	Name    string
 	Version string
 	SHA     string
-	Dir     string // where the plugin was extracted to
+	// Dirs maps target display-name → installed directory.
+	Dirs map[string]string
 }
 
-// Run installs a single .agentpack archive into PluginDir.
+// Run installs a single .agentpack archive into every detected target.
 //
 // The pipeline:
 //  1. Fetch the archive (local copy or remote download) into a temp file.
 //  2. Extract the archive into a temp directory.
 //  3. Verify all checksums.
-//  4. Read .agentpack/metadata.json from the extraction to obtain plugin identity.
-//  5. Move the marketplace directory from temp to PluginDir.
+//  4. Read .agentpack/metadata.json to obtain plugin identity.
+//  5. Call target.Install for each detected (or provided) agent target.
 func Run(ctx context.Context, opts Options) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -84,6 +87,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
+
 	tmpArchive := tmpFile.Name()
 	_ = tmpFile.Close()
 	defer func() { _ = os.Remove(tmpArchive) }()
@@ -117,17 +121,17 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	entries, err := checksum.ReadFile(checksumFile)
+	checksumEntries, err := checksum.ReadFile(checksumFile)
 	if err != nil {
 		return nil, fmt.Errorf("reading checksums: %w", err)
 	}
 
-	results, err := checksum.Verify(ctx, tmpDir, entries)
+	verifyResults, err := checksum.Verify(ctx, tmpDir, checksumEntries)
 	if err != nil {
 		return nil, fmt.Errorf("verify: %w", err)
 	}
 
-	for _, r := range results {
+	for _, r := range verifyResults {
 		if !r.OK {
 			return nil, fmt.Errorf("checksum failed for %s: %s", r.Path, r.Err)
 		}
@@ -143,38 +147,71 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	// Move the marketplace directory to the real PluginDir.
-	marketplaceDir, err := findMarketplaceDir(tmpDir)
-	if err != nil {
-		return nil, err
+	// Resolve the list of targets to install into.
+	targets := opts.Targets
+	if len(targets) == 0 {
+		targets = target.Detected()
 	}
 
-	destDir := filepath.Join(opts.PluginDir, "marketplaces", meta.Name)
-	if err := osMkdirAll(filepath.Dir(destDir), 0o755); err != nil {
-		return nil, fmt.Errorf("mkdir plugin dir: %w", err)
+	installOpts := target.InstallOpts{
+		Name:    meta.Name,
+		Version: meta.Version,
+		Meta:    meta,
 	}
 
-	// Remove existing installation if present.
-	if err := osRemoveAll(destDir); err != nil {
-		return nil, fmt.Errorf("remove existing: %w", err)
-	}
+	dirs := make(map[string]string)
 
-	if err := renameFunc(marketplaceDir, destDir); err != nil {
-		// Rename across devices fails; fall back to copy.
-		if err2 := copyDir(ctx, marketplaceDir, destDir); err2 != nil {
-			return nil, fmt.Errorf("install: %w", err2)
+	for _, tgt := range targets {
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
+
+		// Each target driver may consume (rename) its SourceDir. To support
+		// multiple targets we always supply a fresh copy of the extracted
+		// archive for each target.
+		srcDir, err := copyToTemp(ctx, tmpDir)
+		if err != nil {
+			return nil, fmt.Errorf("prepare source for %s: %w", tgt.Name(), err)
+		}
+
+		installOpts.SourceDir = srcDir
+
+		if installErr := tgt.Install(ctx, installOpts); installErr != nil {
+			_ = os.RemoveAll(srcDir)
+
+			return nil, fmt.Errorf("install to %s: %w", tgt.Name(), installErr)
+		}
+
+		dirs[tgt.DisplayName()] = srcDir
 	}
 
 	return &Result{
 		Name:    meta.Name,
 		Version: meta.Version,
 		SHA:     shortSHA(meta.GitCommitSHA),
-		Dir:     destDir,
+		Dirs:    dirs,
 	}, nil
 }
 
+// copyToTemp makes a fresh copy of src into a new temp directory and returns
+// the path to the new directory.
+func copyToTemp(ctx context.Context, src string) (string, error) {
+	dst, err := osMkdirTemp("", "agentpack-target-*")
+	if err != nil {
+		return "", fmt.Errorf("create target temp dir: %w", err)
+	}
+
+	if copyErr := copyDir(ctx, src, dst); copyErr != nil {
+		_ = os.RemoveAll(dst)
+
+		return "", fmt.Errorf("copy to target dir: %w", copyErr)
+	}
+
+	return dst, nil
+}
+
 // findChecksums locates the checksums.txt file inside the extracted archive.
+// The generic archive layout places it at .agentpack/checksums.txt.
 func findChecksums(dir string) (string, error) {
 	var found string
 
@@ -182,10 +219,13 @@ func findChecksums(dir string) (string, error) {
 		if err != nil {
 			return err
 		}
+
 		if !d.IsDir() && d.Name() == "checksums.txt" && strings.Contains(path, ".agentpack") {
 			found = path
+
 			return filepath.SkipAll
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -207,10 +247,13 @@ func findAndReadMetadata(dir string) (*metadata.Metadata, error) {
 		if err != nil {
 			return err
 		}
+
 		if !d.IsDir() && d.Name() == "metadata.json" && strings.Contains(path, ".agentpack") {
 			found = path
+
 			return filepath.SkipAll
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -234,34 +277,15 @@ func findAndReadMetadata(dir string) (*metadata.Metadata, error) {
 	return &meta, nil
 }
 
-// findMarketplaceDir finds the top-level marketplace directory in the extracted
-// archive (the directory under marketplaces/ that contains the plugin).
-func findMarketplaceDir(dir string) (string, error) {
-	// Look for a marketplaces/<name> subdirectory.
-	marketplacesDir := filepath.Join(dir, "marketplaces")
-
-	entries, err := os.ReadDir(marketplacesDir)
-	if err != nil {
-		return "", fmt.Errorf("read marketplaces dir: %w", err)
-	}
-
-	for _, e := range entries {
-		if e.IsDir() {
-			return filepath.Join(marketplacesDir, e.Name()), nil
-		}
-	}
-
-	return "", fmt.Errorf("no marketplace directory found in archive")
-}
-
 // copyDir recursively copies src to dst.
 func copyDir(ctx context.Context, src string, dst string) error {
 	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if err := ctx.Err(); err != nil {
-			return err
+
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
 		}
 
 		rel, err := filepath.Rel(src, path)
@@ -269,13 +293,13 @@ func copyDir(ctx context.Context, src string, dst string) error {
 			return fmt.Errorf("rel path: %w", err)
 		}
 
-		target := filepath.Join(dst, rel)
+		tgtPath := filepath.Join(dst, rel)
 
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
+			return os.MkdirAll(tgtPath, 0o755)
 		}
 
-		return copyFile(path, target)
+		return copyFile(path, tgtPath)
 	})
 }
 
@@ -303,5 +327,6 @@ func shortSHA(sha string) string {
 	if len(sha) >= 7 {
 		return sha[:7]
 	}
+
 	return sha
 }

@@ -29,20 +29,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/metadata"
 )
 
-// SetRenameFunc replaces the package-level renameFunc with f for the duration
-// of a test. Call the returned function to restore the original.
-func SetRenameFunc(f func(string, string) error) func() {
-	orig := renameFunc
-	renameFunc = f
-	return func() { renameFunc = orig }
-}
-
-// RenameAlwaysFails is a rename function that always returns an error, used
-// to force the copyDir fallback in Run.
-func RenameAlwaysFails(_, _ string) error {
-	return errors.New("simulated cross-device rename failure")
-}
-
 // ShortSHA exposes shortSHA for testing.
 func ShortSHA(sha string) string {
 	return shortSHA(sha)
@@ -68,15 +54,11 @@ func FindAndReadMetadata(dir string) (*metadata.Metadata, error) {
 	return findAndReadMetadata(dir)
 }
 
-// FindMarketplaceDir exposes findMarketplaceDir for testing.
-func FindMarketplaceDir(dir string) (string, error) {
-	return findMarketplaceDir(dir)
-}
-
 // SetOsCreateTemp replaces osCreateTemp for testing.
 func SetOsCreateTemp(fn func(string, string) (*os.File, error)) func() {
 	orig := osCreateTemp
 	osCreateTemp = fn
+
 	return func() { osCreateTemp = orig }
 }
 
@@ -84,14 +66,8 @@ func SetOsCreateTemp(fn func(string, string) (*os.File, error)) func() {
 func SetOsMkdirTemp(fn func(string, string) (string, error)) func() {
 	orig := osMkdirTemp
 	osMkdirTemp = fn
-	return func() { osMkdirTemp = orig }
-}
 
-// SetOsMkdirAll replaces osMkdirAll for testing.
-func SetOsMkdirAll(fn func(string, os.FileMode) error) func() {
-	orig := osMkdirAll
-	osMkdirAll = fn
-	return func() { osMkdirAll = orig }
+	return func() { osMkdirTemp = orig }
 }
 
 // CreateTempAlwaysFails is an osCreateTemp that always returns an error.
@@ -102,21 +78,4 @@ func CreateTempAlwaysFails(_, _ string) (*os.File, error) {
 // MkdirTempAlwaysFails is an osMkdirTemp that always returns an error.
 func MkdirTempAlwaysFails(_, _ string) (string, error) {
 	return "", errors.New("simulated mkdir temp failure")
-}
-
-// MkdirAllAlwaysFails is an osMkdirAll that always returns an error.
-func MkdirAllAlwaysFails(_ string, _ os.FileMode) error {
-	return errors.New("simulated mkdir all failure")
-}
-
-// SetOsRemoveAll replaces osRemoveAll for testing.
-func SetOsRemoveAll(fn func(string) error) func() {
-	orig := osRemoveAll
-	osRemoveAll = fn
-	return func() { osRemoveAll = orig }
-}
-
-// RemoveAllAlwaysFails always returns an error.
-func RemoveAllAlwaysFails(_ string) error {
-	return errors.New("simulated remove all failure")
 }

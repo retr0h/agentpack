@@ -51,10 +51,12 @@ type Result struct {
 }
 
 // Run reads configPath (a agentpack-packages.yaml) and installs or updates every
-// declared package into pluginDir. Results are returned for every package,
-// including failures. A non-nil error is returned only when the config file
-// itself cannot be read or parsed.
-func Run(ctx context.Context, configPath string, pluginDir string) ([]Result, error) {
+// declared package into all detected targets. Results are returned for every
+// package, including failures. A non-nil error is returned only when the config
+// file itself cannot be read or parsed. The pluginDir parameter is retained for
+// API compatibility but is no longer used; target drivers determine install
+// locations.
+func Run(ctx context.Context, configPath string, _ string) ([]Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -77,8 +79,7 @@ func Run(ctx context.Context, configPath string, pluginDir string) ([]Result, er
 		}
 
 		r, installErr := install.Run(ctx, install.Options{
-			Source:    pkg.Source,
-			PluginDir: pluginDir,
+			Source: pkg.Source,
 		})
 
 		if installErr != nil {

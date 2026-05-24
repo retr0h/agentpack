@@ -18,46 +18,28 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package cmd contains the agentpack cobra command tree.
-package cmd
+// Package claudecode export_test.go exposes private helpers for white-box
+// testing.
+package claudecode
 
-import (
-	"context"
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
+import "os"
 
-	"github.com/spf13/cobra"
-
-	"github.com/retr0h/agentpack/pkg/cli"
-	_ "github.com/retr0h/agentpack/pkg/target/claudecode" // register Claude Code target
-)
-
-var rootCmd = &cobra.Command{
-	Use:   "agentpack",
-	Short: "The first git-free package manager for agentskills.io",
+// SetUserHome replaces the userHomeFunc on cc for the duration of a test.
+func SetUserHome(cc *ClaudeCode, fn func() (string, error)) {
+	cc.userHomeFunc = fn
 }
 
-// Execute runs the root command; invoked by main.
-func Execute() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
+// SetRenameFunc replaces the renameFunc on cc for the duration of a test.
+func SetRenameFunc(cc *ClaudeCode, fn func(string, string) error) {
+	cc.renameFunc = fn
+}
 
-	rootCmd.SilenceUsage = true
+// SetOsMkdirAll replaces the mkdirAllFunc on cc for the duration of a test.
+func SetOsMkdirAll(cc *ClaudeCode, fn func(string, os.FileMode) error) {
+	cc.mkdirAllFunc = fn
+}
 
-	defaultHelp := rootCmd.HelpFunc()
-	rootCmd.SetHelpFunc(func(c *cobra.Command, args []string) {
-		if c == rootCmd {
-			out := c.OutOrStdout()
-			_, _ = fmt.Fprintln(out)
-			_, _ = fmt.Fprint(out, cli.Banner(out))
-			_, _ = fmt.Fprintln(out)
-		}
-		defaultHelp(c, args)
-	})
-
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		os.Exit(1)
-	}
+// SetOsRemoveAll replaces the removeAllFunc on cc for the duration of a test.
+func SetOsRemoveAll(cc *ClaudeCode, fn func(string) error) {
+	cc.removeAllFunc = fn
 }

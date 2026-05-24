@@ -18,46 +18,11 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package cmd contains the agentpack cobra command tree.
-package cmd
+// Package target export_test.go exposes private helpers for white-box testing.
+package target
 
-import (
-	"context"
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
-
-	"github.com/spf13/cobra"
-
-	"github.com/retr0h/agentpack/pkg/cli"
-	_ "github.com/retr0h/agentpack/pkg/target/claudecode" // register Claude Code target
-)
-
-var rootCmd = &cobra.Command{
-	Use:   "agentpack",
-	Short: "The first git-free package manager for agentskills.io",
-}
-
-// Execute runs the root command; invoked by main.
-func Execute() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
-	rootCmd.SilenceUsage = true
-
-	defaultHelp := rootCmd.HelpFunc()
-	rootCmd.SetHelpFunc(func(c *cobra.Command, args []string) {
-		if c == rootCmd {
-			out := c.OutOrStdout()
-			_, _ = fmt.Fprintln(out)
-			_, _ = fmt.Fprint(out, cli.Banner(out))
-			_, _ = fmt.Fprintln(out)
-		}
-		defaultHelp(c, args)
-	})
-
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		os.Exit(1)
-	}
+// ResetRegistry clears the global target registry. Only intended for use in
+// tests that need to control which targets are registered.
+func ResetRegistry() {
+	registry = nil
 }

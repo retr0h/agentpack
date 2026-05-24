@@ -18,46 +18,37 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package cmd contains the agentpack cobra command tree.
-package cmd
+package target
 
-import (
-	"context"
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
+// registry holds all known targets, populated via init() in each driver
+// package.
+var registry []Target //nolint:gochecknoglobals
 
-	"github.com/spf13/cobra"
-
-	"github.com/retr0h/agentpack/pkg/cli"
-	_ "github.com/retr0h/agentpack/pkg/target/claudecode" // register Claude Code target
-)
-
-var rootCmd = &cobra.Command{
-	Use:   "agentpack",
-	Short: "The first git-free package manager for agentskills.io",
+// Register adds a target to the global registry. It is called from each
+// driver package's init() function so that a blank import is sufficient to
+// activate the driver.
+func Register(t Target) {
+	registry = append(registry, t)
 }
 
-// Execute runs the root command; invoked by main.
-func Execute() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
+// All returns a copy of all registered targets in registration order.
+func All() []Target {
+	out := make([]Target, len(registry))
+	copy(out, registry)
 
-	rootCmd.SilenceUsage = true
+	return out
+}
 
-	defaultHelp := rootCmd.HelpFunc()
-	rootCmd.SetHelpFunc(func(c *cobra.Command, args []string) {
-		if c == rootCmd {
-			out := c.OutOrStdout()
-			_, _ = fmt.Fprintln(out)
-			_, _ = fmt.Fprint(out, cli.Banner(out))
-			_, _ = fmt.Fprintln(out)
+// Detected returns the subset of registered targets whose Detect() method
+// returns true — i.e. the agents that are installed on the current system.
+func Detected() []Target {
+	var out []Target
+
+	for _, t := range registry {
+		if t.Detect() {
+			out = append(out, t)
 		}
-		defaultHelp(c, args)
-	})
-
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		os.Exit(1)
 	}
+
+	return out
 }
