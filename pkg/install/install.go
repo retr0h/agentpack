@@ -35,6 +35,18 @@ import (
 	"github.com/retr0h/claudia/pkg/metadata"
 )
 
+// Swappable OS functions for testing.
+var (
+	// renameFunc is the function used to rename (move) a directory. It is a
+	// package-level variable so tests can override it to simulate cross-device
+	// rename failures without real filesystem manipulation.
+	renameFunc   = os.Rename
+	osCreateTemp = os.CreateTemp
+	osMkdirTemp  = os.MkdirTemp
+	osMkdirAll   = os.MkdirAll
+	osRemoveAll  = os.RemoveAll
+)
+
 // Options configures an install run.
 type Options struct {
 	Source    string // local path or URL to .claudia archive
@@ -68,7 +80,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	// Fetch to a temp file.
-	tmpFile, err := os.CreateTemp("", "claudia-install-*.claudia")
+	tmpFile, err := osCreateTemp("", "claudia-install-*.claudia")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
@@ -85,7 +97,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	// Extract to a temp dir for verification.
-	tmpDir, err := os.MkdirTemp("", "claudia-install-*")
+	tmpDir, err := osMkdirTemp("", "claudia-install-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
@@ -138,16 +150,16 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	destDir := filepath.Join(opts.PluginDir, "marketplaces", meta.Name)
-	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {
+	if err := osMkdirAll(filepath.Dir(destDir), 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir plugin dir: %w", err)
 	}
 
 	// Remove existing installation if present.
-	if err := os.RemoveAll(destDir); err != nil {
+	if err := osRemoveAll(destDir); err != nil {
 		return nil, fmt.Errorf("remove existing: %w", err)
 	}
 
-	if err := os.Rename(marketplaceDir, destDir); err != nil {
+	if err := renameFunc(marketplaceDir, destDir); err != nil {
 		// Rename across devices fails; fall back to copy.
 		if err2 := copyDir(ctx, marketplaceDir, destDir); err2 != nil {
 			return nil, fmt.Errorf("install: %w", err2)

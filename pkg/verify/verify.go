@@ -32,6 +32,9 @@ import (
 	"github.com/retr0h/claudia/pkg/checksum"
 )
 
+// osMkdirTemp is swappable for testing.
+var osMkdirTemp = os.MkdirTemp
+
 // FileResult holds the verification outcome for a single file in the archive.
 type FileResult struct {
 	Path string
@@ -54,7 +57,7 @@ func Run(ctx context.Context, archivePath string) (*Result, error) {
 		return nil, err
 	}
 
-	tmpDir, err := os.MkdirTemp("", "claudia-verify-*")
+	tmpDir, err := osMkdirTemp("", "claudia-verify-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}

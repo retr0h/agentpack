@@ -22,17 +22,47 @@ package sync_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/avfs/avfs/vfs/osfs"
 
 	"github.com/retr0h/claudia/pkg/build"
 	pkgsync "github.com/retr0h/claudia/pkg/sync"
 )
+
+// --------------------------------------------------------------------------
+// Custom context for triggering loop-level cancellation
+// --------------------------------------------------------------------------
+
+// cancelAfterFirstErrCtx is a context.Context whose Err() returns nil on the
+// first call and context.Canceled on all subsequent calls. This lets us pass
+// the function-entry check (line 59 in sync.go) but fail the loop-level check
+// (line 75).
+type cancelAfterFirstErrCtx struct {
+	callCount int
+}
+
+func newCancelAfterFirstErrCtx() *cancelAfterFirstErrCtx {
+	return &cancelAfterFirstErrCtx{}
+}
+
+func (c *cancelAfterFirstErrCtx) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *cancelAfterFirstErrCtx) Done() <-chan struct{}       { return nil }
+func (c *cancelAfterFirstErrCtx) Value(_ any) any             { return nil }
+
+func (c *cancelAfterFirstErrCtx) Err() error {
+	c.callCount++
+	if c.callCount == 1 {
+		return nil
+	}
+	return errors.New("context canceled")
+}
 
 // --------------------------------------------------------------------------
 // Helpers
@@ -109,6 +139,7 @@ func TestRun(t *testing.T) {
 		name        string
 		setup       func(t *testing.T) (configPath string, pluginDir string)
 		cancelCtx   bool
+		customCtx   context.Context
 		wantErr     string
 		checkResult func(t *testing.T, results []pkgsync.Result)
 	}{
@@ -194,6 +225,20 @@ description: Plugin for sync test
 			cancelCtx: true,
 			wantErr:   "context canceled",
 		},
+		{
+			name: "returns error when context cancelled inside loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				cfgDir := t.TempDir()
+				// Two packages so the loop runs at least once before cancelling.
+				configPath := writePackagesFile(t, cfgDir,
+					"packages:\n  - name: a\n    source: /tmp/a.claudia\n  - name: b\n    source: /tmp/b.claudia\n",
+				)
+				return configPath, t.TempDir()
+			},
+			customCtx: newCancelAfterFirstErrCtx(),
+			wantErr:   "context canceled",
+		},
 	}
 
 	for _, tt := range tests {
@@ -205,10 +250,14 @@ description: Plugin for sync test
 			var ctx context.Context
 			var cancel context.CancelFunc
 
-			if tt.cancelCtx {
+			switch {
+			case tt.customCtx != nil:
+				ctx = tt.customCtx
+				cancel = func() {}
+			case tt.cancelCtx:
 				ctx, cancel = context.WithCancel(context.Background())
 				cancel()
-			} else {
+			default:
 				ctx = context.Background()
 				cancel = func() {}
 			}

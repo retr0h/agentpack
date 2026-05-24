@@ -331,11 +331,25 @@ func TestGenerateMCPConfig(t *testing.T) {
 			wantErr: "requires src",
 		},
 		{
+			name: "remote without name returns error",
+			entries: []manifest.MCPEntry{
+				{Type: "remote", URL: "https://example.com"},
+			},
+			wantErr: "requires a name",
+		},
+		{
 			name: "remote without url returns error",
 			entries: []manifest.MCPEntry{
 				{Type: "remote", Name: "my-remote"},
 			},
 			wantErr: "requires url",
+		},
+		{
+			name: "ux without name returns error",
+			entries: []manifest.MCPEntry{
+				{Type: "ux", Package: "@mycompany/pkg"},
+			},
+			wantErr: "requires a name",
 		},
 		{
 			name: "ux without package returns error",

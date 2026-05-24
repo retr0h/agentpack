@@ -342,12 +342,27 @@ func TestWriteFile(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "fails when write returns error",
+			name: "fails when write returns error during flush",
 			setupVFS: func(t *testing.T) (avfs.VFS, string) {
 				t.Helper()
 				return flushErrorVFS{VFS: memfs.New()}, "/checksums.txt"
 			},
 			entries:     []checksum.Entry{{Hash: "abc", Path: "f.txt"}},
+			wantErr:     true,
+			wantErrFrag: "flush",
+		},
+		{
+			name: "fails when write returns error during fprintf",
+			setupVFS: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return flushErrorVFS{VFS: memfs.New()}, "/checksums.txt"
+			},
+			// A very long path that exceeds the 4096-byte bufio buffer forces an
+			// immediate write to the underlying file, causing fmt.Fprintf to fail.
+			entries: []checksum.Entry{{
+				Hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd",
+				Path: string(make([]byte, 5000)),
+			}},
 			wantErr:     true,
 			wantErrFrag: "write entry",
 		},
@@ -515,8 +530,10 @@ func TestVerify(t *testing.T) {
 		name       string
 		setupFiles map[string][]byte // relative path -> content
 		entries    []checksum.Entry
+		cancelCtx  bool
 		wantOK     []bool
 		wantErrStr []string // empty string means no specific check
+		wantErr    bool
 	}{
 		{
 			name: "matching checksum passes",
@@ -556,6 +573,20 @@ func TestVerify(t *testing.T) {
 			},
 			wantOK: []bool{false},
 		},
+		{
+			name: "cancelled context returns error",
+			setupFiles: map[string][]byte{
+				"file.txt": []byte("hello"),
+			},
+			entries: []checksum.Entry{
+				{
+					Hash: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+					Path: "file.txt",
+				},
+			},
+			cancelCtx: true,
+			wantErr:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -575,7 +606,21 @@ func TestVerify(t *testing.T) {
 				}
 			}
 
-			results, err := checksum.Verify(context.Background(), dir, tt.entries)
+			ctx := context.Background()
+			if tt.cancelCtx {
+				cancelCtx, cancel := context.WithCancel(context.Background())
+				cancel()
+				ctx = cancelCtx
+			}
+
+			results, err := checksum.Verify(ctx, dir, tt.entries)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+
 			if err != nil {
 				t.Fatalf("Verify returned unexpected error: %v", err)
 			}

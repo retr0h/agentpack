@@ -26,17 +26,131 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/avfs/avfs/vfs/osfs"
 
 	"github.com/retr0h/claudia/pkg/archive"
 	"github.com/retr0h/claudia/pkg/verify"
 )
+
+// cancelAfterN returns nil from Err() for the first n calls, then returns a
+// "context canceled" error. This allows tests to pass early ctx checks and
+// trigger cancellation at a specific point inside the function.
+type cancelAfterN struct {
+	n    int
+	call int
+}
+
+func newCancelAfterN(n int) *cancelAfterN { return &cancelAfterN{n: n} }
+
+func (c *cancelAfterN) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *cancelAfterN) Done() <-chan struct{}       { return nil }
+func (c *cancelAfterN) Value(_ any) any             { return nil }
+func (c *cancelAfterN) Err() error {
+	c.call++
+	if c.call <= c.n {
+		return nil
+	}
+	return errors.New("context canceled")
+}
+
+// --------------------------------------------------------------------------
+// FindChecksums
+// --------------------------------------------------------------------------
+
+func TestFindChecksums(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string // returns dir
+		wantErr string
+		check   func(t *testing.T, path string)
+	}{
+		{
+			name: "finds checksums.txt inside .claudia dir",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				claudiaDir := filepath.Join(dir, "marketplaces", "my-plugin", ".claudia")
+				if err := os.MkdirAll(claudiaDir, 0o755); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+				if err := os.WriteFile(
+					filepath.Join(claudiaDir, "checksums.txt"),
+					[]byte("hash  file.txt\n"),
+					0o644,
+				); err != nil {
+					t.Fatalf("write: %v", err)
+				}
+				return dir
+			},
+			check: func(t *testing.T, path string) {
+				t.Helper()
+				if !strings.HasSuffix(path, "checksums.txt") {
+					t.Errorf("path %q does not end in checksums.txt", path)
+				}
+			},
+		},
+		{
+			name: "returns error when checksums.txt not found",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			wantErr: "checksums.txt not found",
+		},
+		{
+			name: "returns error when dir entry callback gets an error",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				// Create a subdirectory we cannot read (permission denied).
+				subdir := filepath.Join(dir, "locked")
+				if err := os.MkdirAll(subdir, 0o000); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(subdir, 0o755) })
+				return dir
+			},
+			wantErr: "searching for checksums.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := tt.setup(t)
+			path, err := verify.FindChecksums(dir)
+
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.check != nil {
+				tt.check(t, path)
+			}
+		})
+	}
+}
 
 // --------------------------------------------------------------------------
 // Helpers
@@ -185,6 +299,8 @@ func TestRun(t *testing.T) {
 		name        string
 		archivePath func(t *testing.T) string
 		ctx         func() context.Context
+		injectFuncs func(t *testing.T) // if set, swap package vars (not parallel-safe)
+		noParallel  bool               // if true, skip t.Parallel()
 		wantErr     string
 		checkResult func(t *testing.T, r *verify.Result)
 	}{
@@ -252,6 +368,21 @@ func TestRun(t *testing.T) {
 			wantErr:     "reading checksums",
 		},
 		{
+			name:       "returns error when MkdirTemp fails",
+			noParallel: true,
+			archivePath: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "unused.claudia")
+			},
+			ctx: func() context.Context { return context.Background() },
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := verify.SetOsMkdirTemp(verify.MkdirTempAlwaysFails)
+				t.Cleanup(restore)
+			},
+			wantErr: "create temp dir",
+		},
+		{
 			name:        "cancelled context returns error before extract",
 			archivePath: buildValidArchive,
 			ctx: func() context.Context {
@@ -261,11 +392,59 @@ func TestRun(t *testing.T) {
 			},
 			wantErr: "context canceled",
 		},
+		{
+			name:        "cancelled context returns error after extract",
+			archivePath: buildValidArchive,
+			ctx: func() context.Context {
+				// Passes the first ctx.Err() check (line 53), then fails the
+				// first ctx.Err() check inside Extract's loop.
+				return newCancelAfterN(1)
+			},
+			wantErr: "context canceled",
+		},
+		{
+			name:        "cancelled context returns error after extract completes",
+			archivePath: buildValidArchive,
+			ctx: func() context.Context {
+				// The valid archive has 4 directory entries + 2 file entries = 6
+				// tar entries. Extract calls ctx.Err() once per entry and once
+				// more for the EOF check = 7 calls. Plus call 1 at verify.Run
+				// line 53 = 8 total before reaching line 67.
+				return newCancelAfterN(8)
+			},
+			wantErr: "context canceled",
+		},
+		{
+			name:        "cancelled context returns error after reading checksums",
+			archivePath: buildValidArchive,
+			ctx: func() context.Context {
+				// Call 1 (line 53) + 7 (Extract) + 1 (line 67) = 9 calls before
+				// reaching verify.Run line 81 (after findChecksums + ReadFile).
+				return newCancelAfterN(9)
+			},
+			wantErr: "context canceled",
+		},
+		{
+			name:        "cancelled context propagates into checksum.Verify",
+			archivePath: buildValidArchive,
+			ctx: func() context.Context {
+				// 9 calls before line 81 + 1 more (line 81) = 10 total; call 11
+				// fires inside checksum.Verify (once per checksum entry).
+				return newCancelAfterN(10)
+			},
+			wantErr: "verify",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			if !tt.noParallel {
+				t.Parallel()
+			}
+
+			if tt.injectFuncs != nil {
+				tt.injectFuncs(t)
+			}
 
 			archivePath := tt.archivePath(t)
 			ctx := tt.ctx()

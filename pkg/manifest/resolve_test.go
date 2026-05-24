@@ -48,6 +48,16 @@ func (statErrorVFS) Stat(string) (fs.FileInfo, error) {
 	return nil, errors.New("permission denied: stat failed")
 }
 
+// relErrorVFS wraps avfs.VFS and injects an error from Rel, exercising the
+// error branch in resolveGlob after a successful Glob match.
+type relErrorVFS struct {
+	avfs.VFS
+}
+
+func (relErrorVFS) Rel(_, _ string) (string, error) {
+	return "", errors.New("simulated rel error")
+}
+
 // makeFixtures creates a memfs with the given relative file paths (written
 // with empty content) rooted at /base and returns the VFS and base path.
 func makeFixtures(t *testing.T, files []string) (avfs.VFS, string) {
@@ -230,6 +240,40 @@ func TestResolveEntries(t *testing.T) {
 				{Src: "[", Dest: "out/"},
 			},
 			wantErr: "invalid glob pattern",
+		},
+		{
+			name: "glob src matches no files returns error",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				return makeFixtures(t, []string{})
+			},
+			entries: []manifest.Entry{
+				{Src: "nonexistent/*.md", Dest: "skills/"},
+			},
+			wantErr:  "pattern 'nonexistent/*.md' matched no files",
+			exactErr: true,
+		},
+		{
+			name: "returns error when vfs.Rel fails in resolveGlob",
+			setup: func(t *testing.T) (avfs.VFS, string) {
+				t.Helper()
+				// Use relErrorVFS so that Glob succeeds (finds files) but Rel
+				// returns an error.
+				base := memfs.New()
+				if err := base.MkdirAll("/base/skills", 0o755); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+				if err := base.WriteFile(
+					"/base/skills/intro.md", []byte(""), fs.FileMode(0o644),
+				); err != nil {
+					t.Fatalf("write: %v", err)
+				}
+				return relErrorVFS{VFS: base}, "/base"
+			},
+			entries: []manifest.Entry{
+				{Glob: "skills/*.md"},
+			},
+			wantErr: "computing relative path",
 		},
 		{
 			name: "glob preserves relative path in dest",

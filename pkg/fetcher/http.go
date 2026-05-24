@@ -28,6 +28,11 @@ import (
 	"os"
 )
 
+// osCreateHTTP is swappable for testing.
+var osCreateHTTP = func(name string) (io.WriteCloser, error) {
+	return os.Create(name)
+}
+
 // HTTPFetcher downloads a remote archive over HTTP or HTTPS.
 type HTTPFetcher struct{}
 
@@ -53,7 +58,7 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, source string, dest string) err
 		return err
 	}
 
-	out, err := os.Create(dest)
+	out, err := osCreateHTTP(dest)
 	if err != nil {
 		return fmt.Errorf("create dest: %w", err)
 	}
@@ -63,7 +68,7 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, source string, dest string) err
 		return fmt.Errorf("write body: %w", err)
 	}
 
-	if err := out.Close(); err != nil {
+	if err = out.Close(); err != nil {
 		return fmt.Errorf("close dest: %w", err)
 	}
 

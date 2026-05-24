@@ -186,6 +186,120 @@ func TestRun(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "invalid metadata.json returns error",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				claudiaDir := filepath.Join(dir, "marketplaces", "bad-plugin", ".claudia")
+				if err := os.MkdirAll(claudiaDir, 0o755); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+				if err := os.WriteFile(
+					filepath.Join(claudiaDir, "metadata.json"),
+					[]byte("not json"),
+					0o644,
+				); err != nil {
+					t.Fatalf("write: %v", err)
+				}
+				return dir
+			},
+			wantErr: "parse metadata.json",
+		},
+		{
+			name: "sha shorter than 7 chars is returned as-is",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				writeMeta(t, dir, metadata.Metadata{
+					Name:           "short-sha-plugin",
+					Version:        "1.0.0",
+					GitCommitSHA:   "abc",
+					BuildTimestamp: "2026-05-23T10:00:00Z",
+				})
+				return dir
+			},
+			checkResult: func(t *testing.T, entries []list.Entry) {
+				t.Helper()
+				if len(entries) != 1 {
+					t.Fatalf("entry count = %d, want 1", len(entries))
+				}
+				if entries[0].SHA != "abc" {
+					t.Errorf("SHA = %q, want %q", entries[0].SHA, "abc")
+				}
+			},
+		},
+		{
+			name: "timestamp without T separator is returned as-is",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				writeMeta(t, dir, metadata.Metadata{
+					Name:           "no-t-plugin",
+					Version:        "1.0.0",
+					GitCommitSHA:   "a1b2c3d4e5f6789",
+					BuildTimestamp: "2026-05-23",
+				})
+				return dir
+			},
+			checkResult: func(t *testing.T, entries []list.Entry) {
+				t.Helper()
+				if len(entries) != 1 {
+					t.Fatalf("entry count = %d, want 1", len(entries))
+				}
+				if entries[0].Installed != "2026-05-23" {
+					t.Errorf("Installed = %q, want %q", entries[0].Installed, "2026-05-23")
+				}
+			},
+		},
+		{
+			name: "skips non-directory entries in marketplaces dir",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				mpDir := filepath.Join(dir, "marketplaces")
+				if err := os.MkdirAll(mpDir, 0o755); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+				// A regular file directly under marketplaces/ — not a plugin dir.
+				if err := os.WriteFile(
+					filepath.Join(mpDir, "not-a-dir.txt"), []byte("x"), 0o644,
+				); err != nil {
+					t.Fatalf("write: %v", err)
+				}
+				// A proper claudia plugin alongside it.
+				writeMeta(t, dir, metadata.Metadata{
+					Name:           "real-plugin",
+					Version:        "1.0.0",
+					GitCommitSHA:   "a1b2c3d4e5f6789",
+					BuildTimestamp: "2026-05-23T10:00:00Z",
+				})
+				return dir
+			},
+			checkResult: func(t *testing.T, entries []list.Entry) {
+				t.Helper()
+				if len(entries) != 1 {
+					t.Fatalf("entry count = %d, want 1", len(entries))
+				}
+				if entries[0].Name != "real-plugin" {
+					t.Errorf("Name = %q, want %q", entries[0].Name, "real-plugin")
+				}
+			},
+		},
+		{
+			name: "returns error when marketplaces dir is unreadable",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				mpDir := filepath.Join(dir, "marketplaces")
+				if err := os.MkdirAll(mpDir, 0o000); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(mpDir, 0o755) })
+				return dir
+			},
+			wantErr: "read marketplaces dir",
+		},
 	}
 
 	for _, tt := range tests {

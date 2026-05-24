@@ -22,6 +22,7 @@ package cli_test
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 
@@ -267,6 +268,43 @@ func TestHumanSize(t *testing.T) {
 			got := cli.HumanSize(tt.bytes)
 			if got != tt.want {
 				t.Errorf("HumanSize(%d) = %q, want %q", tt.bytes, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBannerWithFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		wantTop string
+		wantBot string
+	}{
+		{
+			name:    "renders banner to os.File writer",
+			wantTop: "█▀▀ █░░ █▀█ █░█ █▀▄ █ █▀█",
+			wantBot: "█▄▄ █▄▄ █▀█ █▄█ █▄▀ █ █▀█",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Use a real *os.File to exercise the rendererFor *os.File branch.
+			f, err := os.CreateTemp(t.TempDir(), "banner-*.txt")
+			if err != nil {
+				t.Fatalf("create temp file: %v", err)
+			}
+			defer func() { _ = f.Close() }()
+
+			got := cli.Banner(f)
+			if !strings.Contains(got, tt.wantTop) {
+				t.Errorf("missing top line %q in %q", tt.wantTop, got)
+			}
+			if !strings.Contains(got, tt.wantBot) {
+				t.Errorf("missing bot line %q in %q", tt.wantBot, got)
 			}
 		})
 	}

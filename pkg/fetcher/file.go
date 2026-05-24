@@ -29,6 +29,15 @@ import (
 	"strings"
 )
 
+// Swappable for testing.
+var (
+	osUserHomeDir = os.UserHomeDir
+	ioCopyFile    = io.Copy
+	osCreateFile  = func(name string) (io.WriteCloser, error) {
+		return os.Create(name)
+	}
+)
+
 // FileFetcher copies a local file to a destination path.
 type FileFetcher struct{}
 
@@ -54,17 +63,17 @@ func (f *FileFetcher) Fetch(ctx context.Context, source string, dest string) err
 		return err
 	}
 
-	out, err := os.Create(dest)
+	out, err := osCreateFile(dest)
 	if err != nil {
 		return fmt.Errorf("create dest: %w", err)
 	}
 	defer func() { _ = out.Close() }()
 
-	if _, err := io.Copy(out, in); err != nil {
+	if _, err := ioCopyFile(out, in); err != nil {
 		return fmt.Errorf("copy: %w", err)
 	}
 
-	if err := out.Close(); err != nil {
+	if err = out.Close(); err != nil {
 		return fmt.Errorf("close dest: %w", err)
 	}
 
@@ -77,7 +86,7 @@ func expandHome(path string) (string, error) {
 		return path, nil
 	}
 
-	home, err := os.UserHomeDir()
+	home, err := osUserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("home dir: %w", err)
 	}

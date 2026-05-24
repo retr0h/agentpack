@@ -309,6 +309,191 @@ skills:
 				}
 			},
 		},
+		{
+			name: "builds plugin with binary mcp server",
+			setup: func(t *testing.T) (string, func()) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+
+				// Create a fake binary.
+				binDir := filepath.Join(dir, "bin")
+				if err := os.MkdirAll(binDir, 0o755); err != nil {
+					t.Fatalf("mkdir bin: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(binDir, "my-server"), []byte("#!/bin/sh"), 0o755); err != nil {
+					t.Fatalf("write binary: %v", err)
+				}
+
+				writeManifest(t, dir, `
+name: mcp-binary-plugin
+version: "1.0.0"
+description: Plugin with binary MCP
+mcp:
+  - type: binary
+    name: my-server
+    src: bin/my-server
+`)
+				return dir, func() {}
+			},
+			opts: func(dir string) build.Options {
+				return build.Options{Dir: dir}
+			},
+			checkResult: func(t *testing.T, results []build.Result) {
+				t.Helper()
+				if len(results) != 1 {
+					t.Fatalf("result count = %d, want 1", len(results))
+				}
+				if results[0].Name != "mcp-binary-plugin" {
+					t.Errorf("Name = %q, want mcp-binary-plugin", results[0].Name)
+				}
+			},
+		},
+		{
+			name: "builds plugin with remote mcp server",
+			setup: func(t *testing.T) (string, func()) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+
+				writeManifest(t, dir, `
+name: mcp-remote-plugin
+version: "1.0.0"
+description: Plugin with remote MCP
+mcp:
+  - type: remote
+    name: my-remote
+    url: https://mcp.example.com/v1
+`)
+				return dir, func() {}
+			},
+			opts: func(dir string) build.Options {
+				return build.Options{Dir: dir}
+			},
+			checkResult: func(t *testing.T, results []build.Result) {
+				t.Helper()
+				if len(results) != 1 {
+					t.Fatalf("result count = %d, want 1", len(results))
+				}
+				if results[0].Name != "mcp-remote-plugin" {
+					t.Errorf("Name = %q, want mcp-remote-plugin", results[0].Name)
+				}
+			},
+		},
+		{
+			name: "builds plugin with ux mcp server",
+			setup: func(t *testing.T) (string, func()) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+
+				writeManifest(t, dir, `
+name: mcp-ux-plugin
+version: "1.0.0"
+description: Plugin with ux MCP
+mcp:
+  - type: ux
+    name: my-ux
+    package: "@mycompany/my-server"
+`)
+				return dir, func() {}
+			},
+			opts: func(dir string) build.Options {
+				return build.Options{Dir: dir}
+			},
+			checkResult: func(t *testing.T, results []build.Result) {
+				t.Helper()
+				if len(results) != 1 {
+					t.Fatalf("result count = %d, want 1", len(results))
+				}
+				if results[0].Name != "mcp-ux-plugin" {
+					t.Errorf("Name = %q, want mcp-ux-plugin", results[0].Name)
+				}
+			},
+		},
+		{
+			name: "builds plugin with config-based mcp server",
+			setup: func(t *testing.T) (string, func()) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+
+				// Write a .mcp.json config file.
+				mcpContent := `{"mcpServers":{"my-srv":{"url":"https://example.com"}}}`
+				if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(mcpContent), 0o644); err != nil {
+					t.Fatalf("write .mcp.json: %v", err)
+				}
+
+				writeManifest(t, dir, `
+name: mcp-config-plugin
+version: "1.0.0"
+description: Plugin with config MCP
+mcp:
+  - type: remote
+    name: my-srv
+    config: .mcp.json
+`)
+				return dir, func() {}
+			},
+			opts: func(dir string) build.Options {
+				return build.Options{Dir: dir}
+			},
+			checkResult: func(t *testing.T, results []build.Result) {
+				t.Helper()
+				if len(results) != 1 {
+					t.Fatalf("result count = %d, want 1", len(results))
+				}
+				if results[0].Name != "mcp-config-plugin" {
+					t.Errorf("Name = %q, want mcp-config-plugin", results[0].Name)
+				}
+			},
+		},
+		{
+			name: "fails when mcp binary src is missing",
+			setup: func(t *testing.T) (string, func()) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+
+				writeManifest(t, dir, `
+name: mcp-missing-binary
+version: "1.0.0"
+description: Plugin with missing binary
+mcp:
+  - type: binary
+    name: missing-server
+    src: bin/nonexistent
+`)
+				return dir, func() {}
+			},
+			opts: func(dir string) build.Options {
+				return build.Options{Dir: dir}
+			},
+			wantErr: "mcp binary not found",
+		},
+		{
+			name: "fails when mcp config file is missing",
+			setup: func(t *testing.T) (string, func()) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+
+				writeManifest(t, dir, `
+name: mcp-missing-config
+version: "1.0.0"
+description: Plugin with missing config
+mcp:
+  - type: remote
+    name: my-srv
+    config: nonexistent/.mcp.json
+`)
+				return dir, func() {}
+			},
+			opts: func(dir string) build.Options {
+				return build.Options{Dir: dir}
+			},
+			wantErr: "mcp config not found",
+		},
 	}
 
 	for _, tt := range tests {
