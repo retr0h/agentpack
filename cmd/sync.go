@@ -22,8 +22,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -43,13 +41,11 @@ plugin into the Claude Code plugin directory.`,
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("home dir: %w", err)
-		}
-		pluginDir := filepath.Join(home, ".claude", "plugins")
-
-		results, err := pkgsync.Run(ctx, syncConfigFlag, pluginDir)
+		results, err := pkgsync.Run(ctx, pkgsync.Options{
+			ConfigPath: syncConfigFlag,
+			Builder:    pkgsync.DefaultBuilder{},
+			Installer:  pkgsync.DefaultInstaller{},
+		})
 		if err != nil {
 			return err
 		}

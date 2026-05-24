@@ -24,26 +24,23 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/avfs/avfs/vfs/osfs"
+	"go.uber.org/mock/gomock"
 
 	"github.com/retr0h/agentpack/pkg/build"
+	fetcherMocks "github.com/retr0h/agentpack/pkg/fetcher/mocks"
+	"github.com/retr0h/agentpack/pkg/install"
 	pkgsync "github.com/retr0h/agentpack/pkg/sync"
+	syncMocks "github.com/retr0h/agentpack/pkg/sync/mocks"
 )
-
-// --------------------------------------------------------------------------
-// Custom context for triggering loop-level cancellation
-// --------------------------------------------------------------------------
 
 // cancelAfterFirstErrCtx is a context.Context whose Err() returns nil on the
 // first call and context.Canceled on all subsequent calls. This lets us pass
-// the function-entry check (line 59 in sync.go) but fail the loop-level check
-// (line 75).
+// the function-entry check but fail the per-package loop check.
 type cancelAfterFirstErrCtx struct {
 	callCount int
 }
@@ -61,284 +58,360 @@ func (c *cancelAfterFirstErrCtx) Err() error {
 	if c.callCount == 1 {
 		return nil
 	}
+
 	return errors.New("context canceled")
 }
 
-// --------------------------------------------------------------------------
-// Helpers
-// --------------------------------------------------------------------------
-
-var gitEnv = []string{
-	"GIT_AUTHOR_NAME=Test Author",
-	"GIT_AUTHOR_EMAIL=test@example.com",
-	"GIT_COMMITTER_NAME=Test Committer",
-	"GIT_COMMITTER_EMAIL=test@example.com",
-}
-
-func initGitRepo(t *testing.T, dir string) {
+func writePackagesFile(t *testing.T, dir, content string) string {
 	t.Helper()
 
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), gitEnv...)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-
-	run("init")
-	run("checkout", "-b", "main")
-
-	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	run("add", ".")
-	run("commit", "-m", "init")
-}
-
-// initBareGitRepo creates a bare git repo that can be cloned from a local path.
-// It initialises a working repo with an agentpack.yaml at workDir and clones
-// it bare into a separate temp directory, returning the bare dir path.
-func initBareGitRepo(t *testing.T, manifest string) string {
-	t.Helper()
-
-	run := func(dir string, args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), gitEnv...)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-
-	workDir := t.TempDir()
-	run(workDir, "init")
-	run(workDir, "checkout", "-b", "main")
-
-	if err := os.WriteFile(filepath.Join(workDir, "README.md"), []byte("hello\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile README.md: %v", err)
-	}
-
-	if err := os.WriteFile(filepath.Join(workDir, "agentpack.yaml"), []byte(manifest), 0o644); err != nil {
-		t.Fatalf("WriteFile agentpack.yaml: %v", err)
-	}
-
-	run(workDir, "add", ".")
-	run(workDir, "commit", "-m", "init")
-
-	bareDir := t.TempDir()
-	run(workDir, "clone", "--bare", workDir, bareDir)
-
-	return bareDir
-}
-
-func buildTestArchive(t *testing.T, dir string, manifest string) string {
-	t.Helper()
-
-	if err := os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte(manifest), 0o644); err != nil {
-		t.Fatalf("write agentpack.yaml: %v", err)
-	}
-
-	vfs := osfs.NewWithNoIdm()
-	results, err := build.Run(context.Background(), vfs, build.Options{Dir: dir})
-	if err != nil {
-		t.Fatalf("build.Run: %v", err)
-	}
-	if len(results) == 0 {
-		t.Fatal("build.Run returned no results")
-	}
-
-	return results[0].ArchivePath
-}
-
-func writePackagesFile(t *testing.T, dir string, content string) string {
-	t.Helper()
 	path := filepath.Join(dir, "agentpack-packages.yaml")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write agentpack-packages.yaml: %v", err)
 	}
+
 	return path
 }
-
-// --------------------------------------------------------------------------
-// Run
-// --------------------------------------------------------------------------
 
 func TestRun(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name        string
-		setup       func(t *testing.T) (configPath string, pluginDir string)
-		cancelCtx   bool
+		yaml        string
 		customCtx   context.Context
+		cancelCtx   bool
+		setupMocks  func(ctrl *gomock.Controller) (pkgsync.Options, func())
 		wantErr     string
 		checkResult func(t *testing.T, results []pkgsync.Result)
 	}{
 		{
-			name: "installs all packages from config",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				srcDir := t.TempDir()
-				initGitRepo(t, srcDir)
-				archivePath := buildTestArchive(t, srcDir, `
-name: sync-plugin
-version: "1.0.0"
-description: Plugin for sync test
-`)
-				cfgDir := t.TempDir()
-				pluginDir := t.TempDir()
-				configPath := writePackagesFile(
-					t,
-					cfgDir,
-					"packages:\n  - name: sync-plugin\n    source: "+archivePath+"\n",
-				)
-				return configPath, pluginDir
+			name: "source package installed successfully",
+			yaml: "packages:\n  - name: my-plugin\n    source: /tmp/my-plugin.agentpack\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+				mockInstaller.EXPECT().
+					Install(gomock.Any(), "/tmp/my-plugin.agentpack").
+					Return(&install.Result{Name: "my-plugin", Version: "1.0.0"}, nil)
+
+				return pkgsync.Options{
+					Installer: mockInstaller,
+				}, func() {}
 			},
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
+
 				if len(results) != 1 {
 					t.Fatalf("result count = %d, want 1", len(results))
 				}
+
 				if results[0].Status != "installed" {
 					t.Errorf("Status = %q, want %q", results[0].Status, "installed")
 				}
-				if results[0].Name != "sync-plugin" {
-					t.Errorf("Name = %q, want %q", results[0].Name, "sync-plugin")
+
+				if results[0].Name != "my-plugin" {
+					t.Errorf("Name = %q, want %q", results[0].Name, "my-plugin")
+				}
+
+				if results[0].Version != "1.0.0" {
+					t.Errorf("Version = %q, want %q", results[0].Version, "1.0.0")
 				}
 			},
 		},
 		{
-			name: "records failed status for bad source",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				cfgDir := t.TempDir()
-				pluginDir := t.TempDir()
-				configPath := writePackagesFile(t, cfgDir,
-					"packages:\n  - name: bad-plugin\n    source: /nonexistent/bad.agentpack\n")
-				return configPath, pluginDir
+			name: "source package installer returns error",
+			yaml: "packages:\n  - name: bad-plugin\n    source: /tmp/bad-plugin.agentpack\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+				mockInstaller.EXPECT().
+					Install(gomock.Any(), "/tmp/bad-plugin.agentpack").
+					Return(nil, errors.New("archive corrupt"))
+
+				return pkgsync.Options{
+					Installer: mockInstaller,
+				}, func() {}
 			},
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
+
 				if len(results) != 1 {
 					t.Fatalf("result count = %d, want 1", len(results))
 				}
+
 				if results[0].Status != "failed" {
 					t.Errorf("Status = %q, want %q", results[0].Status, "failed")
 				}
+
 				if results[0].Err == nil {
 					t.Error("Err is nil, want non-nil")
 				}
 			},
 		},
 		{
-			name: "returns error when config file missing",
-			setup: func(t *testing.T) (string, string) {
+			name: "git package fetch + build + install succeeds",
+			yaml: "packages:\n  - name: git-plugin\n    git: github.com/org/repo\n    ref: main\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockFetcher := fetcherMocks.NewMockFetcher(ctrl)
+				mockBuilder := syncMocks.NewMockBuilder(ctrl)
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+
+				mockFetcher.EXPECT().
+					Fetch(gomock.Any(), "github.com/org/repo#main", gomock.Any()).
+					Return(nil)
+
+				mockBuilder.EXPECT().
+					Build(gomock.Any(), gomock.Any()).
+					Return([]build.Result{{Name: "git-plugin", ArchivePath: "/tmp/git-plugin-1.0.0.agentpack"}}, nil)
+
+				mockInstaller.EXPECT().
+					Install(gomock.Any(), "/tmp/git-plugin-1.0.0.agentpack").
+					Return(&install.Result{Name: "git-plugin", Version: "1.0.0"}, nil)
+
+				return pkgsync.Options{
+					Fetcher:   mockFetcher,
+					Builder:   mockBuilder,
+					Installer: mockInstaller,
+				}, func() {}
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
-				return "/nonexistent/agentpack-packages.yaml", t.TempDir()
+
+				if len(results) != 1 {
+					t.Fatalf("result count = %d, want 1", len(results))
+				}
+
+				if results[0].Status != "installed" {
+					t.Errorf("Status = %q, want %q", results[0].Status, "installed")
+				}
+
+				if results[0].Name != "git-plugin" {
+					t.Errorf("Name = %q, want %q", results[0].Name, "git-plugin")
+				}
+			},
+		},
+		{
+			name: "git package fetch fails",
+			yaml: "packages:\n  - name: fetch-fail\n    git: github.com/org/missing\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockFetcher := fetcherMocks.NewMockFetcher(ctrl)
+				mockBuilder := syncMocks.NewMockBuilder(ctrl)
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+
+				mockFetcher.EXPECT().
+					Fetch(gomock.Any(), "github.com/org/missing", gomock.Any()).
+					Return(errors.New("repository not found"))
+
+				return pkgsync.Options{
+					Fetcher:   mockFetcher,
+					Builder:   mockBuilder,
+					Installer: mockInstaller,
+				}, func() {}
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+
+				if len(results) != 1 {
+					t.Fatalf("result count = %d, want 1", len(results))
+				}
+
+				if results[0].Status != "failed" {
+					t.Errorf("Status = %q, want %q", results[0].Status, "failed")
+				}
+
+				if results[0].Err == nil {
+					t.Error("Err is nil, want non-nil")
+				}
+			},
+		},
+		{
+			name: "git package build fails",
+			yaml: "packages:\n  - name: build-fail\n    git: github.com/org/repo\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockFetcher := fetcherMocks.NewMockFetcher(ctrl)
+				mockBuilder := syncMocks.NewMockBuilder(ctrl)
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+
+				mockFetcher.EXPECT().
+					Fetch(gomock.Any(), "github.com/org/repo", gomock.Any()).
+					Return(nil)
+
+				mockBuilder.EXPECT().
+					Build(gomock.Any(), gomock.Any()).
+					Return(nil, errors.New("no agentpack.yaml found"))
+
+				return pkgsync.Options{
+					Fetcher:   mockFetcher,
+					Builder:   mockBuilder,
+					Installer: mockInstaller,
+				}, func() {}
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+
+				if len(results) != 1 {
+					t.Fatalf("result count = %d, want 1", len(results))
+				}
+
+				if results[0].Status != "failed" {
+					t.Errorf("Status = %q, want %q", results[0].Status, "failed")
+				}
+
+				if results[0].Err == nil {
+					t.Error("Err is nil, want non-nil")
+				}
+			},
+		},
+		{
+			name: "git package install fails for one of multiple build results",
+			yaml: "packages:\n  - name: multi-build\n    git: github.com/org/repo\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockFetcher := fetcherMocks.NewMockFetcher(ctrl)
+				mockBuilder := syncMocks.NewMockBuilder(ctrl)
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+
+				mockFetcher.EXPECT().
+					Fetch(gomock.Any(), "github.com/org/repo", gomock.Any()).
+					Return(nil)
+
+				mockBuilder.EXPECT().
+					Build(gomock.Any(), gomock.Any()).
+					Return([]build.Result{
+						{Name: "plugin-a", ArchivePath: "/tmp/plugin-a-1.0.0.agentpack"},
+						{Name: "plugin-b", ArchivePath: "/tmp/plugin-b-1.0.0.agentpack"},
+					}, nil)
+
+				mockInstaller.EXPECT().
+					Install(gomock.Any(), "/tmp/plugin-a-1.0.0.agentpack").
+					Return(&install.Result{Name: "plugin-a", Version: "1.0.0"}, nil)
+
+				mockInstaller.EXPECT().
+					Install(gomock.Any(), "/tmp/plugin-b-1.0.0.agentpack").
+					Return(nil, errors.New("install failed for plugin-b"))
+
+				return pkgsync.Options{
+					Fetcher:   mockFetcher,
+					Builder:   mockBuilder,
+					Installer: mockInstaller,
+				}, func() {}
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+
+				if len(results) != 2 {
+					t.Fatalf("result count = %d, want 2", len(results))
+				}
+
+				if results[0].Status != "installed" {
+					t.Errorf("results[0].Status = %q, want %q", results[0].Status, "installed")
+				}
+
+				if results[1].Status != "failed" {
+					t.Errorf("results[1].Status = %q, want %q", results[1].Status, "failed")
+				}
+
+				if results[1].Err == nil {
+					t.Error("results[1].Err is nil, want non-nil")
+				}
+			},
+		},
+		{
+			name: "missing config file",
+			yaml: "",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				return pkgsync.Options{}, func() {}
 			},
 			wantErr: "read",
 		},
 		{
-			name: "returns error when config file has invalid YAML",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				cfgDir := t.TempDir()
-				// An unclosed bracket causes a real YAML parse error.
-				configPath := writePackagesFile(t, cfgDir, "packages:\n  - name: [unclosed\n")
-				return configPath, t.TempDir()
+			name: "invalid YAML",
+			yaml: "packages:\n  - name: [unclosed\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				return pkgsync.Options{}, func() {}
 			},
 			wantErr: "parse",
 		},
 		{
-			name: "returns error when context is cancelled",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				cfgDir := t.TempDir()
-				configPath := writePackagesFile(
-					t,
-					cfgDir,
-					"packages:\n  - name: p\n    source: /tmp/x.agentpack\n",
-				)
-				return configPath, t.TempDir()
-			},
+			name:      "context cancelled before processing",
+			yaml:      "packages:\n  - name: p\n    source: /tmp/p.agentpack\n",
 			cancelCtx: true,
-			wantErr:   "context canceled",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				return pkgsync.Options{}, func() {}
+			},
+			wantErr: "context canceled",
 		},
 		{
-			name: "returns error when context cancelled inside loop",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				cfgDir := t.TempDir()
-				// Two packages so the loop runs at least once before cancelling.
-				configPath := writePackagesFile(
-					t,
-					cfgDir,
-					"packages:\n  - name: a\n    source: /tmp/a.agentpack\n  - name: b\n    source: /tmp/b.agentpack\n",
-				)
-				return configPath, t.TempDir()
+			name: "context cancelled between packages",
+			yaml: "packages:\n  - name: a\n    source: /tmp/a.agentpack\n  - name: b\n    source: /tmp/b.agentpack\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+
+				// The first package is processed before the context is cancelled.
+				// cancelAfterFirstErrCtx returns nil on the first Err() call (entry
+				// check) and an error on all subsequent calls (the loop check fires
+				// before the second package is processed).
+				mockInstaller.EXPECT().
+					Install(gomock.Any(), "/tmp/a.agentpack").
+					Return(&install.Result{Name: "a", Version: "1.0.0"}, nil).
+					AnyTimes()
+
+				return pkgsync.Options{
+					Installer: mockInstaller,
+				}, func() {}
 			},
 			customCtx: newCancelAfterFirstErrCtx(),
 			wantErr:   "context canceled",
 		},
 		{
-			name: "installs plugin from git source",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				bareDir := initBareGitRepo(t, `
-name: git-plugin
-version: "1.0.0"
-description: Plugin from git
-`)
-				cfgDir := t.TempDir()
-				pluginDir := t.TempDir()
-				configPath := writePackagesFile(
-					t,
-					cfgDir,
-					"packages:\n  - name: git-plugin\n    git: "+bareDir+"\n",
-				)
-				return configPath, pluginDir
+			name: "no installer configured for source package",
+			yaml: "packages:\n  - name: no-installer\n    source: /tmp/no-installer.agentpack\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				return pkgsync.Options{
+					Installer: nil,
+				}, func() {}
 			},
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
+
 				if len(results) != 1 {
 					t.Fatalf("result count = %d, want 1", len(results))
 				}
-				if results[0].Status != "installed" {
-					t.Errorf("Status = %q, want installed (err: %v)", results[0].Status, results[0].Err)
+
+				if results[0].Status != "failed" {
+					t.Errorf("Status = %q, want %q", results[0].Status, "failed")
 				}
-				if results[0].Name != "git-plugin" {
-					t.Errorf("Name = %q, want git-plugin", results[0].Name)
+
+				if results[0].Err == nil {
+					t.Error("Err is nil, want non-nil")
 				}
 			},
 		},
 		{
-			name: "records failed status for git source with bad repo",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				cfgDir := t.TempDir()
-				pluginDir := t.TempDir()
-				configPath := writePackagesFile(
-					t,
-					cfgDir,
-					"packages:\n  - name: bad-git\n    git: /nonexistent/bare-repo\n",
-				)
-				return configPath, pluginDir
+			name: "no builder configured for git package",
+			yaml: "packages:\n  - name: no-builder\n    git: github.com/org/repo\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockFetcher := fetcherMocks.NewMockFetcher(ctrl)
+
+				mockFetcher.EXPECT().
+					Fetch(gomock.Any(), "github.com/org/repo", gomock.Any()).
+					Return(nil)
+
+				return pkgsync.Options{
+					Fetcher:   mockFetcher,
+					Builder:   nil,
+					Installer: syncMocks.NewMockInstaller(ctrl),
+				}, func() {}
 			},
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
+
 				if len(results) != 1 {
 					t.Fatalf("result count = %d, want 1", len(results))
 				}
+
 				if results[0].Status != "failed" {
-					t.Errorf("Status = %q, want failed", results[0].Status)
+					t.Errorf("Status = %q, want %q", results[0].Status, "failed")
 				}
+
 				if results[0].Err == nil {
 					t.Error("Err is nil, want non-nil")
 				}
@@ -350,8 +423,24 @@ description: Plugin from git
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			configPath, pluginDir := tt.setup(t)
+			ctrl := gomock.NewController(t)
 
+			opts, cleanup := tt.setupMocks(ctrl)
+			defer cleanup()
+
+			// Write the config file to a temp dir, except when testing a missing
+			// config (yaml == "").
+			var configPath string
+			if tt.yaml != "" {
+				cfgDir := t.TempDir()
+				configPath = writePackagesFile(t, cfgDir, tt.yaml)
+			} else {
+				configPath = "/nonexistent/agentpack-packages.yaml"
+			}
+
+			opts.ConfigPath = configPath
+
+			// Build the context.
 			var ctx context.Context
 			var cancel context.CancelFunc
 
@@ -366,17 +455,20 @@ description: Plugin from git
 				ctx = context.Background()
 				cancel = func() {}
 			}
+
 			defer cancel()
 
-			results, err := pkgsync.Run(ctx, configPath, pluginDir)
+			results, err := pkgsync.Run(ctx, opts)
 
 			if tt.wantErr != "" {
 				if err == nil {
 					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
 				}
+
 				if !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
 				}
+
 				return
 			}
 

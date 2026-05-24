@@ -18,7 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package sync provides declarative plugin sync from a agentpack-packages.yaml.
+// Package sync provides declarative plugin sync from agentpack-packages.yaml.
 package sync
 
 import (
@@ -26,12 +26,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/avfs/avfs/vfs/osfs"
 	"gopkg.in/yaml.v3"
 
-	"github.com/retr0h/agentpack/pkg/build"
 	"github.com/retr0h/agentpack/pkg/fetcher"
-	"github.com/retr0h/agentpack/pkg/install"
 )
 
 // PackagesFile represents the top-level structure of agentpack-packages.yaml.
@@ -40,19 +37,11 @@ type PackagesFile struct {
 }
 
 // Package declares a single plugin source in agentpack-packages.yaml.
-// Exactly one of Source or Git must be set.
-//
-//   - Source: a local path or URL to a pre-built .agentpack archive.
-//   - Git: a git repository reference such as "github.com/org/repo". When
-//     set, the sync pipeline clones the repo, builds any plugins defined in
-//     agentpack.yaml found at the repo root, and installs the resulting
-//     archives. Ref optionally pins a specific tag, branch, or SHA; when
-//     omitted the default HEAD is used.
 type Package struct {
 	Name   string `yaml:"name"`
-	Source string `yaml:"source"` // local path or URL to .agentpack archive
-	Git    string `yaml:"git"`    // git repo (e.g. github.com/org/repo)
-	Ref    string `yaml:"ref"`    // tag, branch, or SHA (default: HEAD)
+	Source string `yaml:"source"`
+	Git    string `yaml:"git"`
+	Ref    string `yaml:"ref"`
 }
 
 // Result holds the outcome for one package in a sync run.
@@ -63,25 +52,28 @@ type Result struct {
 	Err     error
 }
 
-// Run reads configPath (a agentpack-packages.yaml) and installs or updates every
-// declared package into all detected targets. Results are returned for every
-// package, including failures. A non-nil error is returned only when the config
-// file itself cannot be read or parsed. The pluginDir parameter is retained for
-// API compatibility but is no longer used; target drivers determine install
-// locations.
-func Run(ctx context.Context, configPath string, _ string) ([]Result, error) {
+// Options configures a sync run.
+type Options struct {
+	ConfigPath string
+	Fetcher    fetcher.Fetcher // for git sources; nil uses default GitFetcher
+	Builder    Builder         // for building from cloned repos; nil skips build
+	Installer  Installer       // for installing archives; nil skips install
+}
+
+// Run reads configPath and installs or updates every declared package.
+func Run(ctx context.Context, opts Options) ([]Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(opts.ConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", configPath, err)
+		return nil, fmt.Errorf("read %s: %w", opts.ConfigPath, err)
 	}
 
 	var pf PackagesFile
 	if err := yaml.Unmarshal(data, &pf); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", configPath, err)
+		return nil, fmt.Errorf("parse %s: %w", opts.ConfigPath, err)
 	}
 
 	results := make([]Result, 0, len(pf.Packages))
@@ -94,9 +86,9 @@ func Run(ctx context.Context, configPath string, _ string) ([]Result, error) {
 		var pkgResults []Result
 
 		if pkg.Git != "" {
-			pkgResults = syncGitPackage(ctx, pkg)
+			pkgResults = syncGitPackage(ctx, pkg, opts)
 		} else {
-			pkgResults = syncSourcePackage(ctx, pkg)
+			pkgResults = syncSourcePackage(ctx, pkg, opts)
 		}
 
 		results = append(results, pkgResults...)
@@ -105,84 +97,61 @@ func Run(ctx context.Context, configPath string, _ string) ([]Result, error) {
 	return results, nil
 }
 
-// syncSourcePackage installs a single package from a pre-built .agentpack
-// archive pointed to by pkg.Source.
-func syncSourcePackage(ctx context.Context, pkg Package) []Result {
-	r, installErr := install.Run(ctx, install.Options{
-		Source: pkg.Source,
-	})
-
-	if installErr != nil {
-		return []Result{{
-			Name:   pkg.Name,
-			Status: "failed",
-			Err:    installErr,
-		}}
+func syncSourcePackage(ctx context.Context, pkg Package, opts Options) []Result {
+	if opts.Installer == nil {
+		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no installer configured")}}
 	}
 
-	return []Result{{
-		Name:    r.Name,
-		Version: r.Version,
-		Status:  "installed",
-	}}
+	r, err := opts.Installer.Install(ctx, pkg.Source)
+	if err != nil {
+		return []Result{{Name: pkg.Name, Status: "failed", Err: err}}
+	}
+
+	return []Result{{Name: r.Name, Version: r.Version, Status: "installed"}}
 }
 
-// syncGitPackage clones a git repository using gilt (via GitFetcher.Fetch),
-// then looks for an agentpack.yaml. If found, it builds and installs. The
-// ref from the user's config is used as the version — no .git/ needed.
-func syncGitPackage(ctx context.Context, pkg Package) []Result {
+func syncGitPackage(ctx context.Context, pkg Package, opts Options) []Result {
 	source := pkg.Git
 	if pkg.Ref != "" {
 		source = source + "#" + pkg.Ref
 	}
 
+	f := opts.Fetcher
+	if f == nil {
+		f = &fetcher.GitFetcher{}
+	}
+
 	cloneDir, err := os.MkdirTemp("", "agentpack-sync-git-*")
 	if err != nil {
-		return []Result{{
-			Name:   pkg.Name,
-			Status: "failed",
-			Err:    fmt.Errorf("create temp dir: %w", err),
-		}}
+		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("create temp dir: %w", err)}}
 	}
 	defer func() { _ = os.RemoveAll(cloneDir) }()
 
-	gf := &fetcher.GitFetcher{}
-	if err := gf.Fetch(ctx, source, cloneDir); err != nil {
-		return []Result{{
-			Name:   pkg.Name,
-			Status: "failed",
-			Err:    fmt.Errorf("git fetch: %w", err),
-		}}
+	if err := f.Fetch(ctx, source, cloneDir); err != nil {
+		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("git fetch: %w", err)}}
 	}
 
-	vfs := osfs.NewWithNoIdm()
-	buildResults, err := build.Run(ctx, vfs, build.Options{Dir: cloneDir})
+	if opts.Builder == nil {
+		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no builder configured")}}
+	}
+
+	buildResults, err := opts.Builder.Build(ctx, cloneDir)
 	if err != nil {
-		return []Result{{
-			Name:   pkg.Name,
-			Status: "failed",
-			Err:    fmt.Errorf("build: %w", err),
-		}}
+		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("build: %w", err)}}
+	}
+
+	if opts.Installer == nil {
+		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no installer configured")}}
 	}
 
 	var results []Result
 	for _, br := range buildResults {
-		r, installErr := install.Run(ctx, install.Options{
-			Source: br.ArchivePath,
-		})
-		if installErr != nil {
-			results = append(results, Result{
-				Name:   br.Name,
-				Status: "failed",
-				Err:    installErr,
-			})
+		r, err := opts.Installer.Install(ctx, br.ArchivePath)
+		if err != nil {
+			results = append(results, Result{Name: br.Name, Status: "failed", Err: err})
 			continue
 		}
-		results = append(results, Result{
-			Name:    r.Name,
-			Version: r.Version,
-			Status:  "installed",
-		})
+		results = append(results, Result{Name: r.Name, Version: r.Version, Status: "installed"})
 	}
 
 	return results
