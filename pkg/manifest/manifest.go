@@ -48,7 +48,6 @@ type Manifest struct {
 	Hooks       []Entry    `yaml:"hooks"`
 	Agents      []Entry    `yaml:"agents"`
 	MCP         []MCPEntry `yaml:"mcp"`
-	Binaries    []Entry    `yaml:"binaries"`
 	Settings    []Entry    `yaml:"settings"`
 
 	Plugins []Plugin `yaml:"plugins"`
@@ -70,7 +69,6 @@ type Plugin struct {
 	Hooks       []Entry    `yaml:"hooks"`
 	Agents      []Entry    `yaml:"agents"`
 	MCP         []MCPEntry `yaml:"mcp"`
-	Binaries    []Entry    `yaml:"binaries"`
 	Settings    []Entry    `yaml:"settings"`
 }
 
@@ -81,16 +79,16 @@ type Author struct {
 }
 
 // MCPEntry describes a Model Context Protocol server bundled with a plugin.
+// Only non-binary types are supported: remote (URL endpoint) and ux (npx
+// package). Binary MCP servers are not permitted for security reasons.
 type MCPEntry struct {
-	Type      string            `yaml:"type"`
-	Name      string            `yaml:"name"`
-	Src       string            `yaml:"src"`
-	Config    string            `yaml:"config"`
-	URL       string            `yaml:"url"`
-	Package   string            `yaml:"package"`
-	Args      []string          `yaml:"args"`
-	Env       map[string]string `yaml:"env"`
-	Platforms []string          `yaml:"platforms"`
+	Type    string            `yaml:"type"`
+	Name    string            `yaml:"name"`
+	Config  string            `yaml:"config"`
+	URL     string            `yaml:"url"`
+	Package string            `yaml:"package"`
+	Args    []string          `yaml:"args"`
+	Env     map[string]string `yaml:"env"`
 }
 
 // Entry describes a file or glob that is part of a plugin. A bare YAML string
@@ -207,7 +205,6 @@ func Normalize(m *Manifest) []Plugin {
 				Hooks:       m.Hooks,
 				Agents:      m.Agents,
 				MCP:         m.MCP,
-				Binaries:    m.Binaries,
 				Settings:    m.Settings,
 			},
 		}

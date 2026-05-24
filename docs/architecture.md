@@ -29,6 +29,7 @@ type Fetcher interface {
 |--------|--------|--------|
 | `FileFetcher` | `/`, `./`, `~/` | implemented |
 | `HTTPFetcher` | `http://`, `https://` | implemented |
+| `GitFetcher` | `github.com/`, `gitlab.com/`, `bitbucket.org/`, `*.git` | implemented |
 | `S3Fetcher` | `s3://` | planned |
 | `GCSFetcher` | `gs://` | planned |
 
@@ -111,9 +112,12 @@ platform:
 | commands | `commands/` | Slash command definitions |
 | hooks | `hooks/` | Hook definitions + scripts |
 | agents | `agents/` | Agent markdown definitions |
-| mcp | `mcp/` | MCP server binaries + config |
-| binaries | `binaries/` | Pre-built executables |
+| mcp | `mcp/` | MCP server config (remote and ux types only) |
 | settings | `settings/` | JSON fragments |
+
+Binary executables are not permitted in agentpack archives for security
+reasons. MCP `binary` type is rejected at build time. Use `remote` (hosted
+endpoint) or `ux` (npx package) instead.
 
 Not all agents support all types:
 
@@ -124,7 +128,6 @@ Not all agents support all types:
 | hooks | yes | no | no | no |
 | agents | yes | no | no | no |
 | mcp | yes | partial | no | no |
-| binaries | yes | no | no | no |
 | settings | yes | no | no | no |
 
 ## Install flow
@@ -158,9 +161,8 @@ agentpack sync
   ├─ 1. Read agentpack-packages.yaml
   │
   ├─ 2. For each package:
-  │     ├─ Fetch archive
-  │     ├─ Extract + verify
-  │     └─ Install to all detected targets
+  │     ├─ source: field → Fetch archive → Extract + verify → Install
+  │     └─ git: field   → Clone repo → Build plugins → Install each
   │
   └─ 3. Report results
 ```

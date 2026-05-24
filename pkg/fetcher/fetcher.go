@@ -33,15 +33,33 @@ type Fetcher interface {
 	Fetch(ctx context.Context, source string, dest string) error
 }
 
+// gitHosts lists the known hosting prefixes that trigger GitFetcher selection
+// when no explicit scheme is present.
+var gitHosts = []string{
+	"github.com/",
+	"gitlab.com/",
+	"bitbucket.org/",
+}
+
 // New returns the appropriate Fetcher for the given source URI.
 // It inspects the source string to select the matching backend:
-//   - local path (absolute, relative, or home-relative) → FileFetcher
+//   - github.com/, gitlab.com/, bitbucket.org/ → GitFetcher
+//   - ends with .git → GitFetcher
 //   - http:// or https:// → HTTPFetcher
 //   - s3:// → error (not yet implemented)
 //   - gs:// → error (not yet implemented)
 //   - unknown scheme → error
+//   - local path (absolute, relative, or home-relative) → FileFetcher
 func New(source string) (Fetcher, error) {
+	// Strip a leading fragment-only source for scheme detection.
+	bare := source
+	if idx := strings.LastIndex(source, "#"); idx >= 0 {
+		bare = source[:idx]
+	}
+
 	switch {
+	case isGitSource(bare):
+		return &GitFetcher{}, nil
 	case strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://"):
 		return &HTTPFetcher{}, nil
 	case strings.HasPrefix(source, "s3://"):
@@ -54,4 +72,16 @@ func New(source string) (Fetcher, error) {
 		// local path: absolute (/), relative (./), home-relative (~/), or bare name
 		return &FileFetcher{}, nil
 	}
+}
+
+// isGitSource returns true when bare (URL without fragment) looks like a git
+// repository reference: it matches a known host prefix or ends with ".git".
+func isGitSource(bare string) bool {
+	for _, host := range gitHosts {
+		if strings.HasPrefix(bare, host) {
+			return true
+		}
+	}
+
+	return strings.HasSuffix(bare, ".git")
 }

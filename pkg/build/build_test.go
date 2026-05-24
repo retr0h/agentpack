@@ -381,46 +381,6 @@ skills:
 			},
 		},
 		{
-			name: "builds plugin with binary mcp server",
-			setup: func(t *testing.T) (string, func()) {
-				t.Helper()
-				dir := t.TempDir()
-				initGitRepo(t, dir)
-
-				// Create a fake binary.
-				binDir := filepath.Join(dir, "bin")
-				if err := os.MkdirAll(binDir, 0o755); err != nil {
-					t.Fatalf("mkdir bin: %v", err)
-				}
-				if err := os.WriteFile(filepath.Join(binDir, "my-server"), []byte("#!/bin/sh"), 0o755); err != nil {
-					t.Fatalf("write binary: %v", err)
-				}
-
-				writeManifest(t, dir, `
-name: mcp-binary-plugin
-version: "1.0.0"
-description: Plugin with binary MCP
-mcp:
-  - type: binary
-    name: my-server
-    src: bin/my-server
-`)
-				return dir, func() {}
-			},
-			opts: func(dir string) build.Options {
-				return build.Options{Dir: dir}
-			},
-			checkResult: func(t *testing.T, results []build.Result) {
-				t.Helper()
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-				if results[0].Name != "mcp-binary-plugin" {
-					t.Errorf("Name = %q, want mcp-binary-plugin", results[0].Name)
-				}
-			},
-		},
-		{
 			name: "builds plugin with remote mcp server",
 			setup: func(t *testing.T) (string, func()) {
 				t.Helper()
@@ -518,29 +478,6 @@ mcp:
 					t.Errorf("Name = %q, want mcp-config-plugin", results[0].Name)
 				}
 			},
-		},
-		{
-			name: "fails when mcp binary src is missing",
-			setup: func(t *testing.T) (string, func()) {
-				t.Helper()
-				dir := t.TempDir()
-				initGitRepo(t, dir)
-
-				writeManifest(t, dir, `
-name: mcp-missing-binary
-version: "1.0.0"
-description: Plugin with missing binary
-mcp:
-  - type: binary
-    name: missing-server
-    src: bin/nonexistent
-`)
-				return dir, func() {}
-			},
-			opts: func(dir string) build.Options {
-				return build.Options{Dir: dir}
-			},
-			wantErr: "mcp binary not found",
 		},
 		{
 			name: "fails when mcp config file is missing",
@@ -851,20 +788,20 @@ func TestBuildPlugin(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 				initGitRepo(t, dir)
-				// statAlwaysErrorVFS causes a non-NotExist stat error for the mcp binary.
+				// statAlwaysErrorVFS causes a non-NotExist stat error for the mcp config.
 				vfs := statAlwaysErrorVFS{VFS: osfs.NewWithNoIdm()}
 				p := manifest.Plugin{
 					Name:        "mcp-err-plugin",
 					Version:     "1.0.0",
 					Description: "desc",
 					MCP: []manifest.MCPEntry{
-						{Type: "binary", Name: "srv", Src: "bin/srv"},
+						{Type: "remote", Name: "srv", Config: ".mcp.json"},
 					},
 				}
 				meta := &metadata.Metadata{}
 				return vfs, dir, p, meta
 			},
-			wantErr: "stat mcp binary",
+			wantErr: "stat mcp config",
 		},
 		{
 			name: "fails when computeArchiveChecksums returns ctx error",
@@ -930,22 +867,6 @@ func TestBuildMCPEntries(t *testing.T) {
 			},
 		},
 		{
-			name: "fails on non-NotExist stat error for binary src",
-			setup: func(t *testing.T) (avfs.VFS, string, manifest.Plugin) {
-				t.Helper()
-				dir := t.TempDir()
-				// statAlwaysErrorVFS returns a non-IsNotExist error from Stat.
-				vfs := statAlwaysErrorVFS{VFS: osfs.NewWithNoIdm()}
-				p := manifest.Plugin{
-					MCP: []manifest.MCPEntry{
-						{Type: "binary", Name: "srv", Src: "bin/srv"},
-					},
-				}
-				return vfs, dir, p
-			},
-			wantErr: "stat mcp binary",
-		},
-		{
 			name: "fails on non-NotExist stat error for config file",
 			setup: func(t *testing.T) (avfs.VFS, string, manifest.Plugin) {
 				t.Helper()
@@ -965,15 +886,15 @@ func TestBuildMCPEntries(t *testing.T) {
 			setup: func(t *testing.T) (avfs.VFS, string, manifest.Plugin) {
 				t.Helper()
 				dir := t.TempDir()
-				// Write a real binary so stat passes.
-				binPath := filepath.Join(dir, "srv")
-				if err := os.WriteFile(binPath, []byte("#!/bin/sh"), 0o755); err != nil {
+				// Write real config files so stat passes.
+				cfg := `{"mcpServers":{}}`
+				if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(cfg), 0o644); err != nil {
 					t.Fatal(err)
 				}
 				p := manifest.Plugin{
 					MCP: []manifest.MCPEntry{
-						{Type: "binary", Name: "srv", Src: "srv"},
-						{Type: "binary", Name: "srv2", Src: "srv"},
+						{Type: "remote", Name: "srv", Config: ".mcp.json"},
+						{Type: "remote", Name: "srv2", Config: ".mcp.json"},
 					},
 				}
 				return osfs.NewWithNoIdm(), dir, p

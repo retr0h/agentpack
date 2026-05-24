@@ -216,34 +216,6 @@ func TestGenerateMCPConfig(t *testing.T) {
 		checkJSON func(t *testing.T, data map[string]any)
 	}{
 		{
-			name: "binary mcp server",
-			entries: []manifest.MCPEntry{
-				{
-					Type: "binary",
-					Name: "my-server",
-					Src:  "bin/my-server-darwin-arm64",
-					Args: []string{"--port", "3000"},
-					Env:  map[string]string{"MY_VAR": "value"},
-				},
-			},
-			checkJSON: func(t *testing.T, data map[string]any) {
-				t.Helper()
-				servers := data["mcpServers"].(map[string]any)
-				s := servers["my-server"].(map[string]any)
-				if s["command"] != "${CLAUDE_PLUGIN_ROOT}/mcp/my-server-darwin-arm64" {
-					t.Errorf("command = %v", s["command"])
-				}
-				args := s["args"].([]any)
-				if len(args) != 2 || args[0] != "--port" {
-					t.Errorf("args = %v", args)
-				}
-				env := s["env"].(map[string]any)
-				if env["MY_VAR"] != "value" {
-					t.Errorf("env = %v", env)
-				}
-			},
-		},
-		{
 			name: "remote mcp server",
 			entries: []manifest.MCPEntry{
 				{
@@ -310,25 +282,18 @@ func TestGenerateMCPConfig(t *testing.T) {
 			wantNil: true,
 		},
 		{
+			name: "binary type returns error",
+			entries: []manifest.MCPEntry{
+				{Type: "binary", Name: "my-server"},
+			},
+			wantErr: "binary mcp type is not supported",
+		},
+		{
 			name: "unknown type returns error",
 			entries: []manifest.MCPEntry{
 				{Type: "magic", Name: "bad"},
 			},
 			wantErr: "unknown mcp type",
-		},
-		{
-			name: "binary without name returns error",
-			entries: []manifest.MCPEntry{
-				{Type: "binary", Src: "bin/server"},
-			},
-			wantErr: "requires a name",
-		},
-		{
-			name: "binary without src returns error",
-			entries: []manifest.MCPEntry{
-				{Type: "binary", Name: "my-server"},
-			},
-			wantErr: "requires src",
 		},
 		{
 			name: "remote without name returns error",
@@ -361,7 +326,7 @@ func TestGenerateMCPConfig(t *testing.T) {
 		{
 			name: "multiple servers in one config",
 			entries: []manifest.MCPEntry{
-				{Type: "binary", Name: "bin-srv", Src: "bin/srv"},
+				{Type: "ux", Name: "ux-srv", Package: "@example/pkg"},
 				{Type: "remote", Name: "rem-srv", URL: "https://example.com"},
 			},
 			checkJSON: func(t *testing.T, data map[string]any) {
@@ -370,8 +335,8 @@ func TestGenerateMCPConfig(t *testing.T) {
 				if len(servers) != 2 {
 					t.Errorf("server count = %d, want 2", len(servers))
 				}
-				if _, ok := servers["bin-srv"]; !ok {
-					t.Error("missing bin-srv")
+				if _, ok := servers["ux-srv"]; !ok {
+					t.Error("missing ux-srv")
 				}
 				if _, ok := servers["rem-srv"]; !ok {
 					t.Error("missing rem-srv")

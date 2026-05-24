@@ -58,6 +58,31 @@ func TestNew(t *testing.T) {
 			wantType: "*fetcher.FileFetcher",
 		},
 		{
+			name:     "github.com host returns GitFetcher",
+			source:   "github.com/org/repo",
+			wantType: "*fetcher.GitFetcher",
+		},
+		{
+			name:     "gitlab.com host returns GitFetcher",
+			source:   "gitlab.com/org/repo",
+			wantType: "*fetcher.GitFetcher",
+		},
+		{
+			name:     "bitbucket.org host returns GitFetcher",
+			source:   "bitbucket.org/org/repo",
+			wantType: "*fetcher.GitFetcher",
+		},
+		{
+			name:     "source ending in .git returns GitFetcher",
+			source:   "https://internal.example.com/repo.git",
+			wantType: "*fetcher.GitFetcher",
+		},
+		{
+			name:     "github.com with ref returns GitFetcher",
+			source:   "github.com/org/repo#v1.0.0",
+			wantType: "*fetcher.GitFetcher",
+		},
+		{
 			name:     "http URL returns HTTPFetcher",
 			source:   "http://example.com/archive.agentpack",
 			wantType: "*fetcher.HTTPFetcher",

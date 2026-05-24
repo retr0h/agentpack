@@ -25,14 +25,6 @@ agents:
   - agents/*.md
 
 mcp:
-  - type: binary
-    name: acme-scanner
-    src: bin/acme-scanner
-    args: ["--port", "3000"]
-    env:
-      ACME_LOG_LEVEL: "info"
-    platforms: [darwin-arm64, darwin-amd64, linux-amd64]
-
   - type: remote
     name: acme-cloud
     url: "https://mcp.acme.example.com/v1"
@@ -41,9 +33,6 @@ mcp:
     name: acme-ui
     package: "@acme/mcp-ui"
     args: ["--verbose"]
-
-binaries:
-  - bin/acme-tool
 
 settings:
   - settings/settings.json

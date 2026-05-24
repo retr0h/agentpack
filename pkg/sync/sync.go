@@ -26,8 +26,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/avfs/avfs/vfs/osfs"
 	"gopkg.in/yaml.v3"
 
+	"github.com/retr0h/agentpack/pkg/build"
+	"github.com/retr0h/agentpack/pkg/fetcher"
 	"github.com/retr0h/agentpack/pkg/install"
 )
 
@@ -37,9 +40,19 @@ type PackagesFile struct {
 }
 
 // Package declares a single plugin source in agentpack-packages.yaml.
+// Exactly one of Source or Git must be set.
+//
+//   - Source: a local path or URL to a pre-built .agentpack archive.
+//   - Git: a git repository reference such as "github.com/org/repo". When
+//     set, the sync pipeline clones the repo, builds any plugins defined in
+//     agentpack.yaml found at the repo root, and installs the resulting
+//     archives. Ref optionally pins a specific tag, branch, or SHA; when
+//     omitted the default HEAD is used.
 type Package struct {
 	Name   string `yaml:"name"`
-	Source string `yaml:"source"`
+	Source string `yaml:"source"` // local path or URL to .agentpack archive
+	Git    string `yaml:"git"`    // git repo (e.g. github.com/org/repo)
+	Ref    string `yaml:"ref"`    // tag, branch, or SHA (default: HEAD)
 }
 
 // Result holds the outcome for one package in a sync run.
@@ -78,13 +91,114 @@ func Run(ctx context.Context, configPath string, _ string) ([]Result, error) {
 			return nil, err
 		}
 
+		var pkgResults []Result
+
+		if pkg.Git != "" {
+			pkgResults = syncGitPackage(ctx, pkg)
+		} else {
+			pkgResults = syncSourcePackage(ctx, pkg)
+		}
+
+		results = append(results, pkgResults...)
+	}
+
+	return results, nil
+}
+
+// syncSourcePackage installs a single package from a pre-built .agentpack
+// archive pointed to by pkg.Source.
+func syncSourcePackage(ctx context.Context, pkg Package) []Result {
+	r, installErr := install.Run(ctx, install.Options{
+		Source: pkg.Source,
+	})
+
+	if installErr != nil {
+		return []Result{{
+			Name:   pkg.Name,
+			Status: "failed",
+			Err:    installErr,
+		}}
+	}
+
+	return []Result{{
+		Name:    r.Name,
+		Version: r.Version,
+		Status:  "installed",
+	}}
+}
+
+// syncGitPackage clones a git repository, builds every plugin defined in the
+// agentpack.yaml found at the repo root, and installs each resulting archive.
+// When no agentpack.yaml is present the result is recorded as failed.
+//
+// The clone preserves the .git directory so that build.Run can capture git
+// metadata via metadata.Capture. The cloneDir is removed after all plugins
+// are built and installed.
+func syncGitPackage(ctx context.Context, pkg Package) []Result {
+	// Build the git source string (append ref if set).
+	source := pkg.Git
+	if pkg.Ref != "" {
+		source = source + "#" + pkg.Ref
+	}
+
+	cloneDir, err := os.MkdirTemp("", "agentpack-sync-git-*")
+	if err != nil {
+		return []Result{{
+			Name:   pkg.Name,
+			Status: "failed",
+			Err:    fmt.Errorf("create temp dir: %w", err),
+		}}
+	}
+
+	defer func() { _ = os.RemoveAll(cloneDir) }()
+
+	// Clone directly using cloneRepo (internal helper exposed via GitFetcher)
+	// so that .git/ is preserved in cloneDir for metadata.Capture.
+	gf := &fetcher.GitFetcher{}
+	if err := gf.CloneInto(ctx, source, cloneDir); err != nil {
+		return []Result{{
+			Name:   pkg.Name,
+			Status: "failed",
+			Err:    fmt.Errorf("git fetch: %w", err),
+		}}
+	}
+
+	if err := ctx.Err(); err != nil {
+		return []Result{{
+			Name:   pkg.Name,
+			Status: "failed",
+			Err:    err,
+		}}
+	}
+
+	vfs := osfs.NewWithNoIdm()
+	buildResults, err := build.Run(ctx, vfs, build.Options{Dir: cloneDir})
+	if err != nil {
+		return []Result{{
+			Name:   pkg.Name,
+			Status: "failed",
+			Err:    fmt.Errorf("build: %w", err),
+		}}
+	}
+
+	var results []Result
+
+	for _, br := range buildResults {
+		if err := ctx.Err(); err != nil {
+			return append(results, Result{
+				Name:   br.Name,
+				Status: "failed",
+				Err:    err,
+			})
+		}
+
 		r, installErr := install.Run(ctx, install.Options{
-			Source: pkg.Source,
+			Source: br.ArchivePath,
 		})
 
 		if installErr != nil {
 			results = append(results, Result{
-				Name:   pkg.Name,
+				Name:   br.Name,
 				Status: "failed",
 				Err:    installErr,
 			})
@@ -98,5 +212,5 @@ func Run(ctx context.Context, configPath string, _ string) ([]Result, error) {
 		})
 	}
 
-	return results, nil
+	return results
 }

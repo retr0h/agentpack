@@ -29,13 +29,6 @@ hooks:
 agents:
   - agents/*.md
 mcp:
-  - type: binary
-    name: my-server
-    src: bin/my-server
-    args: ["--port", "3000"]
-    env:
-      MY_VAR: "value"
-    platforms: [darwin-arm64, linux-amd64]
   - type: remote
     name: my-remote
     url: "https://mcp.example.com/v1"
@@ -43,8 +36,6 @@ mcp:
     name: my-ux
     package: "@mycompany/my-mcp-server"
     args: ["--verbose"]
-binaries:
-  - bin/my-tool
 settings:
   - settings.json
 ```
@@ -93,8 +84,7 @@ Each plugin can override any shared field.
 | `commands` | no | Command markdown files (glob or src/dest) |
 | `hooks` | no | hooks.json and hook scripts (glob or src/dest) |
 | `agents` | no | Agent markdown files (glob or src/dest) |
-| `mcp` | no | MCP server entries (see below) |
-| `binaries` | no | Pre-built executables (glob or src/dest) |
+| `mcp` | no | MCP server entries — `remote` and `ux` only (see below) |
 | `settings` | no | JSON fragments (glob or src/dest) |
 
 ### Content entry formats
@@ -119,17 +109,18 @@ is a full path (e.g. `skills/review.md`), the file is renamed.
 
 ### MCP entry types
 
-| Field | binary | remote | ux |
-|-------|--------|--------|----|
-| `type` | required | required | required |
-| `name` | required | required | required |
-| `src` | required | - | - |
-| `url` | - | required | - |
-| `package` | - | - | required |
-| `config` | - | optional | - |
-| `args` | optional | - | optional |
-| `env` | optional | - | - |
-| `platforms` | optional | - | - |
+Binary executables are not permitted in agentpack archives. The `binary` MCP
+type is rejected at build time. Use `remote` or `ux` instead.
+
+| Field | remote | ux |
+|-------|--------|----|
+| `type` | required | required |
+| `name` | required | required |
+| `url` | required | - |
+| `package` | - | required |
+| `config` | optional | - |
+| `args` | - | optional |
+| `env` | - | - |
 
 ---
 
@@ -144,12 +135,26 @@ packages:
     source: https://drive.google.com/uc?id=1ABC&export=download
   - name: local-plugin
     source: ~/Downloads/local-plugin-1.0.0.agentpack
+  - name: git-plugin
+    git: github.com/org/my-plugin
+  - name: git-plugin-pinned
+    git: github.com/org/my-plugin
+    ref: v2.1.0
 ```
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | yes | Plugin name (for display) |
-| `source` | yes | Local path or URL to the `.agentpack` archive |
+| `source` | no | Local path or URL to a `.agentpack` archive |
+| `git` | no | Git repository (e.g. `github.com/org/repo`) |
+| `ref` | no | Tag, branch, or SHA to check out (default: HEAD) |
+
+Exactly one of `source` or `git` must be set per package entry.
+
+When `git` is set, the sync pipeline:
+1. Clones the repository (shallow clone) using `GitFetcher`
+2. Builds all plugins defined in `agentpack.yaml` at the repo root
+3. Installs each resulting archive to all detected targets
 
 Supported source schemes:
 
@@ -157,6 +162,8 @@ Supported source schemes:
 |--------|---------|
 | `/`, `./`, `~/` | Local file copy |
 | `https://`, `http://` | HTTP download |
+| `github.com/`, `gitlab.com/`, `bitbucket.org/` | Git clone |
+| `*.git` suffix | Git clone |
 | `s3://` | AWS S3 (planned) |
 | `gs://` | Google Cloud Storage (planned) |
 
@@ -187,10 +194,7 @@ my-plugin-1.0.0.agentpack
   agents/
     *.md
   mcp/
-    my-server                 # Binary MCP servers
-    .mcp.json                 # Generated MCP config
-  binaries/
-    my-tool                   # Pre-built executables
+    .mcp.json                 # Generated MCP config (remote/ux types)
   settings/
     settings.json             # Settings fragments
 ```
@@ -230,22 +234,8 @@ b94d27b9934d3e08...  .agentpack/metadata.json
 
 #### `.mcp.json` (MCP servers)
 
-agentpack generates the `.mcp.json` from the manifest. The developer's
-config (e.g. `go run ./cmd/server`) won't work on a machine without Go.
-
-**binary** — pre-built executable:
-
-```json
-{
-  "mcpServers": {
-    "my-server": {
-      "command": "${PLUGIN_ROOT}/mcp/my-server",
-      "args": ["--port", "3000"],
-      "env": { "MY_VAR": "value" }
-    }
-  }
-}
-```
+agentpack generates the `.mcp.json` from the manifest. Binary MCP servers are
+not supported. Use `remote` (a hosted endpoint) or `ux` (an npx package).
 
 **remote** — hosted endpoint:
 

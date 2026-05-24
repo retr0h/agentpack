@@ -12,9 +12,9 @@
 The first git-free package manager for [agentskills.io](https://agentskills.io).
 
 Build checksummed `.agentpack` archives from any repo — skills, commands,
-hooks, agents, MCP servers, binaries, settings — and distribute them
-via Google Drive, S3, URL, or sneakernet. Non-technical users install
-with a single command. No git, Go, or build toolchain required on the
+hooks, agents, MCP servers (remote and UX types), settings — and distribute
+them via Google Drive, S3, URL, sneakernet, or git. Non-technical users
+install with a single command. No git, Go, or build toolchain required on the
 receiving end.
 
 Works with Claude Code today. Cursor, Copilot, Gemini CLI, and other
@@ -56,7 +56,8 @@ agentpack sync                               # sync from agentpack-packages.yaml
 | List | Show installed plugins with version, SHA, and install date |
 | Sync | Declarative installs from `agentpack-packages.yaml` |
 | Multi-plugin | One manifest, multiple plugins with src/dest remapping |
-| MCP servers | Binary, remote, and UX/npx — agentpack generates `.mcp.json` |
+| MCP servers | Remote and UX/npx — agentpack generates `.mcp.json` |
+| Git backend | Install directly from GitHub, GitLab, Bitbucket repos |
 | Git metadata | Captures SHA, branch, timestamps at build time |
 | Pluggable backends | File and HTTP today; S3 and GCS planned |
 | Multi-agent targets | Claude Code today; Cursor, Copilot, Gemini CLI planned |
@@ -77,12 +78,12 @@ hooks:
   - hooks/hooks.json
   - hooks/*.sh
 mcp:
-  - type: binary
-    name: my-server
-    src: bin/my-server
   - type: remote
     name: my-api
     url: "https://mcp.example.com/v1"
+  - type: ux
+    name: my-server
+    package: "@mycompany/my-mcp-server"
 ```
 
 See [`examples/`](examples/) for single-plugin and multi-plugin manifests.
@@ -96,6 +97,11 @@ packages:
     source: https://drive.google.com/uc?id=1ABC&export=download
   - name: local-plugin
     source: ~/Downloads/local-plugin-1.0.0.agentpack
+  - name: git-plugin
+    git: github.com/myorg/my-plugin
+  - name: git-plugin-pinned
+    git: github.com/myorg/my-plugin
+    ref: v2.0.0
 ```
 
 ```bash

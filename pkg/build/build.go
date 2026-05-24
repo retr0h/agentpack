@@ -128,8 +128,6 @@ func filterPlugins(plugins []manifest.Plugin, names []string) ([]manifest.Plugin
 //	  ...
 //	mcp/
 //	  ...
-//	binaries/
-//	  ...
 //	settings/
 //	  ...
 //
@@ -157,7 +155,6 @@ func buildPlugin(
 		{"commands", p.Commands},
 		{"hooks", p.Hooks},
 		{"agents", p.Agents},
-		{"binaries", p.Binaries},
 		{"settings", p.Settings},
 	}
 
@@ -259,22 +256,6 @@ func buildMCPEntries(
 	for _, mcp := range p.MCP {
 		if err := ctx.Err(); err != nil {
 			return nil, err
-		}
-
-		if mcp.Type == "binary" && mcp.Src != "" {
-			srcPath := filepath.Join(dir, mcp.Src)
-			if _, err := vfs.Stat(srcPath); err != nil {
-				if avfs.IsNotExist(err) {
-					return nil, fmt.Errorf("mcp binary not found: %s", mcp.Src)
-				}
-
-				return nil, fmt.Errorf("stat mcp binary: %w", err)
-			}
-
-			files = append(files, archive.FileEntry{
-				Src:         srcPath,
-				ArchivePath: path.Join("mcp", filepath.Base(mcp.Src)),
-			})
 		}
 
 		if mcp.Config != "" {

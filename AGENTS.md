@@ -47,7 +47,7 @@ pkg/archive/       Tarball creation and extraction
 pkg/build/         Build pipeline orchestration
 pkg/checksum/      Per-file SHA256 checksumming and verification
 pkg/cli/           Themed terminal output (banner, colors)
-pkg/fetcher/       Backend interface + drivers (file, http)
+pkg/fetcher/       Backend interface + drivers (file, http, git)
 pkg/install/       Install pipeline orchestration
 pkg/list/          List installed plugins
 pkg/manifest/      agentpack.yaml parsing and validation
@@ -56,6 +56,9 @@ pkg/plugin/        Claude Code plugin structure generation
 pkg/sync/          Declarative sync from agentpack-packages.yaml
 pkg/verify/        Verify pipeline orchestration
 ```
+
+Content types: skills, commands, hooks, agents, MCP (remote/ux only), settings.
+Binary executables and binary MCP servers are not permitted (security policy).
 
 - `cmd/` — thin shim: parse flags, create context + VFS, call `pkg/`, print output
 - `pkg/` — public library API, consumable without the CLI

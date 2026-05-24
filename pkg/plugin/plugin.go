@@ -24,7 +24,6 @@ package plugin
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 
 	"github.com/retr0h/agentpack/pkg/manifest"
 )
@@ -164,6 +163,8 @@ func GeneratePlugin(p manifest.Plugin, commandPaths []string) ([]byte, error) {
 // GenerateMCPConfig produces the JSON bytes for .mcp.json from MCP entries.
 // Entries with a Config field set are skipped (they are included as-is by the
 // build pipeline). Returns nil, nil when no entries need generation.
+// Binary MCP type is rejected — binary content is not permitted for security
+// reasons.
 func GenerateMCPConfig(entries []manifest.MCPEntry) ([]byte, error) {
 	cfg := MCPConfig{
 		MCPServers: make(map[string]MCPServer),
@@ -176,22 +177,9 @@ func GenerateMCPConfig(entries []manifest.MCPEntry) ([]byte, error) {
 
 		switch e.Type {
 		case "binary":
-			if e.Name == "" {
-				return nil, fmt.Errorf("binary mcp entry requires a name")
-			}
-			if e.Src == "" {
-				return nil, fmt.Errorf("binary mcp entry %q requires src", e.Name)
-			}
-			server := MCPServer{
-				Command: "${CLAUDE_PLUGIN_ROOT}/mcp/" + filepath.Base(e.Src),
-			}
-			if len(e.Args) > 0 {
-				server.Args = e.Args
-			}
-			if len(e.Env) > 0 {
-				server.Env = e.Env
-			}
-			cfg.MCPServers[e.Name] = server
+			return nil, fmt.Errorf(
+				"binary mcp type is not supported; use remote or ux instead",
+			)
 
 		case "remote":
 			if e.Name == "" {
@@ -222,7 +210,7 @@ func GenerateMCPConfig(entries []manifest.MCPEntry) ([]byte, error) {
 
 		default:
 			return nil, fmt.Errorf(
-				"unknown mcp type %q; expected binary, remote, or ux",
+				"unknown mcp type %q; expected remote or ux",
 				e.Type,
 			)
 		}

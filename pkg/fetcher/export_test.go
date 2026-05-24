@@ -51,3 +51,18 @@ func SetOsCreateHTTP(fn func(string) (io.WriteCloser, error)) func() {
 	osCreateHTTP = fn
 	return func() { osCreateHTTP = orig }
 }
+
+// ParseGitSource exposes parseGitSource for testing.
+func ParseGitSource(source string) (rawURL, ref string, err error) {
+	return parseGitSource(source)
+}
+
+// ToGitURL exposes toGitURL for testing.
+func ToGitURL(rawURL string) string {
+	return toGitURL(rawURL)
+}
+
+// IsSHA exposes isSHA for testing.
+func IsSHA(ref string) bool {
+	return isSHA(ref)
+}

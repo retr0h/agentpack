@@ -100,6 +100,44 @@ func initGitRepo(t *testing.T, dir string) {
 	run("commit", "-m", "init")
 }
 
+// initBareGitRepo creates a bare git repo that can be cloned from a local path.
+// It initialises a working repo with an agentpack.yaml at workDir and clones
+// it bare into a separate temp directory, returning the bare dir path.
+func initBareGitRepo(t *testing.T, manifest string) string {
+	t.Helper()
+
+	run := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), gitEnv...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	workDir := t.TempDir()
+	run(workDir, "init")
+	run(workDir, "checkout", "-b", "main")
+
+	if err := os.WriteFile(filepath.Join(workDir, "README.md"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile README.md: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(workDir, "agentpack.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("WriteFile agentpack.yaml: %v", err)
+	}
+
+	run(workDir, "add", ".")
+	run(workDir, "commit", "-m", "init")
+
+	bareDir := t.TempDir()
+	run(workDir, "clone", "--bare", workDir, bareDir)
+
+	return bareDir
+}
+
 func buildTestArchive(t *testing.T, dir string, manifest string) string {
 	t.Helper()
 
@@ -248,6 +286,63 @@ description: Plugin for sync test
 			},
 			customCtx: newCancelAfterFirstErrCtx(),
 			wantErr:   "context canceled",
+		},
+		{
+			name: "installs plugin from git source",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				bareDir := initBareGitRepo(t, `
+name: git-plugin
+version: "1.0.0"
+description: Plugin from git
+`)
+				cfgDir := t.TempDir()
+				pluginDir := t.TempDir()
+				configPath := writePackagesFile(
+					t,
+					cfgDir,
+					"packages:\n  - name: git-plugin\n    git: "+bareDir+"\n",
+				)
+				return configPath, pluginDir
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+				if len(results) != 1 {
+					t.Fatalf("result count = %d, want 1", len(results))
+				}
+				if results[0].Status != "installed" {
+					t.Errorf("Status = %q, want installed (err: %v)", results[0].Status, results[0].Err)
+				}
+				if results[0].Name != "git-plugin" {
+					t.Errorf("Name = %q, want git-plugin", results[0].Name)
+				}
+			},
+		},
+		{
+			name: "records failed status for git source with bad repo",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				cfgDir := t.TempDir()
+				pluginDir := t.TempDir()
+				configPath := writePackagesFile(
+					t,
+					cfgDir,
+					"packages:\n  - name: bad-git\n    git: /nonexistent/bare-repo\n",
+				)
+				return configPath, pluginDir
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+				if len(results) != 1 {
+					t.Fatalf("result count = %d, want 1", len(results))
+				}
+				if results[0].Status != "failed" {
+					t.Errorf("Status = %q, want failed", results[0].Status)
+				}
+				if results[0].Err == nil {
+					t.Error("Err is nil, want non-nil")
+				}
+			},
 		},
 	}
 
