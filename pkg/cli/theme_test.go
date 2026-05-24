@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retr0h/claudia/pkg/cli"
+	"github.com/retr0h/agentpack/pkg/cli"
 )
 
 func TestBanner(t *testing.T) {
@@ -40,8 +40,8 @@ func TestBanner(t *testing.T) {
 	}{
 		{
 			name:      "contains both banner lines",
-			wantTop:   "█▀▀ █░░ █▀█ █░█ █▀▄ █ █▀█",
-			wantBot:   "█▄▄ █▄▄ █▀█ █▄█ █▄▀ █ █▀█",
+			wantTop:   "█▀█ █▀▀ █▀▀ █▄░█ ▀█▀ █▀█ █▀█ █▀▀ █▄▀",
+			wantBot:   "█▀█ █▄█ ██▄ █░▀█ ░█░ █▀▀ █▀█ █▄▄ █░█",
 			wantLines: 2,
 		},
 	}
@@ -283,8 +283,8 @@ func TestBannerWithFile(t *testing.T) {
 	}{
 		{
 			name:    "renders banner to os.File writer",
-			wantTop: "█▀▀ █░░ █▀█ █░█ █▀▄ █ █▀█",
-			wantBot: "█▄▄ █▄▄ █▀█ █▄█ █▄▀ █ █▀█",
+			wantTop: "█▀█ █▀▀ █▀▀ █▄░█ ▀█▀ █▀█ █▀█ █▀▀ █▄▀",
+			wantBot: "█▀█ █▄█ ██▄ █░▀█ ░█░ █▀▀ █▀█ █▄▄ █░█",
 		},
 	}
 

@@ -18,7 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package archive handles creation and extraction of .claudia tarballs.
+// Package archive handles creation and extraction of .agentpack tarballs.
 package archive
 
 import (

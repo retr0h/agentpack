@@ -38,7 +38,7 @@ import (
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
 
-	"github.com/retr0h/claudia/pkg/archive"
+	"github.com/retr0h/agentpack/pkg/archive"
 )
 
 // --------------------------------------------------------------------------
@@ -275,14 +275,14 @@ func TestCreate(t *testing.T) {
 			entries: func(_ avfs.VFS, _ string) []archive.FileEntry {
 				return []archive.FileEntry{
 					{Src: "/skill.md", ArchivePath: "marketplaces/p/skills/skill.md"},
-					{ArchivePath: "marketplaces/p/.claudia/metadata.json", Content: []byte("{}")},
+					{ArchivePath: "marketplaces/p/.agentpack/metadata.json", Content: []byte("{}")},
 				}
 			},
 			checkTar: func(t *testing.T, archivePath string) {
 				t.Helper()
 				entries := listTarEntries(t, archivePath)
 				assertContains(t, entries, "marketplaces/p/skills/skill.md")
-				assertContains(t, entries, "marketplaces/p/.claudia/metadata.json")
+				assertContains(t, entries, "marketplaces/p/.agentpack/metadata.json")
 			},
 		},
 		{
@@ -321,7 +321,7 @@ func TestCreate(t *testing.T) {
 			name: "fails when vfs Create returns error",
 			setupVFS: func(t *testing.T) (avfs.VFS, string) {
 				t.Helper()
-				return createErrorVFS{VFS: memfs.New()}, "/out/test.claudia"
+				return createErrorVFS{VFS: memfs.New()}, "/out/test.agentpack"
 			},
 			entries: func(_ avfs.VFS, _ string) []archive.FileEntry {
 				return []archive.FileEntry{
@@ -543,11 +543,11 @@ func TestCreate(t *testing.T) {
 			vfs, outDir := tt.setupVFS(t)
 
 			var outPath string
-			if strings.HasSuffix(outDir, ".claudia") {
+			if strings.HasSuffix(outDir, ".agentpack") {
 				outPath = outDir
 			} else {
 				_ = vfs.MkdirAll(outDir, 0o755)
-				outPath = outDir + "/test.claudia"
+				outPath = outDir + "/test.agentpack"
 			}
 
 			// Use a cancelled context for the context-cancellation test case.
@@ -581,7 +581,7 @@ func TestCreate(t *testing.T) {
 				if err != nil {
 					t.Fatalf("read archive from vfs: %v", err)
 				}
-				realPath := filepath.Join(t.TempDir(), "test.claudia")
+				realPath := filepath.Join(t.TempDir(), "test.agentpack")
 				if err := os.WriteFile(realPath, data, 0o644); err != nil {
 					t.Fatalf("write archive to real fs: %v", err)
 				}
@@ -611,10 +611,10 @@ func TestExtract(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(srcDir, "data.txt"), []byte("content"), 0o644); err != nil {
 					t.Fatal(err)
 				}
-				outPath := filepath.Join(t.TempDir(), "rt.claudia")
+				outPath := filepath.Join(t.TempDir(), "rt.agentpack")
 				if err := archive.Create(ctx, vfs, outPath, []archive.FileEntry{
 					{Src: filepath.Join(srcDir, "data.txt"), ArchivePath: "marketplaces/pkg/data.txt"},
-					{ArchivePath: "marketplaces/pkg/.claudia/meta.json", Content: []byte(`{"v":1}`)},
+					{ArchivePath: "marketplaces/pkg/.agentpack/meta.json", Content: []byte(`{"v":1}`)},
 				}); err != nil {
 					t.Fatal(err)
 				}
@@ -630,7 +630,7 @@ func TestExtract(t *testing.T) {
 					t.Errorf("data.txt = %q, want %q", got, "content")
 				}
 				got2, err := os.ReadFile(
-					filepath.Join(destDir, "marketplaces", "pkg", ".claudia", "meta.json"),
+					filepath.Join(destDir, "marketplaces", "pkg", ".agentpack", "meta.json"),
 				)
 				if err != nil {
 					t.Fatalf("read meta.json: %v", err)
@@ -677,7 +677,7 @@ func TestExtract(t *testing.T) {
 			name: "fails on missing archive",
 			buildTar: func(t *testing.T) string {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "nonexistent.claudia")
+				return filepath.Join(t.TempDir(), "nonexistent.agentpack")
 			},
 			wantErr: "open archive",
 		},
@@ -686,7 +686,7 @@ func TestExtract(t *testing.T) {
 			buildTar: func(t *testing.T) string {
 				t.Helper()
 				// A tar with a TypeDir entry named "conflict/".
-				outPath := filepath.Join(t.TempDir(), "withdir.claudia")
+				outPath := filepath.Join(t.TempDir(), "withdir.agentpack")
 				f, err := os.Create(outPath)
 				if err != nil {
 					t.Fatal(err)
@@ -721,7 +721,7 @@ func TestExtract(t *testing.T) {
 				t.Helper()
 				ctx := context.Background()
 				vfs := osfs.NewWithNoIdm()
-				outPath := filepath.Join(t.TempDir(), "test.claudia")
+				outPath := filepath.Join(t.TempDir(), "test.agentpack")
 				if err := archive.Create(ctx, vfs, outPath, []archive.FileEntry{
 					{ArchivePath: "file.txt", Content: []byte("data")},
 				}); err != nil {
@@ -742,7 +742,7 @@ func TestExtract(t *testing.T) {
 			name: "fails on invalid gzip data",
 			buildTar: func(t *testing.T) string {
 				t.Helper()
-				outPath := filepath.Join(t.TempDir(), "notgzip.claudia")
+				outPath := filepath.Join(t.TempDir(), "notgzip.agentpack")
 				if err := os.WriteFile(outPath, []byte("this is not gzip data"), 0o644); err != nil {
 					t.Fatal(err)
 				}
@@ -754,7 +754,7 @@ func TestExtract(t *testing.T) {
 			name: "fails on truncated tar data",
 			buildTar: func(t *testing.T) string {
 				t.Helper()
-				outPath := filepath.Join(t.TempDir(), "badtar.claudia")
+				outPath := filepath.Join(t.TempDir(), "badtar.agentpack")
 				var buf bytes.Buffer
 				gw := gzip.NewWriter(&buf)
 				// Write incomplete/corrupted tar data inside gzip.
@@ -773,7 +773,7 @@ func TestExtract(t *testing.T) {
 				t.Helper()
 				ctx := context.Background()
 				vfs := osfs.NewWithNoIdm()
-				outPath := filepath.Join(t.TempDir(), "test.claudia")
+				outPath := filepath.Join(t.TempDir(), "test.agentpack")
 				if err := archive.Create(ctx, vfs, outPath, []archive.FileEntry{
 					{ArchivePath: "file.txt", Content: []byte("data")},
 				}); err != nil {
@@ -791,7 +791,7 @@ func TestExtract(t *testing.T) {
 				// Build a tar where a file header claims 1000 bytes but only
 				// 10 bytes are written. Closing only gzip (not tar) leaves the
 				// stream truncated so io.Copy inside extractFile returns an error.
-				outPath := filepath.Join(t.TempDir(), "truncated-content.claudia")
+				outPath := filepath.Join(t.TempDir(), "truncated-content.agentpack")
 				f, err := os.Create(outPath)
 				if err != nil {
 					t.Fatal(err)
@@ -827,7 +827,7 @@ func TestExtract(t *testing.T) {
 			buildTar: func(t *testing.T) string {
 				t.Helper()
 				// Build an archive with a TypeReg entry under a subdirectory.
-				outPath := filepath.Join(t.TempDir(), "regdir.claudia")
+				outPath := filepath.Join(t.TempDir(), "regdir.agentpack")
 				f, err := os.Create(outPath)
 				if err != nil {
 					t.Fatal(err)
@@ -867,7 +867,7 @@ func TestExtract(t *testing.T) {
 			name: "extracts file with zero mode using default 0644",
 			buildTar: func(t *testing.T) string {
 				t.Helper()
-				outPath := filepath.Join(t.TempDir(), "zeromode.claudia")
+				outPath := filepath.Join(t.TempDir(), "zeromode.agentpack")
 				f, err := os.Create(outPath)
 				if err != nil {
 					t.Fatal(err)
@@ -1026,7 +1026,7 @@ func assertContains(t *testing.T, entries []string, want string) {
 func buildTarWithSymlink(t *testing.T) string {
 	t.Helper()
 
-	outPath := filepath.Join(t.TempDir(), "symlink.claudia")
+	outPath := filepath.Join(t.TempDir(), "symlink.agentpack")
 	f, err := os.Create(outPath)
 	if err != nil {
 		t.Fatal(err)
@@ -1053,7 +1053,7 @@ func buildTarWithSymlink(t *testing.T) string {
 func buildTarWithTraversal(t *testing.T) string {
 	t.Helper()
 
-	outPath := filepath.Join(t.TempDir(), "traversal.claudia")
+	outPath := filepath.Join(t.TempDir(), "traversal.agentpack")
 	f, err := os.Create(outPath)
 	if err != nil {
 		t.Fatal(err)
@@ -1182,7 +1182,7 @@ func TestAddVirtualFile(t *testing.T) {
 func buildTarWithDir(t *testing.T) string {
 	t.Helper()
 
-	outPath := filepath.Join(t.TempDir(), "withdir.claudia")
+	outPath := filepath.Join(t.TempDir(), "withdir.agentpack")
 	f, err := os.Create(outPath)
 	if err != nil {
 		t.Fatal(err)

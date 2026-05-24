@@ -18,10 +18,10 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package main is the entry point for the claudia binary.
+// Package main is the entry point for the agentpack binary.
 package main
 
-import "github.com/retr0h/claudia/cmd"
+import "github.com/retr0h/agentpack/cmd"
 
 func main() {
 	cmd.Execute()

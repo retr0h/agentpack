@@ -32,8 +32,8 @@ import (
 
 	"github.com/avfs/avfs/vfs/osfs"
 
-	"github.com/retr0h/claudia/pkg/build"
-	pkgsync "github.com/retr0h/claudia/pkg/sync"
+	"github.com/retr0h/agentpack/pkg/build"
+	pkgsync "github.com/retr0h/agentpack/pkg/sync"
 )
 
 // --------------------------------------------------------------------------
@@ -103,8 +103,8 @@ func initGitRepo(t *testing.T, dir string) {
 func buildTestArchive(t *testing.T, dir string, manifest string) string {
 	t.Helper()
 
-	if err := os.WriteFile(filepath.Join(dir, "claudia.yaml"), []byte(manifest), 0o644); err != nil {
-		t.Fatalf("write claudia.yaml: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write agentpack.yaml: %v", err)
 	}
 
 	vfs := osfs.NewWithNoIdm()
@@ -121,9 +121,9 @@ func buildTestArchive(t *testing.T, dir string, manifest string) string {
 
 func writePackagesFile(t *testing.T, dir string, content string) string {
 	t.Helper()
-	path := filepath.Join(dir, "claudia-packages.yaml")
+	path := filepath.Join(dir, "agentpack-packages.yaml")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write claudia-packages.yaml: %v", err)
+		t.Fatalf("write agentpack-packages.yaml: %v", err)
 	}
 	return path
 }
@@ -183,7 +183,7 @@ description: Plugin for sync test
 				cfgDir := t.TempDir()
 				pluginDir := t.TempDir()
 				configPath := writePackagesFile(t, cfgDir,
-					"packages:\n  - name: bad-plugin\n    source: /nonexistent/bad.claudia\n")
+					"packages:\n  - name: bad-plugin\n    source: /nonexistent/bad.agentpack\n")
 				return configPath, pluginDir
 			},
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
@@ -203,7 +203,7 @@ description: Plugin for sync test
 			name: "returns error when config file missing",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				return "/nonexistent/claudia-packages.yaml", t.TempDir()
+				return "/nonexistent/agentpack-packages.yaml", t.TempDir()
 			},
 			wantErr: "read",
 		},
@@ -226,7 +226,7 @@ description: Plugin for sync test
 				configPath := writePackagesFile(
 					t,
 					cfgDir,
-					"packages:\n  - name: p\n    source: /tmp/x.claudia\n",
+					"packages:\n  - name: p\n    source: /tmp/x.agentpack\n",
 				)
 				return configPath, t.TempDir()
 			},
@@ -242,7 +242,7 @@ description: Plugin for sync test
 				configPath := writePackagesFile(
 					t,
 					cfgDir,
-					"packages:\n  - name: a\n    source: /tmp/a.claudia\n  - name: b\n    source: /tmp/b.claudia\n",
+					"packages:\n  - name: a\n    source: /tmp/a.agentpack\n  - name: b\n    source: /tmp/b.agentpack\n",
 				)
 				return configPath, t.TempDir()
 			},

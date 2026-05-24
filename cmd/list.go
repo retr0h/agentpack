@@ -27,13 +27,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/retr0h/claudia/pkg/cli"
-	"github.com/retr0h/claudia/pkg/list"
+	"github.com/retr0h/agentpack/pkg/cli"
+	"github.com/retr0h/agentpack/pkg/list"
 )
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List installed claudia plugins",
+	Short: "List installed agentpack plugins",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		out := cmd.OutOrStdout()

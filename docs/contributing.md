@@ -1,4 +1,4 @@
-# Contributing to claudia
+# Contributing to agentpack
 
 Thanks for your interest in contributing.
 

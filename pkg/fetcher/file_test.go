@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retr0h/claudia/pkg/fetcher"
+	"github.com/retr0h/agentpack/pkg/fetcher"
 )
 
 // failOnCloseWriter is an io.WriteCloser that succeeds on Write but fails on Close.
@@ -76,11 +76,11 @@ func TestFileFetcherFetch(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				dir := t.TempDir()
-				src := filepath.Join(dir, "archive.claudia")
+				src := filepath.Join(dir, "archive.agentpack")
 				if err := os.WriteFile(src, []byte("archive data"), 0o644); err != nil {
 					t.Fatalf("write source: %v", err)
 				}
-				dest := filepath.Join(dir, "copy.claudia")
+				dest := filepath.Join(dir, "copy.agentpack")
 				return src, dest
 			},
 			check: func(t *testing.T, dest string) {
@@ -99,7 +99,7 @@ func TestFileFetcherFetch(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				dir := t.TempDir()
-				return filepath.Join(dir, "nonexistent.claudia"), filepath.Join(dir, "dest.claudia")
+				return filepath.Join(dir, "nonexistent.agentpack"), filepath.Join(dir, "dest.agentpack")
 			},
 			wantErr: "open source",
 		},
@@ -108,11 +108,11 @@ func TestFileFetcherFetch(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				dir := t.TempDir()
-				src := filepath.Join(dir, "archive.claudia")
+				src := filepath.Join(dir, "archive.agentpack")
 				if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
 					t.Fatalf("write source: %v", err)
 				}
-				return src, filepath.Join(dir, "nonexistent", "dest.claudia")
+				return src, filepath.Join(dir, "nonexistent", "dest.agentpack")
 			},
 			wantErr: "create dest",
 		},
@@ -121,11 +121,11 @@ func TestFileFetcherFetch(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				dir := t.TempDir()
-				src := filepath.Join(dir, "archive.claudia")
+				src := filepath.Join(dir, "archive.agentpack")
 				if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
 					t.Fatalf("write source: %v", err)
 				}
-				return src, filepath.Join(dir, "dest.claudia")
+				return src, filepath.Join(dir, "dest.agentpack")
 			},
 			wantErr: "context canceled",
 		},
@@ -134,11 +134,11 @@ func TestFileFetcherFetch(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				dir := t.TempDir()
-				src := filepath.Join(dir, "archive.claudia")
+				src := filepath.Join(dir, "archive.agentpack")
 				if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
 					t.Fatalf("write source: %v", err)
 				}
-				return src, filepath.Join(dir, "dest.claudia")
+				return src, filepath.Join(dir, "dest.agentpack")
 			},
 			customCtx: &cancelOnSecondCallCtx{},
 			wantErr:   "context canceled",
@@ -148,7 +148,7 @@ func TestFileFetcherFetch(t *testing.T) {
 			noParallel: true,
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				return "~/somefile.claudia", filepath.Join(t.TempDir(), "dest.claudia")
+				return "~/somefile.agentpack", filepath.Join(t.TempDir(), "dest.agentpack")
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
@@ -165,11 +165,11 @@ func TestFileFetcherFetch(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				dir := t.TempDir()
-				src := filepath.Join(dir, "archive.claudia")
+				src := filepath.Join(dir, "archive.agentpack")
 				if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
 					t.Fatalf("write source: %v", err)
 				}
-				return src, filepath.Join(dir, "dest.claudia")
+				return src, filepath.Join(dir, "dest.agentpack")
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
@@ -186,11 +186,11 @@ func TestFileFetcherFetch(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				dir := t.TempDir()
-				src := filepath.Join(dir, "archive.claudia")
+				src := filepath.Join(dir, "archive.agentpack")
 				if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
 					t.Fatalf("write source: %v", err)
 				}
-				return src, filepath.Join(dir, "dest.claudia")
+				return src, filepath.Join(dir, "dest.agentpack")
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
@@ -207,11 +207,11 @@ func TestFileFetcherFetch(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				dir := t.TempDir()
-				src := filepath.Join(dir, "archive.claudia")
+				src := filepath.Join(dir, "archive.agentpack")
 				if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
 					t.Fatalf("write source: %v", err)
 				}
-				return src, filepath.Join(dir, "dest.claudia")
+				return src, filepath.Join(dir, "dest.agentpack")
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
@@ -231,7 +231,7 @@ func TestFileFetcherFetch(t *testing.T) {
 					t.Skipf("cannot get home dir: %v", err)
 				}
 				// Create a temp file inside the real home dir.
-				f, err := os.CreateTemp(home, "claudia-test-*.claudia")
+				f, err := os.CreateTemp(home, "agentpack-test-*.agentpack")
 				if err != nil {
 					t.Skipf("cannot create temp file in home: %v", err)
 				}
@@ -244,7 +244,7 @@ func TestFileFetcherFetch(t *testing.T) {
 
 				// Build a ~/basename source path.
 				rel := "~/" + filepath.Base(f.Name())
-				dest := filepath.Join(t.TempDir(), "dest.claudia")
+				dest := filepath.Join(t.TempDir(), "dest.agentpack")
 				return rel, dest
 			},
 			check: func(t *testing.T, dest string) {

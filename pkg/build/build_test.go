@@ -32,7 +32,7 @@ import (
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
 
-	"github.com/retr0h/claudia/pkg/build"
+	"github.com/retr0h/agentpack/pkg/build"
 )
 
 // --------------------------------------------------------------------------
@@ -71,11 +71,11 @@ func initGitRepo(t *testing.T, dir string) {
 	run("commit", "-m", "init")
 }
 
-// writeManifest writes content as claudia.yaml in dir.
+// writeManifest writes content as agentpack.yaml in dir.
 func writeManifest(t *testing.T, dir, content string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, "claudia.yaml"), []byte(content), 0o644); err != nil {
-		t.Fatalf("write claudia.yaml: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write agentpack.yaml: %v", err)
 	}
 }
 
@@ -130,9 +130,9 @@ description: A test plugin
 				if r.Size == 0 {
 					t.Error("Size is 0")
 				}
-				if !strings.HasSuffix(r.ArchivePath, "my-plugin-1.0.0.claudia") {
+				if !strings.HasSuffix(r.ArchivePath, "my-plugin-1.0.0.agentpack") {
 					t.Errorf(
-						"ArchivePath = %q, expected suffix my-plugin-1.0.0.claudia",
+						"ArchivePath = %q, expected suffix my-plugin-1.0.0.agentpack",
 						r.ArchivePath,
 					)
 				}
@@ -238,7 +238,7 @@ description: A test plugin
 			wantErr: "not a git repository",
 		},
 		{
-			name: "fails when claudia.yaml missing",
+			name: "fails when agentpack.yaml missing",
 			setup: func(t *testing.T) (string, func()) {
 				t.Helper()
 				dir := t.TempDir()
@@ -248,7 +248,7 @@ description: A test plugin
 			opts: func(dir string) build.Options {
 				return build.Options{Dir: dir}
 			},
-			wantErr: "claudia.yaml not found",
+			wantErr: "agentpack.yaml not found",
 		},
 		{
 			name: "respects context cancellation",

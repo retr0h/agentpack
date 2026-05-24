@@ -25,13 +25,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/retr0h/claudia/pkg/cli"
-	"github.com/retr0h/claudia/pkg/verify"
+	"github.com/retr0h/agentpack/pkg/cli"
+	"github.com/retr0h/agentpack/pkg/verify"
 )
 
 var verifyCmd = &cobra.Command{
-	Use:   "verify <archive.claudia>",
-	Short: "Verify checksums of a .claudia archive",
+	Use:   "verify <archive.agentpack>",
+	Short: "Verify checksums of a .agentpack archive",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -44,7 +44,7 @@ var verifyCmd = &cobra.Command{
 
 		cli.Printf(
 			out, "%s %s\n\n",
-			cli.Mute(out, "claudia: verifying"),
+			cli.Mute(out, "agentpack: verifying"),
 			cli.Accent(out, result.ArchiveName),
 		)
 

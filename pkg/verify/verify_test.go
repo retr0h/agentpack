@@ -36,8 +36,8 @@ import (
 
 	"github.com/avfs/avfs/vfs/osfs"
 
-	"github.com/retr0h/claudia/pkg/archive"
-	"github.com/retr0h/claudia/pkg/verify"
+	"github.com/retr0h/agentpack/pkg/archive"
+	"github.com/retr0h/agentpack/pkg/verify"
 )
 
 // cancelAfterN returns nil from Err() for the first n calls, then returns a
@@ -75,16 +75,16 @@ func TestFindChecksums(t *testing.T) {
 		check   func(t *testing.T, path string)
 	}{
 		{
-			name: "finds checksums.txt inside .claudia dir",
+			name: "finds checksums.txt inside .agentpack dir",
 			setup: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				claudiaDir := filepath.Join(dir, "marketplaces", "my-plugin", ".claudia")
-				if err := os.MkdirAll(claudiaDir, 0o755); err != nil {
+				agentpackDir := filepath.Join(dir, "marketplaces", "my-plugin", ".agentpack")
+				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
 				if err := os.WriteFile(
-					filepath.Join(claudiaDir, "checksums.txt"),
+					filepath.Join(agentpackDir, "checksums.txt"),
 					[]byte("hash  file.txt\n"),
 					0o644,
 				); err != nil {
@@ -162,7 +162,7 @@ func sha256Hex(data []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-// buildValidArchive creates a .claudia archive with one file and a valid
+// buildValidArchive creates a .agentpack archive with one file and a valid
 // checksums.txt, returning the archive path.
 func buildValidArchive(t *testing.T) string {
 	t.Helper()
@@ -170,20 +170,20 @@ func buildValidArchive(t *testing.T) string {
 	dir := t.TempDir()
 	vfs := osfs.NewWithNoIdm()
 
-	content := []byte("hello claudia")
+	content := []byte("hello agentpack")
 	filePath := "marketplaces/my-plugin/skills/intro.md"
-	checksumPath := "marketplaces/my-plugin/.claudia/checksums.txt"
+	checksumPath := "marketplaces/my-plugin/.agentpack/checksums.txt"
 
 	skillHashStr := sha256Hex(content)
 	checksumLine := fmt.Sprintf("%s  %s\n", skillHashStr, filePath)
 
 	// The checksums.txt also checksums itself, but that creates a circular
-	// dependency. In practice claudia.yaml archives store checksums for the
+	// dependency. In practice agentpack.yaml archives store checksums for the
 	// content files only — the checksums.txt file is excluded from its own
 	// list. We keep it simple here: one file, one checksum entry.
 	checksumContent := checksumLine
 
-	outPath := filepath.Join(dir, "test.claudia")
+	outPath := filepath.Join(dir, "test.agentpack")
 	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: filePath, Content: content},
 		{ArchivePath: checksumPath, Content: []byte(checksumContent)},
@@ -204,13 +204,13 @@ func buildArchiveWithTamperedFile(t *testing.T) string {
 
 	content := []byte("original content")
 	filePath := "marketplaces/my-plugin/skills/intro.md"
-	checksumPath := "marketplaces/my-plugin/.claudia/checksums.txt"
+	checksumPath := "marketplaces/my-plugin/.agentpack/checksums.txt"
 
 	// Record a wrong hash to simulate tampering.
 	badHash := strings.Repeat("0", 64)
 	checksumContent := fmt.Sprintf("%s  %s\n", badHash, filePath)
 
-	outPath := filepath.Join(dir, "tampered.claudia")
+	outPath := filepath.Join(dir, "tampered.agentpack")
 	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: filePath, Content: content},
 		{ArchivePath: checksumPath, Content: []byte(checksumContent)},
@@ -228,7 +228,7 @@ func buildArchiveWithoutChecksums(t *testing.T) string {
 	dir := t.TempDir()
 	vfs := osfs.NewWithNoIdm()
 
-	outPath := filepath.Join(dir, "nochecksum.claudia")
+	outPath := filepath.Join(dir, "nochecksum.agentpack")
 	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: "marketplaces/my-plugin/skills/intro.md", Content: []byte("content")},
 	}); err != nil {
@@ -246,10 +246,10 @@ func buildArchiveWithBadChecksumsFormat(t *testing.T) string {
 	dir := t.TempDir()
 	vfs := osfs.NewWithNoIdm()
 
-	outPath := filepath.Join(dir, "badformat.claudia")
+	outPath := filepath.Join(dir, "badformat.agentpack")
 	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{
-			ArchivePath: "marketplaces/my-plugin/.claudia/checksums.txt",
+			ArchivePath: "marketplaces/my-plugin/.agentpack/checksums.txt",
 			Content:     []byte("badhash file.txt\n"), // missing double-space separator
 		},
 	}); err != nil {
@@ -264,7 +264,7 @@ func buildArchiveWithBadChecksumsFormat(t *testing.T) string {
 func buildTarWithSymlink(t *testing.T) string {
 	t.Helper()
 
-	outPath := filepath.Join(t.TempDir(), "symlink.claudia")
+	outPath := filepath.Join(t.TempDir(), "symlink.agentpack")
 	f, err := os.Create(outPath)
 	if err != nil {
 		t.Fatal(err)
@@ -351,7 +351,7 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name:        "malformed archive returns extract error",
-			archivePath: func(t *testing.T) string { return filepath.Join(t.TempDir(), "nonexistent.claudia") },
+			archivePath: func(t *testing.T) string { return filepath.Join(t.TempDir(), "nonexistent.agentpack") },
 			ctx:         func() context.Context { return context.Background() },
 			wantErr:     "extract",
 		},
@@ -372,7 +372,7 @@ func TestRun(t *testing.T) {
 			noParallel: true,
 			archivePath: func(t *testing.T) string {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "unused.claudia")
+				return filepath.Join(t.TempDir(), "unused.agentpack")
 			},
 			ctx: func() context.Context { return context.Background() },
 			injectFuncs: func(t *testing.T) {

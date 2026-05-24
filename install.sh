@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 #
-# claudia installer
-# Usage: curl -fsSL https://github.com/retr0h/claudia/raw/main/install.sh | bash
+# agentpack installer
+# Usage: curl -fsSL https://github.com/retr0h/agentpack/raw/main/install.sh | bash
 #
 # Env overrides:
-#   CLAUDIA_VERSION       install a specific version (e.g. 1.0.0) instead of latest
-#   CLAUDIA_INSTALL_DIR   force install destination, skipping the default rules
+#   AGENTPACK_VERSION       install a specific version (e.g. 1.0.0) instead of latest
+#   AGENTPACK_INSTALL_DIR   force install destination, skipping the default rules
 
 set -euo pipefail
-APP=claudia
+APP=agentpack
 
 # Visual style uses the Claude Code brand palette. ACCENT is the
 # Claude Code orange (#cc7c5e / R:204 G:124 B:94) — must match
-# ThemeClaude in pkg/cli/theme.go so curl|bash and `claudia --help`
+# ThemeClaude in pkg/cli/theme.go so curl|bash and `agentpack --help`
 # paint with the exact same hue.
 MUTED='\033[0;2m'
 RED='\033[0;31m'
@@ -20,7 +20,7 @@ ACCENT='\033[38;2;204;124;94m'
 NC='\033[0m' # reset
 
 err() {
-    printf "${RED}claudia: %s${NC}\n" "$1" >&2
+    printf "${RED}agentpack: %s${NC}\n" "$1" >&2
     exit 1
 }
 
@@ -92,7 +92,7 @@ download_with_progress() {
     fi
 
     local tmp_dir=${TMPDIR:-/tmp}
-    local basename="${tmp_dir}/claudia_install_$$"
+    local basename="${tmp_dir}/agentpack_install_$$"
     local tracefile="${basename}.trace"
 
     rm -f "$tracefile"
@@ -173,7 +173,7 @@ detect_os() {
     case "$raw" in
         Darwin)  os=darwin ;;
         Linux)   os=linux ;;
-        *)       err "unsupported OS: $raw — build from source: https://github.com/retr0h/claudia" ;;
+        *)       err "unsupported OS: $raw — build from source: https://github.com/retr0h/agentpack" ;;
     esac
 }
 
@@ -187,11 +187,11 @@ detect_arch() {
 }
 
 resolve_version() {
-    if [ -n "${CLAUDIA_VERSION:-}" ]; then
-        version=${CLAUDIA_VERSION#v}
+    if [ -n "${AGENTPACK_VERSION:-}" ]; then
+        version=${AGENTPACK_VERSION#v}
         return
     fi
-    tag=$(http_get https://api.github.com/repos/retr0h/claudia/releases/latest \
+    tag=$(http_get https://api.github.com/repos/retr0h/agentpack/releases/latest \
         | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
         | head -n1)
     if [ -z "$tag" ]; then
@@ -209,8 +209,8 @@ path_contains() {
 
 resolve_install_dir() {
     needs_symlink=0
-    if [ -n "${CLAUDIA_INSTALL_DIR:-}" ]; then
-        install_dir=$CLAUDIA_INSTALL_DIR
+    if [ -n "${AGENTPACK_INSTALL_DIR:-}" ]; then
+        install_dir=$AGENTPACK_INSTALL_DIR
         return
     fi
     if [ "$(id -u)" = "0" ]; then
@@ -225,42 +225,42 @@ resolve_install_dir() {
         install_dir=$HOME/bin
         return
     fi
-    install_dir=$HOME/.claudia/bin
+    install_dir=$HOME/.agentpack/bin
     needs_symlink=1
 }
 
 setup_tmp() {
-    tmp=$(mktemp -d 2>/dev/null || mktemp -d -t claudia-install)
+    tmp=$(mktemp -d 2>/dev/null || mktemp -d -t agentpack-install)
     trap 'rm -rf "$tmp"' EXIT
 }
 
 download() {
-    base=https://github.com/retr0h/claudia/releases/download/v${version}
-    asset=claudia_${version}_${os}_${arch}
+    base=https://github.com/retr0h/agentpack/releases/download/v${version}
+    asset=agentpack_${version}_${os}_${arch}
 
-    print_message info "\n${MUTED}Installing ${NC}claudia ${MUTED}version: ${NC}$version"
-    fetch "$base/$asset" "$tmp/claudia" progress \
+    print_message info "\n${MUTED}Installing ${NC}agentpack ${MUTED}version: ${NC}$version"
+    fetch "$base/$asset" "$tmp/agentpack" progress \
         || err "failed to download $base/$asset"
     fetch "$base/checksums.txt" "$tmp/checksums.txt" \
         || err "failed to download $base/checksums.txt"
 }
 
 verify_checksum() {
-    asset=claudia_${version}_${os}_${arch}
+    asset=agentpack_${version}_${os}_${arch}
     printf "${MUTED}Verifying checksum…${NC}\n"
     expected=$(grep " $asset\$" "$tmp/checksums.txt" | awk '{print $1}')
     if [ -z "$expected" ]; then
         err "no checksum entry for $asset in checksums.txt"
     fi
     if have shasum; then
-        actual=$(shasum -a 256 "$tmp/claudia" | awk '{print $1}')
+        actual=$(shasum -a 256 "$tmp/agentpack" | awk '{print $1}')
     elif have sha256sum; then
-        actual=$(sha256sum "$tmp/claudia" | awk '{print $1}')
+        actual=$(sha256sum "$tmp/agentpack" | awk '{print $1}')
     else
         err "neither shasum nor sha256sum found on PATH"
     fi
     if [ "$expected" != "$actual" ]; then
-        printf "${RED}claudia: checksum mismatch for %s${NC}\n  expected: %s\n  actual:   %s\n" \
+        printf "${RED}agentpack: checksum mismatch for %s${NC}\n  expected: %s\n  actual:   %s\n" \
             "$asset" "$expected" "$actual" >&2
         exit 1
     fi
@@ -268,36 +268,36 @@ verify_checksum() {
 
 strip_quarantine() {
     [ "$os" = "darwin" ] || return 0
-    xattr -d com.apple.quarantine "$tmp/claudia" 2>/dev/null || true
+    xattr -d com.apple.quarantine "$tmp/agentpack" 2>/dev/null || true
 }
 
 install_binary() {
     mkdir -p "$install_dir" || err "cannot create $install_dir"
-    install -m 755 "$tmp/claudia" "$install_dir/claudia" \
-        || err "cannot write to $install_dir/claudia"
+    install -m 755 "$tmp/agentpack" "$install_dir/agentpack" \
+        || err "cannot write to $install_dir/agentpack"
 }
 
 maybe_symlink() {
     [ "$needs_symlink" = "1" ] || return 0
     if [ -w /usr/local/bin ]; then
-        ln -sf "$install_dir/claudia" /usr/local/bin/claudia 2>/dev/null || true
+        ln -sf "$install_dir/agentpack" /usr/local/bin/agentpack 2>/dev/null || true
     fi
 }
 
 print_summary() {
     printf "\n"
-    printf "${MUTED}█▀▀ █░░ █▀█ █░█ █▀▄ █ █▀█${NC}   ${MUTED}installed to${NC} ${ACCENT}%s/claudia${NC}\n" "$install_dir"
-    printf "${ACCENT}█▄▄ █▄▄ █▀█ █▄█ █▄▀ █ █▀█${NC}   ${MUTED}version${NC} ${NC}%s${NC}\n" "$version"
+    printf "${MUTED}█▀█ █▀▀ █▀▀ █▄░█ ▀█▀ █▀█ █▀█ █▀▀ █▄▀${NC}   ${MUTED}installed to${NC} ${ACCENT}%s/agentpack${NC}\n" "$install_dir"
+    printf "${ACCENT}█▀█ █▄█ ██▄ █░▀█ ░█░ █▀▀ █▀█ █▄▄ █░█${NC}   ${MUTED}version${NC} ${NC}%s${NC}\n" "$version"
     printf "\n"
     if ! path_contains "$install_dir"; then
         print_message warning "Add this to your shell rc:"
         printf "  ${NC}export PATH=\"%s:\$PATH\"${NC}\n\n" "$install_dir"
     fi
     printf "${MUTED}Get started:${NC}\n"
-    printf "  claudia build                     ${MUTED}# build .claudia archives from claudia.yaml${NC}\n"
-    printf "  claudia verify archive.claudia    ${MUTED}# verify archive checksums${NC}\n"
+    printf "  agentpack build                     ${MUTED}# build .agentpack archives from agentpack.yaml${NC}\n"
+    printf "  agentpack verify archive.agentpack    ${MUTED}# verify archive checksums${NC}\n"
     printf "\n"
-    printf "${MUTED}Docs:${NC} https://github.com/retr0h/claudia\n"
+    printf "${MUTED}Docs:${NC} https://github.com/retr0h/agentpack\n"
     printf "\n"
 }
 

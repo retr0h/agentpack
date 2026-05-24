@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retr0h/claudia/pkg/fetcher"
+	"github.com/retr0h/agentpack/pkg/fetcher"
 )
 
 func TestNew(t *testing.T) {
@@ -39,47 +39,47 @@ func TestNew(t *testing.T) {
 	}{
 		{
 			name:     "absolute path returns FileFetcher",
-			source:   "/tmp/archive.claudia",
+			source:   "/tmp/archive.agentpack",
 			wantType: "*fetcher.FileFetcher",
 		},
 		{
 			name:     "relative path returns FileFetcher",
-			source:   "./archive.claudia",
+			source:   "./archive.agentpack",
 			wantType: "*fetcher.FileFetcher",
 		},
 		{
 			name:     "home-relative path returns FileFetcher",
-			source:   "~/downloads/archive.claudia",
+			source:   "~/downloads/archive.agentpack",
 			wantType: "*fetcher.FileFetcher",
 		},
 		{
 			name:     "bare filename returns FileFetcher",
-			source:   "archive.claudia",
+			source:   "archive.agentpack",
 			wantType: "*fetcher.FileFetcher",
 		},
 		{
 			name:     "http URL returns HTTPFetcher",
-			source:   "http://example.com/archive.claudia",
+			source:   "http://example.com/archive.agentpack",
 			wantType: "*fetcher.HTTPFetcher",
 		},
 		{
 			name:     "https URL returns HTTPFetcher",
-			source:   "https://example.com/archive.claudia",
+			source:   "https://example.com/archive.agentpack",
 			wantType: "*fetcher.HTTPFetcher",
 		},
 		{
 			name:    "s3 scheme returns error",
-			source:  "s3://bucket/archive.claudia",
+			source:  "s3://bucket/archive.agentpack",
 			wantErr: "s3 backend not yet implemented",
 		},
 		{
 			name:    "gs scheme returns error",
-			source:  "gs://bucket/archive.claudia",
+			source:  "gs://bucket/archive.agentpack",
 			wantErr: "gs backend not yet implemented",
 		},
 		{
 			name:    "unknown scheme returns error",
-			source:  "ftp://example.com/archive.claudia",
+			source:  "ftp://example.com/archive.agentpack",
 			wantErr: "unknown scheme",
 		},
 	}

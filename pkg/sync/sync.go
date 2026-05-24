@@ -18,7 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package sync provides declarative plugin sync from a claudia-packages.yaml.
+// Package sync provides declarative plugin sync from a agentpack-packages.yaml.
 package sync
 
 import (
@@ -28,15 +28,15 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/retr0h/claudia/pkg/install"
+	"github.com/retr0h/agentpack/pkg/install"
 )
 
-// PackagesFile represents the top-level structure of claudia-packages.yaml.
+// PackagesFile represents the top-level structure of agentpack-packages.yaml.
 type PackagesFile struct {
 	Packages []Package `yaml:"packages"`
 }
 
-// Package declares a single plugin source in claudia-packages.yaml.
+// Package declares a single plugin source in agentpack-packages.yaml.
 type Package struct {
 	Name   string `yaml:"name"`
 	Source string `yaml:"source"`
@@ -50,7 +50,7 @@ type Result struct {
 	Err     error
 }
 
-// Run reads configPath (a claudia-packages.yaml) and installs or updates every
+// Run reads configPath (a agentpack-packages.yaml) and installs or updates every
 // declared package into pluginDir. Results are returned for every package,
 // including failures. A non-nil error is returned only when the config file
 // itself cannot be read or parsed.

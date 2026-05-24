@@ -18,7 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package cmd contains the claudia cobra command tree.
+// Package cmd contains the agentpack cobra command tree.
 package cmd
 
 import (
@@ -30,12 +30,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/retr0h/claudia/pkg/cli"
+	"github.com/retr0h/agentpack/pkg/cli"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "claudia",
-	Short: "Git-free package manager for Claude Code plugins",
+	Use:   "agentpack",
+	Short: "The first git-free package manager for agentskills.io",
 }
 
 // Execute runs the root command; invoked by main.

@@ -38,10 +38,10 @@ import (
 
 	"github.com/avfs/avfs/vfs/osfs"
 
-	"github.com/retr0h/claudia/pkg/archive"
-	"github.com/retr0h/claudia/pkg/build"
-	"github.com/retr0h/claudia/pkg/install"
-	"github.com/retr0h/claudia/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/archive"
+	"github.com/retr0h/agentpack/pkg/build"
+	"github.com/retr0h/agentpack/pkg/install"
+	"github.com/retr0h/agentpack/pkg/metadata"
 )
 
 // --------------------------------------------------------------------------
@@ -80,12 +80,12 @@ func sha256Hex(data []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-// buildArchiveNoChecksums builds a .claudia archive with no checksums.txt.
+// buildArchiveNoChecksums builds a .agentpack archive with no checksums.txt.
 func buildArchiveNoChecksums(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	vfs := osfs.NewWithNoIdm()
-	outPath := filepath.Join(dir, "nochecksum.claudia")
+	outPath := filepath.Join(dir, "nochecksum.agentpack")
 	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{
 			ArchivePath: "marketplaces/my-plugin/skills/intro.md",
@@ -97,15 +97,15 @@ func buildArchiveNoChecksums(t *testing.T) string {
 	return outPath
 }
 
-// buildArchiveBadChecksums builds a .claudia archive with a malformed checksums.txt.
+// buildArchiveBadChecksums builds a .agentpack archive with a malformed checksums.txt.
 func buildArchiveBadChecksums(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	vfs := osfs.NewWithNoIdm()
-	outPath := filepath.Join(dir, "badchecksum.claudia")
+	outPath := filepath.Join(dir, "badchecksum.agentpack")
 	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{
-			ArchivePath: "marketplaces/my-plugin/.claudia/checksums.txt",
+			ArchivePath: "marketplaces/my-plugin/.agentpack/checksums.txt",
 			Content:     []byte("badhash file.txt\n"), // missing double-space
 		},
 	}); err != nil {
@@ -114,20 +114,20 @@ func buildArchiveBadChecksums(t *testing.T) string {
 	return outPath
 }
 
-// buildArchiveTamperedChecksum builds a .claudia archive where the checksum
+// buildArchiveTamperedChecksum builds a .agentpack archive where the checksum
 // does not match the actual file content.
 func buildArchiveTamperedChecksum(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	vfs := osfs.NewWithNoIdm()
-	outPath := filepath.Join(dir, "tampered.claudia")
+	outPath := filepath.Join(dir, "tampered.agentpack")
 	filePath := "marketplaces/my-plugin/skills/intro.md"
 	badHash := strings.Repeat("0", 64)
 	checksumContent := fmt.Sprintf("%s  %s\n", badHash, filePath)
 	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: filePath, Content: []byte("content")},
 		{
-			ArchivePath: "marketplaces/my-plugin/.claudia/checksums.txt",
+			ArchivePath: "marketplaces/my-plugin/.agentpack/checksums.txt",
 			Content:     []byte(checksumContent),
 		},
 	}); err != nil {
@@ -142,14 +142,14 @@ func buildArchiveNoMetadata(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	vfs := osfs.NewWithNoIdm()
-	outPath := filepath.Join(dir, "nometa.claudia")
+	outPath := filepath.Join(dir, "nometa.agentpack")
 	content := []byte("# Intro")
 	filePath := "marketplaces/my-plugin/skills/intro.md"
 	checksumContent := fmt.Sprintf("%s  %s\n", sha256Hex(content), filePath)
 	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: filePath, Content: content},
 		{
-			ArchivePath: "marketplaces/my-plugin/.claudia/checksums.txt",
+			ArchivePath: "marketplaces/my-plugin/.agentpack/checksums.txt",
 			Content:     []byte(checksumContent),
 		},
 	}); err != nil {
@@ -158,8 +158,8 @@ func buildArchiveNoMetadata(t *testing.T) string {
 	return outPath
 }
 
-// buildArchiveNoMarketplace builds an archive where a .claudia/checksums.txt
-// and .claudia/metadata.json exist but there is no marketplaces/ directory,
+// buildArchiveNoMarketplace builds an archive where a .agentpack/checksums.txt
+// and .agentpack/metadata.json exist but there is no marketplaces/ directory,
 // triggering findMarketplaceDir's "read marketplaces dir" error which is
 // caught and returned as "no marketplace directory found" from Run.
 //
@@ -168,7 +168,7 @@ func buildArchiveNoMetadata(t *testing.T) string {
 func buildArchiveNoMarketplace(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	outPath := filepath.Join(dir, "nomarketplace.claudia")
+	outPath := filepath.Join(dir, "nomarketplace.agentpack")
 	f, err := os.Create(outPath)
 	if err != nil {
 		t.Fatal(err)
@@ -181,8 +181,8 @@ func buildArchiveNoMarketplace(t *testing.T) string {
 
 	content := []byte("content")
 	hash := sha256Hex(content)
-	// Place files directly at top-level .claudia/ — no marketplaces/ at all.
-	filePath := ".claudia/file.txt"
+	// Place files directly at top-level .agentpack/ — no marketplaces/ at all.
+	filePath := ".agentpack/file.txt"
 	checksumLine := fmt.Sprintf("%s  %s\n", hash, filePath)
 
 	metaJSON, _ := json.Marshal(metadata.Metadata{
@@ -195,8 +195,8 @@ func buildArchiveNoMarketplace(t *testing.T) string {
 		content []byte
 	}{
 		{filePath, content},
-		{".claudia/checksums.txt", []byte(checksumLine)},
-		{".claudia/metadata.json", metaJSON},
+		{".agentpack/checksums.txt", []byte(checksumLine)},
+		{".agentpack/metadata.json", metaJSON},
 	} {
 		hdr := &tar.Header{
 			Name:     e.name,
@@ -250,13 +250,13 @@ func initGitRepo(t *testing.T, dir string) {
 	run("commit", "-m", "init")
 }
 
-// buildTestArchive creates a .claudia archive in dir using the build pipeline
+// buildTestArchive creates a .agentpack archive in dir using the build pipeline
 // and returns the path to the archive.
 func buildTestArchive(t *testing.T, dir string, manifest string) string {
 	t.Helper()
 
-	if err := os.WriteFile(filepath.Join(dir, "claudia.yaml"), []byte(manifest), 0o644); err != nil {
-		t.Fatalf("write claudia.yaml: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write agentpack.yaml: %v", err)
 	}
 
 	vfs := osfs.NewWithNoIdm()
@@ -322,7 +322,7 @@ description: A test plugin
 					t.Errorf("plugin dir not found: %v", err)
 				}
 				// Verify metadata.json exists in the installed dir.
-				metaPath := filepath.Join(r.Dir, ".claudia", "metadata.json")
+				metaPath := filepath.Join(r.Dir, ".agentpack", "metadata.json")
 				if _, err := os.Stat(metaPath); err != nil {
 					t.Errorf("metadata.json not found: %v", err)
 				}
@@ -361,7 +361,7 @@ description: Updated plugin
 			name: "returns error when source has unknown scheme",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				return "gs://my-bucket/plugin.claudia", t.TempDir()
+				return "gs://my-bucket/plugin.agentpack", t.TempDir()
 			},
 			wantErr: "fetcher",
 		},
@@ -369,7 +369,7 @@ description: Updated plugin
 			name: "returns error when archive does not exist",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				return "/nonexistent/path.claudia", t.TempDir()
+				return "/nonexistent/path.agentpack", t.TempDir()
 			},
 			wantErr: "fetch",
 		},
@@ -473,7 +473,7 @@ description: Plugin for ctx after meta test
 			noParallel: true,
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				return "/some/path.claudia", t.TempDir()
+				return "/some/path.agentpack", t.TempDir()
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
@@ -509,7 +509,7 @@ description: Plugin for mkdir temp test
 				t.Helper()
 				dir := t.TempDir()
 				// Write non-gzip data to make archive.Extract fail.
-				archivePath := filepath.Join(dir, "corrupt.claudia")
+				archivePath := filepath.Join(dir, "corrupt.agentpack")
 				if err := os.WriteFile(archivePath, []byte("not gzip data"), 0o644); err != nil {
 					t.Fatalf("write: %v", err)
 				}
@@ -977,15 +977,15 @@ func TestFindChecksums(t *testing.T) {
 		check   func(t *testing.T, path string)
 	}{
 		{
-			name: "finds checksums.txt inside .claudia dir",
+			name: "finds checksums.txt inside .agentpack dir",
 			setup: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				claudiaDir := filepath.Join(dir, "marketplaces", "my-plugin", ".claudia")
-				if err := os.MkdirAll(claudiaDir, 0o755); err != nil {
+				agentpackDir := filepath.Join(dir, "marketplaces", "my-plugin", ".agentpack")
+				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
-				checksumPath := filepath.Join(claudiaDir, "checksums.txt")
+				checksumPath := filepath.Join(agentpackDir, "checksums.txt")
 				if err := os.WriteFile(checksumPath, []byte("hash  file.txt\n"), 0o644); err != nil {
 					t.Fatalf("write checksums.txt: %v", err)
 				}
@@ -1063,12 +1063,12 @@ func TestFindAndReadMetadata(t *testing.T) {
 		check   func(t *testing.T, m any)
 	}{
 		{
-			name: "finds and reads metadata.json inside .claudia dir",
+			name: "finds and reads metadata.json inside .agentpack dir",
 			setup: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				claudiaDir := filepath.Join(dir, "marketplaces", "my-plugin", ".claudia")
-				if err := os.MkdirAll(claudiaDir, 0o755); err != nil {
+				agentpackDir := filepath.Join(dir, "marketplaces", "my-plugin", ".agentpack")
+				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
 				meta := metadata.Metadata{
@@ -1079,7 +1079,7 @@ func TestFindAndReadMetadata(t *testing.T) {
 				if err != nil {
 					t.Fatalf("marshal: %v", err)
 				}
-				if err := os.WriteFile(filepath.Join(claudiaDir, "metadata.json"), data, 0o644); err != nil {
+				if err := os.WriteFile(filepath.Join(agentpackDir, "metadata.json"), data, 0o644); err != nil {
 					t.Fatalf("write metadata.json: %v", err)
 				}
 				return dir
@@ -1104,11 +1104,11 @@ func TestFindAndReadMetadata(t *testing.T) {
 			setup: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				claudiaDir := filepath.Join(dir, "marketplaces", "my-plugin", ".claudia")
-				if err := os.MkdirAll(claudiaDir, 0o755); err != nil {
+				agentpackDir := filepath.Join(dir, "marketplaces", "my-plugin", ".agentpack")
+				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
-				if err := os.WriteFile(filepath.Join(claudiaDir, "metadata.json"), []byte("not json {{{"), 0o644); err != nil {
+				if err := os.WriteFile(filepath.Join(agentpackDir, "metadata.json"), []byte("not json {{{"), 0o644); err != nil {
 					t.Fatalf("write: %v", err)
 				}
 				return dir
@@ -1134,11 +1134,11 @@ func TestFindAndReadMetadata(t *testing.T) {
 			setup: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				claudiaDir := filepath.Join(dir, "marketplaces", "my-plugin", ".claudia")
-				if err := os.MkdirAll(claudiaDir, 0o755); err != nil {
+				agentpackDir := filepath.Join(dir, "marketplaces", "my-plugin", ".agentpack")
+				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
-				metaPath := filepath.Join(claudiaDir, "metadata.json")
+				metaPath := filepath.Join(agentpackDir, "metadata.json")
 				if err := os.WriteFile(metaPath, []byte(`{"name":"p"}`), 0o000); err != nil {
 					t.Fatalf("write: %v", err)
 				}

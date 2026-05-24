@@ -27,15 +27,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retr0h/claudia/pkg/list"
-	"github.com/retr0h/claudia/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/list"
+	"github.com/retr0h/agentpack/pkg/metadata"
 )
 
-// writeMeta writes a metadata.json into pluginDir/marketplaces/<name>/.claudia/.
+// writeMeta writes a metadata.json into pluginDir/marketplaces/<name>/.agentpack/.
 func writeMeta(t *testing.T, pluginDir string, meta metadata.Metadata) {
 	t.Helper()
 
-	dir := filepath.Join(pluginDir, "marketplaces", meta.Name, ".claudia")
+	dir := filepath.Join(pluginDir, "marketplaces", meta.Name, ".agentpack")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -158,16 +158,16 @@ func TestRun(t *testing.T) {
 			},
 		},
 		{
-			name: "skips non-claudia directories without metadata.json",
+			name: "skips non-agentpack directories without metadata.json",
 			setup: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				// A directory without .claudia/metadata.json.
+				// A directory without .agentpack/metadata.json.
 				nonClaudia := filepath.Join(dir, "marketplaces", "git-plugin")
 				if err := os.MkdirAll(nonClaudia, 0o755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
-				// A proper claudia plugin.
+				// A proper agentpack plugin.
 				writeMeta(t, dir, metadata.Metadata{
 					Name:           "acme-toolkit",
 					Version:        "1.0.0",
@@ -191,12 +191,12 @@ func TestRun(t *testing.T) {
 			setup: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				claudiaDir := filepath.Join(dir, "marketplaces", "bad-plugin", ".claudia")
-				if err := os.MkdirAll(claudiaDir, 0o755); err != nil {
+				agentpackDir := filepath.Join(dir, "marketplaces", "bad-plugin", ".agentpack")
+				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
 				if err := os.WriteFile(
-					filepath.Join(claudiaDir, "metadata.json"),
+					filepath.Join(agentpackDir, "metadata.json"),
 					[]byte("not json"),
 					0o644,
 				); err != nil {
@@ -267,7 +267,7 @@ func TestRun(t *testing.T) {
 				); err != nil {
 					t.Fatalf("write: %v", err)
 				}
-				// A proper claudia plugin alongside it.
+				// A proper agentpack plugin alongside it.
 				writeMeta(t, dir, metadata.Metadata{
 					Name:           "real-plugin",
 					Version:        "1.0.0",

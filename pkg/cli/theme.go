@@ -30,7 +30,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Theme is a palette covering claudia's CLI surface.
+// Theme is a palette covering agentpack's CLI surface.
 type Theme struct {
 	Name      string
 	Mute      lipgloss.Style
@@ -74,10 +74,10 @@ func render(w io.Writer, st lipgloss.Style, s string) string {
 	return st.Renderer(rendererFor(w)).Render(s)
 }
 
-// Banner returns the CLAUDIA block-letter logo.
+// Banner returns the AGENTPACK block-letter logo.
 func Banner(w io.Writer) string {
-	const top = "█▀▀ █░░ █▀█ █░█ █▀▄ █ █▀█"
-	const bot = "█▄▄ █▄▄ █▀█ █▄█ █▄▀ █ █▀█"
+	const top = "█▀█ █▀▀ █▀▀ █▄░█ ▀█▀ █▀█ █▀█ █▀▀ █▄▀"
+	const bot = "█▀█ █▄█ ██▄ █░▀█ ░█░ █▀▀ █▀█ █▄▄ █░█"
 	return render(w, active.BannerTop, top) + "\n" +
 		render(w, active.BannerBot, bot) + "\n"
 }

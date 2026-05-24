@@ -18,7 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package install orchestrates the claudia install pipeline.
+// Package install orchestrates the agentpack install pipeline.
 package install
 
 import (
@@ -29,10 +29,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/retr0h/claudia/pkg/archive"
-	"github.com/retr0h/claudia/pkg/checksum"
-	"github.com/retr0h/claudia/pkg/fetcher"
-	"github.com/retr0h/claudia/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/archive"
+	"github.com/retr0h/agentpack/pkg/checksum"
+	"github.com/retr0h/agentpack/pkg/fetcher"
+	"github.com/retr0h/agentpack/pkg/metadata"
 )
 
 // Swappable OS functions for testing.
@@ -49,7 +49,7 @@ var (
 
 // Options configures an install run.
 type Options struct {
-	Source    string // local path or URL to .claudia archive
+	Source    string // local path or URL to .agentpack archive
 	PluginDir string // ~/.claude/plugins/ (target directory)
 }
 
@@ -61,13 +61,13 @@ type Result struct {
 	Dir     string // where the plugin was extracted to
 }
 
-// Run installs a single .claudia archive into PluginDir.
+// Run installs a single .agentpack archive into PluginDir.
 //
 // The pipeline:
 //  1. Fetch the archive (local copy or remote download) into a temp file.
 //  2. Extract the archive into a temp directory.
 //  3. Verify all checksums.
-//  4. Read .claudia/metadata.json from the extraction to obtain plugin identity.
+//  4. Read .agentpack/metadata.json from the extraction to obtain plugin identity.
 //  5. Move the marketplace directory from temp to PluginDir.
 func Run(ctx context.Context, opts Options) (*Result, error) {
 	if err := ctx.Err(); err != nil {
@@ -80,7 +80,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	// Fetch to a temp file.
-	tmpFile, err := osCreateTemp("", "claudia-install-*.claudia")
+	tmpFile, err := osCreateTemp("", "agentpack-install-*.agentpack")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
@@ -97,7 +97,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	// Extract to a temp dir for verification.
-	tmpDir, err := osMkdirTemp("", "claudia-install-*")
+	tmpDir, err := osMkdirTemp("", "agentpack-install-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
@@ -182,7 +182,7 @@ func findChecksums(dir string) (string, error) {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && d.Name() == "checksums.txt" && strings.Contains(path, ".claudia") {
+		if !d.IsDir() && d.Name() == "checksums.txt" && strings.Contains(path, ".agentpack") {
 			found = path
 			return filepath.SkipAll
 		}
@@ -199,7 +199,7 @@ func findChecksums(dir string) (string, error) {
 	return found, nil
 }
 
-// findAndReadMetadata locates and parses .claudia/metadata.json.
+// findAndReadMetadata locates and parses .agentpack/metadata.json.
 func findAndReadMetadata(dir string) (*metadata.Metadata, error) {
 	var found string
 
@@ -207,7 +207,7 @@ func findAndReadMetadata(dir string) (*metadata.Metadata, error) {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && d.Name() == "metadata.json" && strings.Contains(path, ".claudia") {
+		if !d.IsDir() && d.Name() == "metadata.json" && strings.Contains(path, ".agentpack") {
 			found = path
 			return filepath.SkipAll
 		}

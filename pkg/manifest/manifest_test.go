@@ -31,14 +31,14 @@ import (
 	"github.com/avfs/avfs/vfs/memfs"
 	"gopkg.in/yaml.v3"
 
-	"github.com/retr0h/claudia/pkg/manifest"
+	"github.com/retr0h/agentpack/pkg/manifest"
 )
 
 // --------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------
 
-// memfsWithYAML creates a memfs, writes content as claudia.yaml under /dir,
+// memfsWithYAML creates a memfs, writes content as agentpack.yaml under /dir,
 // and returns the VFS and the directory path "/dir".
 func memfsWithYAML(t *testing.T, content string) (avfs.VFS, string) {
 	t.Helper()
@@ -46,8 +46,8 @@ func memfsWithYAML(t *testing.T, content string) (avfs.VFS, string) {
 	if err := vfs.MkdirAll("/dir", 0o755); err != nil {
 		t.Fatalf("MkdirAll /dir: %v", err)
 	}
-	if err := vfs.WriteFile("/dir/claudia.yaml", []byte(content), fs.FileMode(0o644)); err != nil {
-		t.Fatalf("WriteFile claudia.yaml: %v", err)
+	if err := vfs.WriteFile("/dir/agentpack.yaml", []byte(content), fs.FileMode(0o644)); err != nil {
+		t.Fatalf("WriteFile agentpack.yaml: %v", err)
 	}
 	return vfs, "/dir"
 }
@@ -57,7 +57,7 @@ func memfsWithYAML(t *testing.T, content string) (avfs.VFS, string) {
 // --------------------------------------------------------------------------
 
 // readFileErrorVFS wraps avfs.VFS and returns an error from ReadFile for any
-// path that exists. Used to trigger the "reading claudia.yaml" error branch.
+// path that exists. Used to trigger the "reading agentpack.yaml" error branch.
 type readFileErrorVFS struct {
 	avfs.VFS
 }
@@ -165,7 +165,7 @@ plugins:
 				t.Helper()
 				return memfsWithYAML(t, "plugins: []\n")
 			},
-			wantErr: "no plugins defined in claudia.yaml",
+			wantErr: "no plugins defined in agentpack.yaml",
 		},
 		{
 			name: "multi plugin missing name",
@@ -207,14 +207,14 @@ plugins:
 			name: "file not found",
 			setupVFS: func(t *testing.T) (avfs.VFS, string) {
 				t.Helper()
-				// Return an empty memfs with no claudia.yaml — triggers IsNotExist.
+				// Return an empty memfs with no agentpack.yaml — triggers IsNotExist.
 				vfs := memfs.New()
 				if err := vfs.MkdirAll("/dir", 0o755); err != nil {
 					t.Fatal(err)
 				}
 				return vfs, "/dir"
 			},
-			wantErr: "claudia.yaml not found in",
+			wantErr: "agentpack.yaml not found in",
 		},
 		{
 			name: "non-IsNotExist read error triggers reading branch",
@@ -224,7 +224,7 @@ plugins:
 				// is not an IsNotExist error, so it hits the reading branch.
 				return readFileErrorVFS{VFS: memfs.New()}, "/dir"
 			},
-			wantErr: "reading claudia.yaml",
+			wantErr: "reading agentpack.yaml",
 		},
 		{
 			name: "malformed YAML returns parse error",
@@ -233,7 +233,7 @@ plugins:
 				// Write invalid YAML to trigger the yaml.Unmarshal error branch.
 				return memfsWithYAML(t, "name: [invalid yaml\n")
 			},
-			wantErr: "parsing claudia.yaml",
+			wantErr: "parsing agentpack.yaml",
 		},
 	}
 

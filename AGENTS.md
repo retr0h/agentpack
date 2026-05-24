@@ -10,8 +10,8 @@ they should have enough context to work safely up to that depth.
 
 ## What is this?
 
-claudia is a git-free package manager for Claude Code plugins. It builds,
-checksums, and distributes plugin archives (`.claudia` tarballs) so
+agentpack is a git-free package manager for Claude Code plugins. It builds,
+checksums, and distributes plugin archives (`.agentpack` tarballs) so
 non-technical users can install Claude Code skills, commands, hooks, agents,
 MCP servers, and settings without needing git, Go, or any build toolchain.
 
@@ -48,10 +48,10 @@ pkg/cli/           Themed terminal output (banner, colors)
 pkg/fetcher/       Backend interface + drivers (file, http)
 pkg/install/       Install pipeline orchestration
 pkg/list/          List installed plugins
-pkg/manifest/      claudia.yaml parsing and validation
+pkg/manifest/      agentpack.yaml parsing and validation
 pkg/metadata/      Git SHA, version, timestamp capture
 pkg/plugin/        Claude Code plugin structure generation
-pkg/sync/          Declarative sync from claudia-packages.yaml
+pkg/sync/          Declarative sync from agentpack-packages.yaml
 pkg/verify/        Verify pipeline orchestration
 ```
 

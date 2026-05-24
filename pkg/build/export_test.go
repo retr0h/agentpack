@@ -26,8 +26,8 @@ import (
 
 	"github.com/avfs/avfs"
 
-	"github.com/retr0h/claudia/pkg/archive"
-	"github.com/retr0h/claudia/pkg/checksum"
+	"github.com/retr0h/agentpack/pkg/archive"
+	"github.com/retr0h/agentpack/pkg/checksum"
 )
 
 // FileEntry aliases archive.FileEntry for use in build_test.go without

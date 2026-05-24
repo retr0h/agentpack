@@ -18,7 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package verify orchestrates the claudia archive verification pipeline.
+// Package verify orchestrates the agentpack archive verification pipeline.
 package verify
 
 import (
@@ -28,8 +28,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/retr0h/claudia/pkg/archive"
-	"github.com/retr0h/claudia/pkg/checksum"
+	"github.com/retr0h/agentpack/pkg/archive"
+	"github.com/retr0h/agentpack/pkg/checksum"
 )
 
 // osMkdirTemp is swappable for testing.
@@ -42,13 +42,13 @@ type FileResult struct {
 	Err  string
 }
 
-// Result holds the outcome of verifying a .claudia archive.
+// Result holds the outcome of verifying a .agentpack archive.
 type Result struct {
 	ArchiveName string
 	Files       []FileResult
 }
 
-// Run extracts a .claudia archive to a temp directory, locates checksums.txt,
+// Run extracts a .agentpack archive to a temp directory, locates checksums.txt,
 // and verifies every file listed in it. It returns a Result describing each
 // file's verification status. A non-nil error is returned only when the
 // overall operation cannot proceed (e.g. cannot extract or find checksums.txt).
@@ -57,7 +57,7 @@ func Run(ctx context.Context, archivePath string) (*Result, error) {
 		return nil, err
 	}
 
-	tmpDir, err := osMkdirTemp("", "claudia-verify-*")
+	tmpDir, err := osMkdirTemp("", "agentpack-verify-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
@@ -106,7 +106,7 @@ func Run(ctx context.Context, archivePath string) (*Result, error) {
 }
 
 // findChecksums walks dir searching for a checksums.txt file inside a
-// .claudia directory. Returns an error if not found.
+// .agentpack directory. Returns an error if not found.
 func findChecksums(dir string) (string, error) {
 	var found string
 
@@ -114,7 +114,7 @@ func findChecksums(dir string) (string, error) {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && d.Name() == "checksums.txt" && strings.Contains(path, ".claudia") {
+		if !d.IsDir() && d.Name() == "checksums.txt" && strings.Contains(path, ".agentpack") {
 			found = path
 			return filepath.SkipAll
 		}

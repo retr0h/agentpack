@@ -19,7 +19,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package fetcher provides a backend interface and drivers for retrieving
-// .claudia archives from local paths or remote URLs.
+// .agentpack archives from local paths or remote URLs.
 package fetcher
 
 import (
@@ -28,7 +28,7 @@ import (
 	"strings"
 )
 
-// Fetcher retrieves a .claudia archive from a source URI to a local path.
+// Fetcher retrieves a .agentpack archive from a source URI to a local path.
 type Fetcher interface {
 	Fetch(ctx context.Context, source string, dest string) error
 }

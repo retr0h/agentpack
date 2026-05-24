@@ -18,7 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package manifest handles claudia.yaml parsing and validation.
+// Package manifest handles agentpack.yaml parsing and validation.
 package manifest
 
 import (
@@ -30,7 +30,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Manifest is the top-level structure of a claudia.yaml file. It supports both
+// Manifest is the top-level structure of a agentpack.yaml file. It supports both
 // single-plugin (name/version/description at the top level) and multi-plugin
 // (plugins[] array) forms. The two forms are mutually exclusive.
 type Manifest struct {
@@ -55,7 +55,7 @@ type Manifest struct {
 }
 
 // Plugin represents a single plugin entry in the multi-plugin form of
-// claudia.yaml.
+// agentpack.yaml.
 type Plugin struct {
 	Name        string     `yaml:"name"`
 	Version     string     `yaml:"version"`
@@ -113,23 +113,23 @@ func (e *Entry) UnmarshalYAML(value *yaml.Node) error {
 	return value.Decode((*raw)(e))
 }
 
-// Load reads claudia.yaml from dir using vfs, unmarshals it, and validates it.
+// Load reads agentpack.yaml from dir using vfs, unmarshals it, and validates it.
 // It returns an error when the file is missing, malformed, or fails
 // validation.
 func Load(_ context.Context, vfs avfs.VFS, dir string) (*Manifest, error) {
-	path := filepath.Join(dir, "claudia.yaml")
+	path := filepath.Join(dir, "agentpack.yaml")
 
 	data, err := vfs.ReadFile(path)
 	if err != nil {
 		if avfs.IsNotExist(err) {
-			return nil, fmt.Errorf("claudia.yaml not found in %s", dir)
+			return nil, fmt.Errorf("agentpack.yaml not found in %s", dir)
 		}
-		return nil, fmt.Errorf("reading claudia.yaml: %w", err)
+		return nil, fmt.Errorf("reading agentpack.yaml: %w", err)
 	}
 
 	var m Manifest
 	if err := yaml.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("parsing claudia.yaml: %w", err)
+		return nil, fmt.Errorf("parsing agentpack.yaml: %w", err)
 	}
 
 	if err := validate(&m); err != nil {
@@ -152,7 +152,7 @@ func validate(m *Manifest) error {
 
 	// Explicit empty plugins list: plugins: [] was written but has no entries.
 	if m.Plugins != nil && len(m.Plugins) == 0 {
-		return fmt.Errorf("no plugins defined in claudia.yaml")
+		return fmt.Errorf("no plugins defined in agentpack.yaml")
 	}
 
 	// Multi-plugin form.

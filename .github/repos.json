@@ -30,7 +30,7 @@
   },
   "repos": [
     {
-      "name": "claudia",
+      "name": "agentpack",
       "description": "Git-free package manager for Claude Code plugins.",
       "topics": ["claude", "claude-code", "plugins", "package-manager", "go", "golang", "cli"]
     }

@@ -26,7 +26,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/retr0h/claudia/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/metadata"
 )
 
 // SetRenameFunc replaces the package-level renameFunc with f for the duration

@@ -27,14 +27,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/retr0h/claudia/pkg/cli"
-	"github.com/retr0h/claudia/pkg/install"
+	"github.com/retr0h/agentpack/pkg/cli"
+	"github.com/retr0h/agentpack/pkg/install"
 )
 
 var installCmd = &cobra.Command{
 	Use:   "install <source>",
-	Short: "Install a .claudia archive",
-	Long: `Install a .claudia archive into the Claude Code plugin directory.
+	Short: "Install a .agentpack archive",
+	Long: `Install a .agentpack archive into the Claude Code plugin directory.
 Source may be a local file path or an HTTP/HTTPS URL.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -58,7 +58,7 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 		cli.Printf(
 			out,
 			"%s %s %s (%s)\n\n",
-			cli.Mute(out, "claudia: installing"),
+			cli.Mute(out, "agentpack: installing"),
 			cli.Accent(out, result.Name),
 			cli.Mute(out, "v"+result.Version),
 			cli.Mute(out, result.SHA),

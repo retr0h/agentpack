@@ -18,7 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package build orchestrates the claudia build pipeline.
+// Package build orchestrates the agentpack build pipeline.
 package build
 
 import (
@@ -31,11 +31,11 @@ import (
 	"github.com/avfs/avfs"
 	"gopkg.in/yaml.v3"
 
-	"github.com/retr0h/claudia/pkg/archive"
-	"github.com/retr0h/claudia/pkg/checksum"
-	"github.com/retr0h/claudia/pkg/manifest"
-	"github.com/retr0h/claudia/pkg/metadata"
-	"github.com/retr0h/claudia/pkg/plugin"
+	"github.com/retr0h/agentpack/pkg/archive"
+	"github.com/retr0h/agentpack/pkg/checksum"
+	"github.com/retr0h/agentpack/pkg/manifest"
+	"github.com/retr0h/agentpack/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/plugin"
 )
 
 // Options configures a build run.
@@ -103,7 +103,7 @@ func filterPlugins(plugins []manifest.Plugin, names []string) ([]manifest.Plugin
 	for _, n := range names {
 		p, ok := idx[n]
 		if !ok {
-			return nil, fmt.Errorf("plugin %q not found in claudia.yaml", n)
+			return nil, fmt.Errorf("plugin %q not found in agentpack.yaml", n)
 		}
 		result = append(result, p)
 	}
@@ -192,16 +192,16 @@ func buildPlugin(
 		return Result{}, fmt.Errorf("marshaling metadata: %w", err)
 	}
 	files = append(files, archive.FileEntry{
-		ArchivePath: path.Join(prefix, ".claudia/metadata.json"),
+		ArchivePath: path.Join(prefix, ".agentpack/metadata.json"),
 		Content:     metaJSON,
 	})
 
 	manifestYAML, err := yaml.Marshal(p)
 	if err != nil {
-		return Result{}, fmt.Errorf("marshaling claudia.yaml: %w", err)
+		return Result{}, fmt.Errorf("marshaling agentpack.yaml: %w", err)
 	}
 	files = append(files, archive.FileEntry{
-		ArchivePath: path.Join(prefix, ".claudia/claudia.yaml"),
+		ArchivePath: path.Join(prefix, ".agentpack/agentpack.yaml"),
 		Content:     manifestYAML,
 	})
 
@@ -211,11 +211,11 @@ func buildPlugin(
 	}
 	checksumContent := formatChecksums(checksumEntries)
 	files = append(files, archive.FileEntry{
-		ArchivePath: path.Join(prefix, ".claudia/checksums.txt"),
+		ArchivePath: path.Join(prefix, ".agentpack/checksums.txt"),
 		Content:     checksumContent,
 	})
 
-	outputName := fmt.Sprintf("%s-%s.claudia", p.Name, p.Version)
+	outputName := fmt.Sprintf("%s-%s.agentpack", p.Name, p.Version)
 	outputPath := filepath.Join(dir, outputName)
 
 	if err := archive.Create(ctx, vfs, outputPath, files); err != nil {

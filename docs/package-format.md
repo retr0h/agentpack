@@ -1,6 +1,6 @@
 # Package Format
 
-## claudia.yaml — build manifest
+## agentpack.yaml — build manifest
 
 Declares what to package. Lives at the root of the plugin repo.
 
@@ -136,25 +136,25 @@ instead of generating one.
 
 ---
 
-## claudia-packages.yaml — sync manifest
+## agentpack-packages.yaml — sync manifest
 
 Declares what should be installed on the target machine. Used by
-`claudia sync`.
+`agentpack sync`.
 
 ```yaml
 packages:
   - name: my-plugin
     source: https://drive.google.com/uc?id=1ABC&export=download
   - name: local-plugin
-    source: ~/Downloads/local-plugin-1.0.0.claudia
+    source: ~/Downloads/local-plugin-1.0.0.agentpack
   - name: s3-plugin
-    source: s3://my-bucket/plugins/s3-plugin-1.0.0.claudia
+    source: s3://my-bucket/plugins/s3-plugin-1.0.0.agentpack
 ```
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | yes | Plugin name (for display) |
-| `source` | yes | Local path or URL to the `.claudia` archive |
+| `source` | yes | Local path or URL to the `.agentpack` archive |
 
 Supported source schemes:
 
@@ -167,24 +167,24 @@ Supported source schemes:
 
 ---
 
-## .claudia archive format
+## .agentpack archive format
 
-A `.claudia` file is a gzipped tarball (`.tar.gz` with a `.claudia`
+A `.agentpack` file is a gzipped tarball (`.tar.gz` with a `.agentpack`
 extension). The internal layout mirrors `~/.claude/plugins/` so the end
-user can install with `claudia install` or plain `tar`.
+user can install with `agentpack install` or plain `tar`.
 
 ### Archive layout
 
 ```
-my-plugin-1.0.0.claudia
+my-plugin-1.0.0.agentpack
   marketplaces/my-plugin/
     .claude-plugin/
       marketplace.json        # Generated — Claude Code marketplace descriptor
       plugin.json             # Generated — Claude Code plugin descriptor
-    .claudia/
+    .agentpack/
       metadata.json           # Generated — git SHA, version, timestamps
       checksums.txt           # Generated — per-file SHA256 checksums
-      claudia.yaml            # Copy of the manifest for this plugin
+      agentpack.yaml            # Copy of the manifest for this plugin
     skills/
       *.md
     commands/
@@ -239,7 +239,7 @@ Single-plugin marketplace pattern — the marketplace IS the plugin:
 The `commands` array is populated from resolved command entries. Skills
 are discovered by Claude Code via the directory structure.
 
-#### `.claudia/metadata.json`
+#### `.agentpack/metadata.json`
 
 Captured at build time from the git repo:
 
@@ -255,7 +255,7 @@ Captured at build time from the git repo:
 }
 ```
 
-#### `.claudia/checksums.txt`
+#### `.agentpack/checksums.txt`
 
 Every file in the archive (except `checksums.txt` itself) gets a SHA256
 checksum. Format matches `sha256sum(1)` output — two spaces between
@@ -305,7 +305,7 @@ binary.
 
 ### Metadata directory
 
-The `.claudia/` metadata directory lives inside `marketplaces/{name}/`,
+The `.agentpack/` metadata directory lives inside `marketplaces/{name}/`,
 not at the archive root. This means:
 
 - **No collision** — each plugin's metadata is namespaced. Untarring ten
@@ -313,15 +313,15 @@ not at the archive root. This means:
 - **Self-contained** — delete `marketplaces/my-plugin/` and the metadata
   goes with it.
 - **Follows Claude Code convention** — Claude Code puts `.claude-plugin/`
-  inside the marketplace directory. `.claudia/` is the same pattern.
+  inside the marketplace directory. `.agentpack/` is the same pattern.
   Claude Code ignores it because it only looks for `.claude-plugin/`.
 
 ### Manual installation
 
-As an alternative to `claudia install`, use plain `tar`:
+As an alternative to `agentpack install`, use plain `tar`:
 
 ```bash
-tar xzf my-plugin-1.0.0.claudia -C ~/.claude/plugins/
+tar xzf my-plugin-1.0.0.agentpack -C ~/.claude/plugins/
 ```
 
 First time only, enable the plugin in `~/.claude/settings.json`:

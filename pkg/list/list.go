@@ -19,7 +19,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package list scans an installed plugin directory and returns metadata for
-// every claudia-managed plugin found.
+// every agentpack-managed plugin found.
 package list
 
 import (
@@ -30,10 +30,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/retr0h/claudia/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/metadata"
 )
 
-// Entry represents a single installed claudia plugin.
+// Entry represents a single installed agentpack plugin.
 type Entry struct {
 	Name      string
 	Version   string
@@ -42,9 +42,9 @@ type Entry struct {
 	Dir       string // path to the marketplace directory
 }
 
-// Run scans pluginDir/marketplaces/ for installed claudia plugins and returns
-// them sorted by name. A directory is considered a claudia plugin when it
-// contains a .claudia/metadata.json file.
+// Run scans pluginDir/marketplaces/ for installed agentpack plugins and returns
+// them sorted by name. A directory is considered an agentpack plugin when it
+// contains a .agentpack/metadata.json file.
 func Run(pluginDir string) ([]Entry, error) {
 	marketplacesDir := filepath.Join(pluginDir, "marketplaces")
 
@@ -64,11 +64,11 @@ func Run(pluginDir string) ([]Entry, error) {
 		}
 
 		dir := filepath.Join(marketplacesDir, de.Name())
-		metaPath := filepath.Join(dir, ".claudia", "metadata.json")
+		metaPath := filepath.Join(dir, ".agentpack", "metadata.json")
 
 		data, err := os.ReadFile(metaPath)
 		if err != nil {
-			// Not a claudia plugin — skip silently.
+			// Not an agentpack plugin — skip silently.
 			continue
 		}
 

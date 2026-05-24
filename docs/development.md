@@ -14,8 +14,8 @@ mise install
 ## Quick Start
 
 ```bash
-git clone https://github.com/retr0h/claudia.git
-cd claudia
+git clone https://github.com/retr0h/agentpack.git
+cd agentpack
 go test ./...
 ```
 
@@ -25,7 +25,7 @@ go test ./...
 go test ./...              # run tests
 go vet ./...               # vet
 gofmt -l .                 # find unformatted files
-go build -o claudia .      # build
+go build -o agentpack .      # build
 ```
 
 Or via just:
@@ -42,17 +42,17 @@ just clean          # remove binary
 
 ```
 cmd/               Cobra CLI shim (root, build, verify, install, list, sync, version)
-pkg/archive/       Tarball creation and extraction (.claudia archives)
+pkg/archive/       Tarball creation and extraction (.agentpack archives)
 pkg/build/         Build pipeline orchestration
 pkg/checksum/      Per-file SHA256 checksumming and verification
 pkg/cli/           Themed terminal output (banner, colors)
 pkg/fetcher/       Backend interface + drivers (file, http)
 pkg/install/       Install pipeline orchestration
 pkg/list/          List installed plugins
-pkg/manifest/      claudia.yaml parsing and validation
+pkg/manifest/      agentpack.yaml parsing and validation
 pkg/metadata/      Git SHA, version, timestamp capture
 pkg/plugin/        Claude Code plugin structure generation
-pkg/sync/          Declarative sync from claudia-packages.yaml
+pkg/sync/          Declarative sync from agentpack-packages.yaml
 pkg/verify/        Verify pipeline orchestration
 ```
 

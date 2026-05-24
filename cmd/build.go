@@ -28,15 +28,15 @@ import (
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/spf13/cobra"
 
-	"github.com/retr0h/claudia/pkg/build"
-	"github.com/retr0h/claudia/pkg/cli"
+	"github.com/retr0h/agentpack/pkg/build"
+	"github.com/retr0h/agentpack/pkg/cli"
 )
 
 var buildCmd = &cobra.Command{
 	Use:   "build [plugin-names...]",
-	Short: "Build .claudia archives from a claudia.yaml manifest",
-	Long: `Build checksummed .claudia archives for one or more plugins defined in
-claudia.yaml. When plugin names are given as arguments, only those plugins
+	Short: "Build .agentpack archives from a agentpack.yaml manifest",
+	Long: `Build checksummed .agentpack archives for one or more plugins defined in
+agentpack.yaml. When plugin names are given as arguments, only those plugins
 are built. Otherwise all plugins in the manifest are built.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -58,7 +58,7 @@ are built. Otherwise all plugins in the manifest are built.`,
 			cli.Printf(
 				out,
 				"%s %s %s\n\n  %s  (%s)\n  sha256: %s\n\n",
-				cli.Mute(out, "claudia: building"),
+				cli.Mute(out, "agentpack: building"),
 				cli.Accent(out, r.Name),
 				cli.Mute(out, "v"+r.Version),
 				filepath.Base(r.ArchivePath),

@@ -27,16 +27,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/retr0h/claudia/pkg/cli"
-	pkgsync "github.com/retr0h/claudia/pkg/sync"
+	"github.com/retr0h/agentpack/pkg/cli"
+	pkgsync "github.com/retr0h/agentpack/pkg/sync"
 )
 
 var syncConfigFlag string
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Sync plugins from claudia-packages.yaml",
-	Long: `Sync reads claudia-packages.yaml and installs or updates every declared
+	Short: "Sync plugins from agentpack-packages.yaml",
+	Long: `Sync reads agentpack-packages.yaml and installs or updates every declared
 plugin into the Claude Code plugin directory.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
@@ -57,7 +57,7 @@ plugin into the Claude Code plugin directory.`,
 		cli.Printf(
 			out,
 			"%s %s\n\n",
-			cli.Mute(out, "claudia: syncing"),
+			cli.Mute(out, "agentpack: syncing"),
 			cli.Mute(out, fmt.Sprintf("%d packages", len(results))),
 		)
 
@@ -118,8 +118,8 @@ func init() {
 	syncCmd.Flags().StringVarP(
 		&syncConfigFlag,
 		"config", "c",
-		"claudia-packages.yaml",
-		"path to claudia-packages.yaml",
+		"agentpack-packages.yaml",
+		"path to agentpack-packages.yaml",
 	)
 	rootCmd.AddCommand(syncCmd)
 }

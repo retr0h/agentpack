@@ -6,7 +6,7 @@ docs/bun.lock
 .just/remote/
 .superpowers/
 
-/claudia
+/agentpack
 coverage.out
-*.claudia
+*.agentpack
 examples/*/.git/

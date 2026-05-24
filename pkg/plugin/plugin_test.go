@@ -25,8 +25,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retr0h/claudia/pkg/manifest"
-	"github.com/retr0h/claudia/pkg/plugin"
+	"github.com/retr0h/agentpack/pkg/manifest"
+	"github.com/retr0h/agentpack/pkg/plugin"
 )
 
 func TestGenerateMarketplace(t *testing.T) {

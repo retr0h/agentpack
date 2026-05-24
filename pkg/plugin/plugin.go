@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/retr0h/claudia/pkg/manifest"
+	"github.com/retr0h/agentpack/pkg/manifest"
 )
 
 // Marketplace is the Claude Code marketplace descriptor written to

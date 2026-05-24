@@ -32,7 +32,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retr0h/claudia/pkg/fetcher"
+	"github.com/retr0h/agentpack/pkg/fetcher"
 )
 
 // httpFailOnCloseWriter is an io.WriteCloser that succeeds on Write but fails on Close.
@@ -84,7 +84,7 @@ func TestHTTPFetcherFetch(t *testing.T) {
 			},
 			setupDest: func(t *testing.T) string {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "out.claudia")
+				return filepath.Join(t.TempDir(), "out.agentpack")
 			},
 			checkBody: "archive content",
 		},
@@ -95,7 +95,7 @@ func TestHTTPFetcherFetch(t *testing.T) {
 			},
 			setupDest: func(t *testing.T) string {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "out.claudia")
+				return filepath.Join(t.TempDir(), "out.agentpack")
 			},
 			wantErr: "http 404",
 		},
@@ -106,7 +106,7 @@ func TestHTTPFetcherFetch(t *testing.T) {
 			},
 			setupDest: func(t *testing.T) string {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "out.claudia")
+				return filepath.Join(t.TempDir(), "out.agentpack")
 			},
 			cancelCtx: true,
 			wantErr:   "context canceled",
@@ -119,7 +119,7 @@ func TestHTTPFetcherFetch(t *testing.T) {
 			setupDest: func(t *testing.T) string {
 				t.Helper()
 				// A path whose parent directory doesn't exist.
-				return filepath.Join(t.TempDir(), "nonexistent", "out.claudia")
+				return filepath.Join(t.TempDir(), "nonexistent", "out.agentpack")
 			},
 			wantErr: "create dest",
 		},
@@ -128,7 +128,7 @@ func TestHTTPFetcherFetch(t *testing.T) {
 			sourceURL: "://invalid-url",
 			setupDest: func(t *testing.T) string {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "out.claudia")
+				return filepath.Join(t.TempDir(), "out.agentpack")
 			},
 			wantErr: "build request",
 		},
@@ -139,7 +139,7 @@ func TestHTTPFetcherFetch(t *testing.T) {
 			},
 			setupDest: func(t *testing.T) string {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "out.claudia")
+				return filepath.Join(t.TempDir(), "out.agentpack")
 			},
 			// triggerAt:0 means all Err() calls return error immediately.
 			// Since Done() returns nil, the http client won't cancel mid-flight.
@@ -155,7 +155,7 @@ func TestHTTPFetcherFetch(t *testing.T) {
 			},
 			setupDest: func(t *testing.T) string {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "out.claudia")
+				return filepath.Join(t.TempDir(), "out.agentpack")
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
@@ -181,7 +181,7 @@ func TestHTTPFetcherFetch(t *testing.T) {
 			},
 			setupDest: func(t *testing.T) string {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "out.claudia")
+				return filepath.Join(t.TempDir(), "out.agentpack")
 			},
 			// This test may or may not error depending on timing; skip
 			// the error assertion and just verify it doesn't panic.

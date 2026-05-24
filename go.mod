@@ -1,4 +1,4 @@
-module github.com/retr0h/claudia
+module github.com/retr0h/agentpack
 
 go 1.25.7
 

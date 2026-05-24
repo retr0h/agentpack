@@ -32,7 +32,7 @@ import (
 	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/memfs"
 
-	"github.com/retr0h/claudia/pkg/checksum"
+	"github.com/retr0h/agentpack/pkg/checksum"
 )
 
 // --------------------------------------------------------------------------
@@ -142,7 +142,7 @@ func TestComputeBytes(t *testing.T) {
 	}{
 		{
 			name:    "non-empty data produces 64-char hex hash",
-			data:    []byte("hello, claudia"),
+			data:    []byte("hello, agentpack"),
 			wantLen: 64,
 		},
 		{
@@ -191,7 +191,7 @@ func TestComputeFile(t *testing.T) {
 			setupVFS: func(t *testing.T) (avfs.VFS, string) {
 				t.Helper()
 				vfs := memfs.New()
-				if err := vfs.WriteFile("/input.bin", []byte("hello, claudia"), fs.FileMode(0o600)); err != nil {
+				if err := vfs.WriteFile("/input.bin", []byte("hello, agentpack"), fs.FileMode(0o600)); err != nil {
 					t.Fatal(err)
 				}
 				return vfs, "/input.bin"
