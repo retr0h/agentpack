@@ -9,7 +9,7 @@ Declares what to package. Lives at the root of the plugin repo.
 ```yaml
 name: my-plugin
 version: 1.0.0
-description: "My Claude Code plugin"
+description: "My security toolkit"
 
 author:
   name: "John Dewey"
@@ -51,7 +51,7 @@ settings:
 
 ### Multi-plugin
 
-For repos where files don't follow Claude Code's layout:
+For repos where files don't follow standard layout:
 
 ```yaml
 author:
@@ -88,14 +88,14 @@ Each plugin can override any shared field.
 | `license` | no | SPDX license identifier |
 | `homepage` | no | Project URL |
 | `keywords` | no | Search/discovery tags |
-| `category` | no | Claude Code plugin category |
+| `category` | no | Plugin category |
 | `skills` | no | Skill markdown files (glob or src/dest) |
 | `commands` | no | Command markdown files (glob or src/dest) |
 | `hooks` | no | hooks.json and hook scripts (glob or src/dest) |
 | `agents` | no | Agent markdown files (glob or src/dest) |
 | `mcp` | no | MCP server entries (see below) |
 | `binaries` | no | Pre-built executables (glob or src/dest) |
-| `settings` | no | JSON fragments for settings.json (glob or src/dest) |
+| `settings` | no | JSON fragments (glob or src/dest) |
 
 ### Content entry formats
 
@@ -131,9 +131,6 @@ is a full path (e.g. `skills/review.md`), the file is renamed.
 | `env` | optional | - | - |
 | `platforms` | optional | - | - |
 
-The `config` field on `remote` includes an existing `.mcp.json` as-is
-instead of generating one.
-
 ---
 
 ## agentpack-packages.yaml — sync manifest
@@ -147,8 +144,6 @@ packages:
     source: https://drive.google.com/uc?id=1ABC&export=download
   - name: local-plugin
     source: ~/Downloads/local-plugin-1.0.0.agentpack
-  - name: s3-plugin
-    source: s3://my-bucket/plugins/s3-plugin-1.0.0.agentpack
 ```
 
 | Field | Required | Description |
@@ -169,75 +164,41 @@ Supported source schemes:
 
 ## .agentpack archive format
 
-A `.agentpack` file is a gzipped tarball (`.tar.gz` with a `.agentpack`
-extension). The internal layout mirrors `~/.claude/plugins/` so the end
-user can install with `agentpack install` or plain `tar`.
+A `.agentpack` file is a gzipped tarball. The internal layout is
+**generic** — organized by content type, not by target platform. The
+target driver (Claude Code, Cursor, etc.) handles translation to
+platform-specific layout at install time.
 
 ### Archive layout
 
 ```
 my-plugin-1.0.0.agentpack
-  marketplaces/my-plugin/
-    .claude-plugin/
-      marketplace.json        # Generated — Claude Code marketplace descriptor
-      plugin.json             # Generated — Claude Code plugin descriptor
-    .agentpack/
-      metadata.json           # Generated — git SHA, version, timestamps
-      checksums.txt           # Generated — per-file SHA256 checksums
-      agentpack.yaml            # Copy of the manifest for this plugin
-    skills/
-      *.md
-    commands/
-      *.md
-    hooks/
-      hooks.json
-      *.sh
-    agents/
-      *.md
-    mcp/
-      my-server               # Binary MCP servers
-      .mcp.json               # Generated — MCP server config
-    bin/
-      my-tool                 # Pre-built binaries
-    settings/
-      settings.json           # Settings fragments
+  .agentpack/
+    manifest.yaml             # Copy of the agentpack.yaml for this plugin
+    metadata.json             # Git SHA, version, timestamps
+    checksums.txt             # Per-file SHA256 checksums
+  skills/
+    *.md
+  commands/
+    *.md
+  hooks/
+    hooks.json
+    *.sh
+  agents/
+    *.md
+  mcp/
+    my-server                 # Binary MCP servers
+    .mcp.json                 # Generated MCP config
+  binaries/
+    my-tool                   # Pre-built executables
+  settings/
+    settings.json             # Settings fragments
 ```
+
+The archive is platform-agnostic. Content is grouped by type so that
+each target driver can pick what it supports and ignore the rest.
 
 ### Generated files
-
-#### `.claude-plugin/marketplace.json`
-
-Single-plugin marketplace pattern — the marketplace IS the plugin:
-
-```json
-{
-  "name": "my-plugin",
-  "owner": { "name": "John Dewey", "email": "john@dewey.ws" },
-  "metadata": { "description": "My plugin", "version": "1.0.0" },
-  "plugins": [{
-    "name": "my-plugin",
-    "source": "./",
-    "description": "My plugin",
-    "version": "1.0.0",
-    "author": { "name": "John Dewey", "email": "john@dewey.ws" },
-    "license": "MIT"
-  }]
-}
-```
-
-#### `.claude-plugin/plugin.json`
-
-```json
-{
-  "name": "my-plugin",
-  "version": "1.0.0",
-  "description": "My plugin",
-  "commands": ["./commands/init.md", "./commands/analyze.md"]
-}
-```
-
-The `commands` array is populated from resolved command entries. Skills
-are discovered by Claude Code via the directory structure.
 
 #### `.agentpack/metadata.json`
 
@@ -258,28 +219,27 @@ Captured at build time from the git repo:
 #### `.agentpack/checksums.txt`
 
 Every file in the archive (except `checksums.txt` itself) gets a SHA256
-checksum. Format matches `sha256sum(1)` output — two spaces between
-hash and path:
+checksum. Format matches `sha256sum(1)` — two spaces between hash and
+path:
 
 ```
-e3b0c44298fc1c14...  marketplaces/my-plugin/.claude-plugin/marketplace.json
-a7ffc6f8bf1ed766...  marketplaces/my-plugin/skills/review.md
+e3b0c44298fc1c14...  skills/review.md
+a7ffc6f8bf1ed766...  commands/scan.md
+b94d27b9934d3e08...  .agentpack/metadata.json
 ```
 
 #### `.mcp.json` (MCP servers)
 
-Claudia generates the `.mcp.json` that Claude Code needs to launch MCP
-servers. The developer's config (e.g. `go run ./cmd/server`) won't work
-on a machine without Go — the packaged version references the pre-built
-binary.
+agentpack generates the `.mcp.json` from the manifest. The developer's
+config (e.g. `go run ./cmd/server`) won't work on a machine without Go.
 
-**binary** — pre-built executable, launched via `${CLAUDE_PLUGIN_ROOT}`:
+**binary** — pre-built executable:
 
 ```json
 {
   "mcpServers": {
     "my-server": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/mcp/my-server",
+      "command": "${PLUGIN_ROOT}/mcp/my-server",
       "args": ["--port", "3000"],
       "env": { "MY_VAR": "value" }
     }
@@ -287,51 +247,51 @@ binary.
 }
 ```
 
-**remote** — hosted endpoint, no binary ships:
+**remote** — hosted endpoint:
 
 ```json
 { "mcpServers": { "my-remote": { "url": "https://mcp.example.com/v1" } } }
 ```
 
-**ux** — npx package, end user must have the package runner:
+**ux** — npx package:
 
 ```json
 {
   "mcpServers": {
-    "my-ux": { "command": "npx", "args": ["@mycompany/my-server", "--verbose"] }
+    "my-ux": { "command": "npx", "args": ["@mycompany/my-server"] }
   }
 }
 ```
 
-### Metadata directory
+### Target driver translation
 
-The `.agentpack/` metadata directory lives inside `marketplaces/{name}/`,
-not at the archive root. This means:
+The archive is generic. When installing, the target driver translates
+it to the platform's expected layout:
 
-- **No collision** — each plugin's metadata is namespaced. Untarring ten
-  plugins never stomps.
-- **Self-contained** — delete `marketplaces/my-plugin/` and the metadata
-  goes with it.
-- **Follows Claude Code convention** — Claude Code puts `.claude-plugin/`
-  inside the marketplace directory. `.agentpack/` is the same pattern.
-  Claude Code ignores it because it only looks for `.claude-plugin/`.
-
-### Manual installation
-
-As an alternative to `agentpack install`, use plain `tar`:
-
-```bash
-tar xzf my-plugin-1.0.0.agentpack -C ~/.claude/plugins/
+**Claude Code** target produces:
+```
+~/.claude/plugins/marketplaces/my-plugin/
+  .claude-plugin/marketplace.json    # generated by driver
+  .claude-plugin/plugin.json         # generated by driver
+  .agentpack/metadata.json
+  .agentpack/checksums.txt
+  skills/*.md
+  commands/*.md
+  hooks/hooks.json
+  mcp/.mcp.json                      # ${CLAUDE_PLUGIN_ROOT} paths
 ```
 
-First time only, enable the plugin in `~/.claude/settings.json`:
-
-```json
-{
-  "enabledPlugins": {
-    "my-plugin@my-plugin": true
-  }
-}
+**Cursor** target produces:
+```
+~/.cursor/skills/my-plugin/
+  *.md                               # skills only
 ```
 
-Subsequent updates: re-run the same `tar` command.
+**Universal** target (`.agents/skills/` convention):
+```
+.agents/skills/my-plugin/
+  *.md                               # skills only
+```
+
+Each driver installs what it understands and silently skips the rest.
+See [architecture.md](architecture.md) for the full driver design.

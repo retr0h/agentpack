@@ -104,8 +104,9 @@ agentpack sync
 
 ## 📖 Documentation
 
-- [Package Format][] — archive layout, generated files, MCP config
-- [Development][] — architecture, testing conventions, layout
+- [Architecture][] — driver design, install flow, content types
+- [Package Format][] — archive layout, manifest reference, MCP config
+- [Development][] — dev setup, testing conventions, layout
 - [Contributing][] — commit style, lint chain, PR checklist
 
 ## 📄 License
@@ -113,6 +114,7 @@ agentpack sync
 [MIT][]
 
 [MIT]: LICENSE
+[Architecture]: docs/architecture.md
 [Package Format]: docs/package-format.md
 [Development]: docs/development.md
 [Contributing]: docs/contributing.md
