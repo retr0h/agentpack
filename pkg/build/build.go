@@ -27,6 +27,8 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"runtime"
+	"time"
 
 	"github.com/avfs/avfs"
 	"gopkg.in/yaml.v3"
@@ -71,7 +73,11 @@ func Run(ctx context.Context, vfs avfs.VFS, opts Options) ([]Result, error) {
 
 	meta, err := metadata.Capture(ctx, opts.Dir, "", "")
 	if err != nil {
-		return nil, err
+		meta = &metadata.Metadata{
+			BuildTimestamp: time.Now().UTC().Format(time.RFC3339),
+			BuilderVersion: "dev",
+			Platform:       runtime.GOOS + "-" + runtime.GOARCH,
+		}
 	}
 
 	var results []Result

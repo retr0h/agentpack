@@ -127,15 +127,10 @@ func syncSourcePackage(ctx context.Context, pkg Package) []Result {
 	}}
 }
 
-// syncGitPackage clones a git repository, builds every plugin defined in the
-// agentpack.yaml found at the repo root, and installs each resulting archive.
-// When no agentpack.yaml is present the result is recorded as failed.
-//
-// The clone preserves the .git directory so that build.Run can capture git
-// metadata via metadata.Capture. The cloneDir is removed after all plugins
-// are built and installed.
+// syncGitPackage clones a git repository using gilt (via GitFetcher.Fetch),
+// then looks for an agentpack.yaml. If found, it builds and installs. The
+// ref from the user's config is used as the version — no .git/ needed.
 func syncGitPackage(ctx context.Context, pkg Package) []Result {
-	// Build the git source string (append ref if set).
 	source := pkg.Git
 	if pkg.Ref != "" {
 		source = source + "#" + pkg.Ref
@@ -149,25 +144,14 @@ func syncGitPackage(ctx context.Context, pkg Package) []Result {
 			Err:    fmt.Errorf("create temp dir: %w", err),
 		}}
 	}
-
 	defer func() { _ = os.RemoveAll(cloneDir) }()
 
-	// Clone directly using cloneRepo (internal helper exposed via GitFetcher)
-	// so that .git/ is preserved in cloneDir for metadata.Capture.
 	gf := &fetcher.GitFetcher{}
-	if err := gf.CloneInto(ctx, source, cloneDir); err != nil {
+	if err := gf.Fetch(ctx, source, cloneDir); err != nil {
 		return []Result{{
 			Name:   pkg.Name,
 			Status: "failed",
 			Err:    fmt.Errorf("git fetch: %w", err),
-		}}
-	}
-
-	if err := ctx.Err(); err != nil {
-		return []Result{{
-			Name:   pkg.Name,
-			Status: "failed",
-			Err:    err,
 		}}
 	}
 
@@ -182,20 +166,10 @@ func syncGitPackage(ctx context.Context, pkg Package) []Result {
 	}
 
 	var results []Result
-
 	for _, br := range buildResults {
-		if err := ctx.Err(); err != nil {
-			return append(results, Result{
-				Name:   br.Name,
-				Status: "failed",
-				Err:    err,
-			})
-		}
-
 		r, installErr := install.Run(ctx, install.Options{
 			Source: br.ArchivePath,
 		})
-
 		if installErr != nil {
 			results = append(results, Result{
 				Name:   br.Name,
@@ -204,7 +178,6 @@ func syncGitPackage(ctx context.Context, pkg Package) []Result {
 			})
 			continue
 		}
-
 		results = append(results, Result{
 			Name:    r.Name,
 			Version: r.Version,

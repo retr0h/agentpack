@@ -292,7 +292,7 @@ description: A test plugin
 			wantErr: "nonexistent",
 		},
 		{
-			name: "fails when not a git repo",
+			name: "succeeds without git repo using fallback metadata",
 			setup: func(t *testing.T) (string, func()) {
 				t.Helper()
 				dir := t.TempDir()
@@ -306,7 +306,6 @@ description: A test plugin
 			opts: func(dir string) build.Options {
 				return build.Options{Dir: dir}
 			},
-			wantErr: "not a git repository",
 		},
 		{
 			name: "fails when agentpack.yaml missing",
