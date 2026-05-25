@@ -95,6 +95,18 @@ func autoPackage(
 	skillFilter []string,
 	agentFilter []string,
 ) (string, error) {
+	return autoPackageWithVersion(ctx, cloneDir, name, sha, "latest", skillFilter, agentFilter)
+}
+
+func autoPackageWithVersion(
+	ctx context.Context,
+	cloneDir string,
+	name string,
+	sha string,
+	version string,
+	skillFilter []string,
+	agentFilter []string,
+) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -139,7 +151,7 @@ func autoPackage(
 	// Build metadata — use the SHA from the git clone.
 	meta := &metadata.Metadata{
 		Name:           name,
-		Version:        "latest",
+		Version:        version,
 		GitCommitSHA:   sha,
 		BuildTimestamp: time.Now().UTC().Format(time.RFC3339),
 		BuilderVersion: "dev",

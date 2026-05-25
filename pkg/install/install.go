@@ -131,7 +131,9 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 	gf, _ := f.(*fetcher.GitFetcher)
 
 	cloneURL := opts.Source
+	ref := ""
 	if idx := strings.LastIndex(cloneURL, "#"); idx >= 0 {
+		ref = cloneURL[idx+1:]
 		cloneURL = cloneURL[:idx]
 	}
 
@@ -148,7 +150,13 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 
 	name := nameFromSource(opts.Source)
 
-	archivePath, err := autoPackage(ctx, cloneDir, name, sha, opts.Skills, opts.Agents)
+	// Use the ref as version when pinned, otherwise "latest".
+	version := "latest"
+	if ref != "" {
+		version = ref
+	}
+
+	archivePath, err := autoPackageWithVersion(ctx, cloneDir, name, sha, version, opts.Skills, opts.Agents)
 	if err != nil {
 		return nil, fmt.Errorf("auto-package: %w", err)
 	}
