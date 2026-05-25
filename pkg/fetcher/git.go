@@ -109,17 +109,52 @@ func (f *GitFetcher) FetchWithResult(ctx context.Context, source string, dest st
 		}
 	}
 
-	// If SHA checkout is required, do it now.
-	if resolveAfterClone && ref != "" {
-		w, werr := repo.Worktree()
-		if werr != nil {
-			return "", fmt.Errorf("worktree: %w", werr)
-		}
+	// Always checkout the requested ref after clone/open so the worktree
+	// matches the requested version, not whatever the cache had checked out.
+	w, werr := repo.Worktree()
+	if werr != nil {
+		return "", fmt.Errorf("worktree: %w", werr)
+	}
 
+	var resolvedSHA string
+
+	switch {
+	case isSHA(ref):
 		hash := plumbing.NewHash(ref)
-		if checkErr := w.Checkout(&gogit.CheckoutOptions{Hash: hash}); checkErr != nil {
+		if checkErr := w.Checkout(&gogit.CheckoutOptions{Hash: hash, Force: true}); checkErr != nil {
 			return "", fmt.Errorf("checkout %s: %w", ref, checkErr)
 		}
+
+		resolvedSHA = ref
+	case isTagRef(ref):
+		tagRef, tagErr := repo.Tag(ref)
+		if tagErr != nil {
+			return "", fmt.Errorf("resolve tag %s: %w", ref, tagErr)
+		}
+
+		if checkErr := w.Checkout(&gogit.CheckoutOptions{Hash: tagRef.Hash(), Force: true}); checkErr != nil {
+			return "", fmt.Errorf("checkout tag %s: %w", ref, checkErr)
+		}
+
+		resolvedSHA = tagRef.Hash().String()
+	case ref != "" && ref != "HEAD":
+		branchRef, branchErr := repo.Reference(plumbing.NewBranchReferenceName(ref), true)
+		if branchErr != nil {
+			return "", fmt.Errorf("resolve branch %s: %w", ref, branchErr)
+		}
+
+		if checkErr := w.Checkout(&gogit.CheckoutOptions{Hash: branchRef.Hash(), Force: true}); checkErr != nil {
+			return "", fmt.Errorf("checkout branch %s: %w", ref, checkErr)
+		}
+
+		resolvedSHA = branchRef.Hash().String()
+	default:
+		head, headErr := repo.Head()
+		if headErr != nil {
+			return "", fmt.Errorf("resolve HEAD: %w", headErr)
+		}
+
+		resolvedSHA = head.Hash().String()
 	}
 
 	// Copy cached worktree into dest (excluding .git/).
@@ -127,13 +162,7 @@ func (f *GitFetcher) FetchWithResult(ctx context.Context, source string, dest st
 		return "", fmt.Errorf("copy worktree: %w", copyErr)
 	}
 
-	// Resolve current HEAD SHA.
-	head, headErr := repo.Head()
-	if headErr != nil {
-		return "", fmt.Errorf("resolve HEAD: %w", headErr)
-	}
-
-	return head.Hash().String(), nil
+	return resolvedSHA, nil
 }
 
 // Fetch implements the Fetcher interface. It clones the repository into dest.
