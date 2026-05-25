@@ -63,22 +63,17 @@ func (f *GitFetcher) FetchWithResult(ctx context.Context, source string, dest st
 	// When ref is a branch or empty, clone with that branch directly.
 	// When ref looks like a SHA, clone the default branch then checkout.
 	// When ref looks like a tag, set the ReferenceName to the tag.
-	var resolveAfterClone bool
-
 	switch {
 	case ref == "" || ref == "HEAD":
 		// no ref — clone HEAD of default branch
 	case isSHA(ref):
-		// SHA checkout: clone default then checkout commit
-		resolveAfterClone = true
+		// SHA checkout: need full history, don't set ReferenceName
 	case isTagRef(ref):
 		cloneOpts.ReferenceName = plumbing.NewTagReferenceName(ref)
 	default:
 		// treat as branch
 		cloneOpts.ReferenceName = plumbing.NewBranchReferenceName(ref)
 	}
-
-	cloneOpts.NoCheckout = resolveAfterClone
 
 	cacheDir, err := defaultCacheDir()
 	if err != nil {
