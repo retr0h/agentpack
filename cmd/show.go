@@ -53,16 +53,39 @@ var showCmd = &cobra.Command{
 		cli.Printf(out, "%s %s\n", cli.Mute(out, "Source:"), cli.Accent(out, m.Source))
 		cli.Printf(out, "%s %s\n", cli.Mute(out, "SHA:"), cli.Accent(out, shortSHAShow(m.SHA)))
 		cli.Printf(out, "%s %s\n", cli.Mute(out, "Installed:"), cli.Accent(out, installed))
-		cli.Printf(out, "\n%s\n", cli.Mute(out, fmt.Sprintf("Files (%d):", len(m.Files))))
+		// Group files by target to show base dir once per target.
+		type targetGroup struct {
+			dir   string
+			files []registry.InstalledFile
+		}
+
+		groups := make(map[string]*targetGroup)
+		var order []string
 
 		for _, f := range m.Files {
-			cli.Printf(
-				out,
-				"  %s  %s  %s\n",
-				cli.Accent(out, cli.Pad(f.Target, 12)),
-				cli.Mute(out, f.Path),
-				cli.Mute(out, shortSHAShow(f.SHA256)),
+			g, ok := groups[f.Target]
+			if !ok {
+				g = &targetGroup{dir: f.Dir}
+				groups[f.Target] = g
+				order = append(order, f.Target)
+			}
+
+			g.files = append(g.files, f)
+		}
+
+		for _, tgt := range order {
+			g := groups[tgt]
+			cli.Printf(out, "\n%s %s\n",
+				cli.Accent(out, tgt),
+				cli.Mute(out, fmt.Sprintf("(%s, %d files)", g.dir, len(g.files))),
 			)
+
+			for _, f := range g.files {
+				cli.Printf(out, "  %s  %s\n",
+					cli.Mute(out, f.Path),
+					cli.Mute(out, shortSHAShow(f.SHA256)),
+				)
+			}
 		}
 
 		return nil
