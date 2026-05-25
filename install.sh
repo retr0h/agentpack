@@ -11,12 +11,12 @@ set -euo pipefail
 APP=agentpack
 
 # Visual style uses the Claude Code brand palette. ACCENT is the
-# Claude Code orange (#cc7c5e / R:204 G:124 B:94) — must match
+# Claude Code orange (#a855f7 / R:204 G:124 B:94) — must match
 # ThemeClaude in pkg/cli/theme.go so curl|bash and `agentpack --help`
 # paint with the exact same hue.
 MUTED='\033[0;2m'
 RED='\033[0;31m'
-ACCENT='\033[38;2;204;124;94m'
+ACCENT='\033[38;2;168;85;247m'
 NC='\033[0m' # reset
 
 err() {

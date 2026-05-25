@@ -49,16 +49,16 @@ func fg(c string) lipgloss.Style {
 var faint = lipgloss.NewStyle().Faint(true)
 
 // ThemeClaude uses the Claude Code brand palette — the warm terracotta
-// orange (#cc7c5e) sampled from code.claude.com as the primary accent.
+// orange (#a855f7) sampled from code.claude.com as the primary accent.
 var ThemeClaude = Theme{
 	Name:      "claude",
 	Mute:      faint,
-	Accent:    fg("#cc7c5e"), // Claude Code orange (R:204 G:124 B:94)
+	Accent:    fg("#a855f7"), // Claude Code orange (R:204 G:124 B:94)
 	OK:        fg("#50fa7b"),
 	Err:       fg("#ff6ec7"),
 	Info:      fg("#00d4ff"), // cyan, for dates/versions
 	BannerTop: faint,
-	BannerBot: fg("#cc7c5e"), // Claude Code orange
+	BannerBot: fg("#a855f7"), // Claude Code orange
 }
 
 var active = &ThemeClaude
