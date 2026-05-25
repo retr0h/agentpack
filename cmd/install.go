@@ -33,6 +33,11 @@ import (
 // checkmark is the Unicode check character used in install output.
 const checkmark = "✓"
 
+var (
+	installSkills []string
+	installAgents []string
+)
+
 var installCmd = &cobra.Command{
 	Use:   "install <source>",
 	Short: "Install a .agentpack archive",
@@ -51,6 +56,8 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 		// Targets defaults to nil so install.Run uses target.Detected().
 		result, err := install.Run(ctx, install.Options{
 			Source: source,
+			Skills: installSkills,
+			Agents: installAgents,
 		})
 		if err != nil {
 			return err
@@ -113,4 +120,7 @@ func sourceBaseName(source string) string {
 
 func init() {
 	rootCmd.AddCommand(installCmd)
+
+	installCmd.Flags().StringArrayVar(&installSkills, "skill", nil, "install only specific skill(s) by name (may be repeated)")
+	installCmd.Flags().StringArrayVar(&installAgents, "agent", nil, "install only specific agent(s) by name (may be repeated)")
 }

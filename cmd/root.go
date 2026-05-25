@@ -38,7 +38,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "agentpack",
-	Short: "The package manager for agentskills.io",
+	Short: "The native package manager for agentskills.io",
 }
 
 // Execute runs the root command; invoked by main.

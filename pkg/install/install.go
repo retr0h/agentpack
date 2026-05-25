@@ -60,6 +60,19 @@ type Options struct {
 	// Dir is the root directory for installation (cwd for local, home for global).
 	Dir string
 
+	// Skills restricts the install to named skills only. Each value is matched
+	// against the skill subdirectory name (e.g. "review" matches
+	// skills/review/SKILL.md). When empty all skills are installed.
+	Skills []string
+
+	// Agents restricts the install to named agents only. When empty all agents
+	// are installed.
+	Agents []string
+
+	// OriginalSource preserves the user-facing source URL when Source is
+	// overwritten to point at a local archive during the build-first pipeline.
+	OriginalSource string
+
 	// Targets is the list of agent targets to install into. When nil or empty
 	// the global target registry is consulted and only detected targets are
 	// used.
@@ -111,15 +124,45 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 		return nil, fmt.Errorf("fetch: %w", err)
 	}
 
-	name := nameFromSource(opts.Source)
-	meta := &metadata.Metadata{
-		Name:           name,
-		Version:        "latest",
-		GitCommitSHA:   sha,
-		BuildTimestamp: time.Now().UTC().Format(time.RFC3339),
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
-	return installFromDir(ctx, opts, cloneDir, meta)
+	name := nameFromSource(opts.Source)
+
+	// Build a .agentpack archive from the cloned repo contents. This ensures
+	// every install path produces a verifiable, content-filtered archive per
+	// ADR-001 regardless of whether the source repo ships an agentpack.yaml.
+	archivePath, err := autoPackage(ctx, cloneDir, name, sha, opts.Skills, opts.Agents)
+	if err != nil {
+		return nil, fmt.Errorf("auto-package: %w", err)
+	}
+	defer func() { _ = os.Remove(archivePath) }()
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Persist the archive to the archives store so subsequent reinstalls do not
+	// require a network fetch.
+	storedPath, err := storeArchive(archivePath, name, sha)
+	if err != nil {
+		// Non-fatal: we still have the temp archive, proceed with install.
+		storedPath = archivePath
+	}
+
+	// Install using the standard archive path so checksum verification and
+	// metadata parsing are applied uniformly.
+	archiveOpts := opts
+	archiveOpts.OriginalSource = opts.Source
+	archiveOpts.Source = storedPath
+
+	archiveFetcher, err := fetcher.New(storedPath)
+	if err != nil {
+		return nil, fmt.Errorf("fetcher for stored archive: %w", err)
+	}
+
+	return runFromArchive(ctx, archiveOpts, archiveFetcher)
 }
 
 func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, error) {
@@ -266,7 +309,7 @@ func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *m
 	// Save registry manifest.
 	manifest := &registry.PackageManifest{
 		Name:      meta.Name,
-		Source:    opts.Source,
+		Source:    registrySource(opts),
 		SHA:       meta.GitCommitSHA,
 		Version:   meta.Version,
 		Installed: time.Now().UTC().Format(time.RFC3339),
@@ -290,10 +333,10 @@ func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *m
 // collectTargetFiles scans only the content dirs that exist in the source
 // (skills/, commands/, agents/) and records what was copied to the install dir.
 func collectTargetFiles(installDir string, tgt target.Target, srcDir string) ([]registry.InstalledFile, error) {
-	contentDirs := []string{"skills", "commands", "agents"}
+	targetContentDirs := []string{"skills", "commands", "agents"}
 	var allFiles []registry.InstalledFile
 
-	for _, content := range contentDirs {
+	for _, content := range targetContentDirs {
 		srcContent := filepath.Join(srcDir, content)
 		if _, err := os.Stat(srcContent); os.IsNotExist(err) {
 			continue
@@ -505,4 +548,11 @@ func shortSHA(sha string) string {
 	}
 
 	return sha
+}
+
+func registrySource(opts Options) string {
+	if opts.OriginalSource != "" {
+		return opts.OriginalSource
+	}
+	return opts.Source
 }

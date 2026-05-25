@@ -9,16 +9,11 @@
 
 # agentpack
 
-The first git-free package manager for [agentskills.io](https://agentskills.io).
+The native package manager for [agentskills.io](https://agentskills.io).
 
-Build checksummed `.agentpack` archives from any repo — skills, commands,
-hooks, agents, MCP servers (remote and UX types), settings — and distribute
-them via Google Drive, S3, URL, sneakernet, or git. Non-technical users
-install with a single command. No git, Go, or build toolchain required on the
-receiving end.
-
-Works with Claude Code today. Cursor, Copilot, Gemini CLI, and other
-agentskills.io-compatible platforms coming soon.
+Install, manage, and distribute AI agent skills across Claude Code,
+Cursor, Copilot, Gemini CLI, Codex, OpenCode, and Windsurf. Works with
+any [officialskills.sh](https://officialskills.sh) repo out of the box.
 
 ## 📦 Install
 
@@ -37,38 +32,38 @@ go build -o agentpack .
 ## 🚀 Quick Start
 
 ```bash
-agentpack build                              # build all plugins in agentpack.yaml
-agentpack build my-plugin                    # build one plugin
-agentpack verify my-plugin-1.0.0.agentpack     # verify checksums
-agentpack install my-plugin-1.0.0.agentpack    # install to ~/.claude/plugins/
-agentpack install https://example.com/my-plugin-1.0.0.agentpack  # install from URL
-agentpack list                               # show installed plugins
-agentpack sync                               # sync from agentpack-packages.yaml
+agentpack install github.com/org/skills-repo                    # install from git
+agentpack install github.com/org/repo --skill review             # install one skill
+agentpack install plugin.agentpack                               # install from archive
+agentpack list                                                   # show installed
+agentpack show my-plugin                                         # show package details
+agentpack update my-plugin                                       # update to latest
+agentpack outdated                                               # check for updates
+agentpack remove my-plugin                                       # uninstall
 ```
 
 ## ✨ Features
 
 | Feature | Description |
 |---------|-------------|
-| Build | Package plugins from `agentpack.yaml` into `.agentpack` archives |
-| Verify | SHA256 checksum verification of every file in an archive |
-| Install | Unpack archives from local files or URLs |
-| List | Show installed plugins with version, SHA, and install date |
-| Sync | Declarative installs from `agentpack-packages.yaml` |
-| Multi-plugin | One manifest, multiple plugins with src/dest remapping |
-| MCP servers | Remote and UX/npx — agentpack generates `.mcp.json` |
-| Git backend | Install directly from GitHub, GitLab, Bitbucket repos |
-| Git metadata | Captures SHA, branch, timestamps at build time |
-| Pluggable backends | File and HTTP today; S3 and GCS planned |
-| Multi-agent targets | Claude Code today; Cursor, Copilot, Gemini CLI planned |
-| agentskills.io | Compatible with the open agent skills ecosystem |
+| Install from git | Any GitHub/GitLab/Bitbucket repo, with `--skill` / `--agent` filters |
+| Install from archive | `.agentpack` files via local path, URL, or offline transfer |
+| Build packages | `agentpack build` from `agentpack.yaml` manifest |
+| Verify | SHA256 checksum verification of every file |
+| List / Show | See what's installed, where it came from, every file tracked |
+| Update / Outdated | Check for and apply updates from git sources |
+| Remove | Safe uninstall — only deletes files agentpack installed |
+| Multi-agent | Claude Code, Cursor, Copilot, Gemini CLI, Codex, OpenCode, Windsurf |
+| officialskills.sh | Native support for the agentskills.io skill format |
+| Offline | `.agentpack` archives work without git, npm, or any toolchain |
+| Netrc | Private repo support via `~/.netrc` credentials |
 
 ## 📋 Manifest
 
 ```yaml
 name: my-plugin
 version: 1.0.0
-description: "My Claude Code plugin"
+description: "My skills package"
 
 skills:
   - skills/*.md
@@ -81,9 +76,6 @@ mcp:
   - type: remote
     name: my-api
     url: "https://mcp.example.com/v1"
-  - type: ux
-    name: my-server
-    package: "@mycompany/my-mcp-server"
 ```
 
 See [`examples/`](examples/) for single-plugin and multi-plugin manifests.
@@ -91,17 +83,15 @@ See [`examples/`](examples/) for single-plugin and multi-plugin manifests.
 ## 🔄 Declarative Sync
 
 ```yaml
-# agentpack-packages.yaml — on the target machine
+# agentpack-packages.yaml
 packages:
-  - name: my-plugin
-    source: https://drive.google.com/uc?id=1ABC&export=download
-  - name: local-plugin
-    source: ~/Downloads/local-plugin-1.0.0.agentpack
-  - name: git-plugin
-    git: github.com/myorg/my-plugin
-  - name: git-plugin-pinned
-    git: github.com/myorg/my-plugin
-    ref: v2.0.0
+  - name: security-skills
+    git: github.com/org/security-skills
+    ref: v1.0.0
+  - name: devops-skills
+    git: github.com/org/devops-skills
+  - name: offline-plugin
+    source: ~/Downloads/plugin.agentpack
 ```
 
 ```bash
@@ -110,17 +100,17 @@ agentpack sync
 
 ## 📖 Documentation
 
-- [Architecture][] — driver design, install flow, content types
 - [Package Format (ADR-001)][] — archive schema, content types, build pipeline
-- [Development][] — dev setup, testing conventions, layout
-- [Contributing][] — commit style, lint chain, PR checklist
+- [Architecture][] — driver design, install flow
+- [Development][] — dev setup, testing conventions
+- [Contributing][] — commit style, PR checklist
 
 ## 📄 License
 
 [MIT][]
 
 [MIT]: LICENSE
-[Architecture]: docs/architecture.md
 [Package Format (ADR-001)]: docs/adr/001-agentpack-format.md
+[Architecture]: docs/architecture.md
 [Development]: docs/development.md
 [Contributing]: docs/contributing.md

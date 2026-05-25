@@ -30,6 +30,44 @@ import (
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
+// AutoPackage exposes autoPackage for testing.
+func AutoPackage(
+	ctx context.Context,
+	cloneDir, name, sha string,
+	skillFilter, agentFilter []string,
+) (string, error) {
+	return autoPackage(ctx, cloneDir, name, sha, skillFilter, agentFilter)
+}
+
+// StoreArchive exposes storeArchive for testing.
+func StoreArchive(srcPath, name, sha string) (string, error) {
+	return storeArchive(srcPath, name, sha)
+}
+
+// FilteredSubdirs exposes filteredSubdirs for testing.
+func FilteredSubdirs(contentDir string, filter []string) []string {
+	return filteredSubdirs(contentDir, filter)
+}
+
+// ArchivesDir exposes archivesDir for testing.
+func ArchivesDir() (string, error) {
+	return archivesDir()
+}
+
+// SetArchivesDir replaces archivesDirFunc for testing and returns a restore fn.
+func SetArchivesDir(fn func() (string, error)) func() {
+	orig := archivesDirFunc
+	archivesDirFunc = fn
+	return func() { archivesDirFunc = orig }
+}
+
+// SetArchivesDirHome replaces archivesDirHome for testing and returns a restore fn.
+func SetArchivesDirHome(fn func() (string, error)) func() {
+	orig := archivesDirHome
+	archivesDirHome = fn
+	return func() { archivesDirHome = orig }
+}
+
 // ShortSHA exposes shortSHA for testing.
 func ShortSHA(sha string) string {
 	return shortSHA(sha)
