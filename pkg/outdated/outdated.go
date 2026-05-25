@@ -45,16 +45,32 @@ type Entry struct {
 	Outdated bool
 }
 
+// Options configures an outdated check run.
+type Options struct {
+	// Names is the list of plugin names to check. When empty all installed
+	// plugins are checked.
+	Names []string
+
+	// OnStep is called in real-time before each plugin's remote is queried.
+	// When nil, no progress is reported.
+	OnStep func(name string)
+}
+
 // Run checks all installed plugins (or the named ones from opts.Names) for
 // newer versions by calling LsRemote on their stored source URLs.
 func Run(ctx context.Context, names []string) ([]Entry, error) {
+	return RunWithOptions(ctx, Options{Names: names})
+}
+
+// RunWithOptions is like Run but accepts an Options struct for richer control.
+func RunWithOptions(ctx context.Context, opts Options) ([]Entry, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
 	var manifests []*registry.PackageManifest
 
-	if len(names) == 0 {
+	if len(opts.Names) == 0 {
 		all, err := registry.List()
 		if err != nil {
 			return nil, fmt.Errorf("list registry: %w", err)
@@ -62,7 +78,7 @@ func Run(ctx context.Context, names []string) ([]Entry, error) {
 
 		manifests = all
 	} else {
-		for _, n := range names {
+		for _, n := range opts.Names {
 			m, err := registry.Load(n)
 			if err != nil {
 				return nil, fmt.Errorf("load %s: %w", n, err)
@@ -77,6 +93,10 @@ func Run(ctx context.Context, names []string) ([]Entry, error) {
 	for _, m := range manifests {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+
+		if opts.OnStep != nil {
+			opts.OnStep(m.Name)
 		}
 
 		remoteSHA, lsErr := resolveRemoteHead(ctx, m.Source)

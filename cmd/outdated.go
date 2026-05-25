@@ -35,7 +35,17 @@ var outdatedCmd = &cobra.Command{
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		entries, err := pkgoutdated.Run(ctx, args)
+		cli.Printf(out, "%s\n\n", cli.Mute(out, "agentpack: checking for updates"))
+
+		entries, err := pkgoutdated.RunWithOptions(ctx, pkgoutdated.Options{
+			Names: args,
+			OnStep: func(name string) {
+				cli.Printf(out, "  %s %s\n",
+					cli.Mute(out, "checking"),
+					cli.Mute(out, name),
+				)
+			},
+		})
 		if err != nil {
 			return err
 		}
@@ -46,7 +56,7 @@ var outdatedCmd = &cobra.Command{
 			return nil
 		}
 
-		cli.Printf(out, "%s\n\n", cli.Mute(out, "agentpack: checking for updates"))
+		cli.Print(out, "")
 
 		for _, e := range entries {
 			if e.Outdated {

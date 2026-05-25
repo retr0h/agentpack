@@ -58,6 +58,11 @@ type Options struct {
 	Fetcher    fetcher.Fetcher // for git sources; nil uses default GitFetcher
 	Builder    Builder         // for building from cloned repos; nil skips build
 	Installer  Installer       // for installing archives; nil skips install
+
+	// OnStep is called in real-time as each package is processed.
+	// The name argument is the package name being synced.
+	// When nil, no progress is reported.
+	OnStep func(name string)
 }
 
 // Run reads configPath and installs or updates every declared package.
@@ -81,6 +86,10 @@ func Run(ctx context.Context, opts Options) ([]Result, error) {
 	for _, pkg := range pf.Packages {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+
+		if opts.OnStep != nil {
+			opts.OnStep(pkg.Name)
 		}
 
 		var pkgResults []Result

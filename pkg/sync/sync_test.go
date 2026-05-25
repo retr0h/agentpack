@@ -386,6 +386,35 @@ func TestRun(t *testing.T) {
 			},
 		},
 		{
+			name: "OnStep called once per package",
+			yaml: "packages:\n  - name: step-plugin\n    source: /tmp/step-plugin.agentpack\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+				mockInstaller.EXPECT().
+					Install(gomock.Any(), "/tmp/step-plugin.agentpack").
+					Return(&install.Result{Name: "step-plugin", Version: "1.0.0"}, nil)
+
+				var stepped []string
+				return pkgsync.Options{
+					Installer: mockInstaller,
+					OnStep: func(name string) {
+						stepped = append(stepped, name)
+					},
+				}, func() {}
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+
+				if len(results) != 1 {
+					t.Fatalf("result count = %d, want 1", len(results))
+				}
+
+				if results[0].Status != "installed" {
+					t.Errorf("Status = %q, want %q", results[0].Status, "installed")
+				}
+			},
+		},
+		{
 			name: "no builder configured for git package",
 			yaml: "packages:\n  - name: no-builder\n    git: github.com/org/repo\n",
 			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {

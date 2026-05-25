@@ -329,6 +329,8 @@ func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *m
 
 		installOpts.SourceDir = srcDir
 
+		emitStep(opts, Step{Name: "installing to", Detail: tgt.DisplayName()})
+
 		if installErr := tgt.Install(ctx, installOpts); installErr != nil {
 			_ = os.RemoveAll(srcDir)
 

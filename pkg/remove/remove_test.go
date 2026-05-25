@@ -181,6 +181,99 @@ func TestRun(t *testing.T) {
 			wantSkpLen: 1,
 		},
 		{
+			name: "OnStep called for removed file",
+			setup: func(t *testing.T, tmp string) remove.Options {
+				t.Helper()
+				t.Setenv("HOME", tmp)
+
+				content := []byte("# skill content\n")
+				pluginDir := t.TempDir()
+				filePath := filepath.Join(pluginDir, "step.md")
+
+				if err := os.WriteFile(filePath, content, 0o644); err != nil {
+					t.Fatalf("setup WriteFile: %v", err)
+				}
+
+				m := &registry.PackageManifest{
+					Name:   "step-plugin",
+					Source: "github.com/org/repo",
+					Files: []registry.InstalledFile{
+						{
+							Path:   "step.md",
+							SHA256: sha256Of(content),
+							Target: "claude-code",
+							Dir:    pluginDir,
+						},
+					},
+				}
+
+				if err := registry.Save(m); err != nil {
+					t.Fatalf("setup Save: %v", err)
+				}
+
+				var stepped []remove.Step
+				return remove.Options{
+					Name:         "step-plugin",
+					LockfilePath: filepath.Join(tmp, "agentpack-lock.yaml"),
+					OnStep: func(s remove.Step) {
+						stepped = append(stepped, s)
+					},
+				}
+			},
+			wantRemLen: 1,
+			wantSkpLen: 0,
+		},
+		{
+			name: "OnStep called for skipped file",
+			setup: func(t *testing.T, tmp string) remove.Options {
+				t.Helper()
+				t.Setenv("HOME", tmp)
+
+				pluginDir := t.TempDir()
+				filePath := filepath.Join(pluginDir, "skip.md")
+
+				original := []byte("# original\n")
+				if err := os.WriteFile(filePath, original, 0o644); err != nil {
+					t.Fatalf("setup WriteFile: %v", err)
+				}
+
+				recordedSHA := sha256Of(original)
+
+				// Modify so checksum won't match.
+				if err := os.WriteFile(filePath, []byte("# MODIFIED\n"), 0o644); err != nil {
+					t.Fatalf("setup modify: %v", err)
+				}
+
+				m := &registry.PackageManifest{
+					Name:   "skip-step-plugin",
+					Source: "github.com/org/repo",
+					Files: []registry.InstalledFile{
+						{
+							Path:   "skip.md",
+							SHA256: recordedSHA,
+							Target: "claude-code",
+							Dir:    pluginDir,
+						},
+					},
+				}
+
+				if err := registry.Save(m); err != nil {
+					t.Fatalf("setup Save: %v", err)
+				}
+
+				var stepped []remove.Step
+				return remove.Options{
+					Name:         "skip-step-plugin",
+					LockfilePath: filepath.Join(tmp, "agentpack-lock.yaml"),
+					OnStep: func(s remove.Step) {
+						stepped = append(stepped, s)
+					},
+				}
+			},
+			wantRemLen: 0,
+			wantSkpLen: 1,
+		},
+		{
 			name: "nonexistent package returns error",
 			setup: func(t *testing.T, tmp string) remove.Options {
 				t.Helper()

@@ -24,6 +24,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/update"
 )
 
@@ -46,6 +47,14 @@ func TestRun(t *testing.T) {
 			opts:      update.Options{Name: "any"},
 			cancelCtx: true,
 			wantErr:   "context canceled",
+		},
+		{
+			name: "nonexistent package with OnStep returns error before step fires",
+			opts: update.Options{
+				Name:   "no-such-with-step",
+				OnStep: func(_ install.Step) {},
+			},
+			wantErr: "load registry manifest",
 		},
 	}
 

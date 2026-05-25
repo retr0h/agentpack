@@ -91,6 +91,97 @@ func TestRun(t *testing.T) {
 	}
 }
 
+// --------------------------------------------------------------------------
+// TestRunWithOptions
+// --------------------------------------------------------------------------
+
+func TestRunWithOptions(t *testing.T) {
+	tests := []struct {
+		name       string
+		opts       outdated.Options
+		cancelCtx  bool
+		wantErr    string
+		wantLen    int
+		checkSteps func(t *testing.T, steps []string)
+	}{
+		{
+			name:    "empty registry returns empty slice",
+			opts:    outdated.Options{},
+			wantLen: 0,
+		},
+		{
+			name:      "cancelled context returns error",
+			opts:      outdated.Options{},
+			cancelCtx: true,
+			wantErr:   "context canceled",
+		},
+		{
+			name:    "named nonexistent plugin returns error",
+			opts:    outdated.Options{Names: []string{"ghost-plugin"}},
+			wantErr: "load ghost-plugin",
+		},
+		{
+			name: "OnStep not called when registry is empty",
+			opts: outdated.Options{
+				OnStep: func(_ string) {},
+			},
+			wantLen:    0,
+			checkSteps: func(t *testing.T, steps []string) { t.Helper() },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Cannot call t.Parallel() alongside t.Setenv.
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			if tt.cancelCtx {
+				cancel()
+			}
+
+			t.Setenv("HOME", t.TempDir())
+
+			var steps []string
+			if tt.opts.OnStep == nil && tt.checkSteps != nil {
+				tt.opts.OnStep = func(name string) { steps = append(steps, name) }
+			} else if tt.opts.OnStep != nil && tt.checkSteps != nil {
+				orig := tt.opts.OnStep
+				tt.opts.OnStep = func(name string) {
+					steps = append(steps, name)
+					orig(name)
+				}
+			}
+
+			entries, err := outdated.RunWithOptions(ctx, tt.opts)
+
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+
+				if !strContains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(entries) != tt.wantLen {
+				t.Errorf("len = %d, want %d", len(entries), tt.wantLen)
+			}
+
+			if tt.checkSteps != nil {
+				tt.checkSteps(t, steps)
+			}
+		})
+	}
+}
+
 func strContains(s, sub string) bool {
 	return len(sub) == 0 || (len(s) >= len(sub) && func() bool {
 		for i := 0; i <= len(s)-len(sub); i++ {

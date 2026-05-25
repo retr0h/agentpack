@@ -278,6 +278,8 @@ func TestRun(t *testing.T) {
 		injectFuncs func(t *testing.T)
 		wantErr     string
 		checkResult func(t *testing.T, r *install.Result)
+		onStep      func(s install.Step)
+		checkSteps  func(t *testing.T, steps []install.Step)
 	}{
 		{
 			name:       "installs archive to stub target",
@@ -375,6 +377,46 @@ description: Multi-target plugin
 
 				if r.Name != "empty-targets-plugin" {
 					t.Errorf("Name = %q, want %q", r.Name, "empty-targets-plugin")
+				}
+			},
+		},
+		{
+			name:       "OnStep emits installing-to step per target",
+			noParallel: true,
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+				archivePath := buildTestArchive(t, dir, `
+name: step-plugin
+version: "1.0.0"
+description: step test
+`)
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("step-target").AnyTimes()
+				m.EXPECT().DisplayName().Return("Step Target").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
+
+				return archivePath, []target.Target{m}
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				t.Cleanup(restore)
+			},
+			checkSteps: func(t *testing.T, steps []install.Step) {
+				t.Helper()
+
+				var found bool
+				for _, s := range steps {
+					if s.Name == "installing to" && s.Detail == "Step Target" {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					t.Errorf("expected step {installing to, Step Target} in steps %v", steps)
 				}
 			},
 		},
@@ -727,9 +769,16 @@ description: ctx inside targets loop
 
 			defer cancel()
 
+			var steps []install.Step
+			var onStep func(install.Step)
+			if tt.checkSteps != nil {
+				onStep = func(s install.Step) { steps = append(steps, s) }
+			}
+
 			r, err := install.Run(ctx, install.Options{
 				Source:  archivePath,
 				Targets: targets,
+				OnStep:  onStep,
 			})
 
 			if tt.wantErr != "" {
@@ -750,6 +799,10 @@ description: ctx inside targets loop
 
 			if tt.checkResult != nil {
 				tt.checkResult(t, r)
+			}
+
+			if tt.checkSteps != nil {
+				tt.checkSteps(t, steps)
 			}
 		})
 	}

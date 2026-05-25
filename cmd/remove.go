@@ -38,26 +38,27 @@ directory is never touched.`,
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		result, err := pkgremove.Run(ctx, pkgremove.Options{
-			Name: args[0],
-		})
-		if err != nil {
-			return err
-		}
+		name := args[0]
 
 		cli.Printf(
 			out,
 			"%s %s\n\n",
 			cli.Mute(out, "agentpack: removing"),
-			cli.Accent(out, result.Name),
+			cli.Accent(out, name),
 		)
 
-		for _, f := range result.Removed {
-			cli.Printf(out, "  %s %s\n", cli.OK(out, "removed"), cli.Mute(out, f.Path))
-		}
-
-		for _, f := range result.Skipped {
-			cli.Printf(out, "  %s %s\n", cli.Mute(out, "skipped"), cli.Mute(out, f.Path))
+		result, err := pkgremove.Run(ctx, pkgremove.Options{
+			Name: name,
+			OnStep: func(s pkgremove.Step) {
+				if s.Skipped {
+					cli.Printf(out, "  %s %s\n", cli.Mute(out, "skipped"), cli.Mute(out, s.Path))
+				} else {
+					cli.Printf(out, "  %s %s\n", cli.OK(out, "removed"), cli.Mute(out, s.Path))
+				}
+			},
+		})
+		if err != nil {
+			return err
 		}
 
 		cli.Printf(out, "\n  %s removed\n", cli.OK(out, result.Name))

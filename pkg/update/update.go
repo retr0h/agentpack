@@ -72,6 +72,10 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	f, fErr := fetcher.New(m.Source)
 	if fErr == nil {
 		if _, isGit := f.(*fetcher.GitFetcher); isGit {
+			if opts.OnStep != nil {
+				opts.OnStep(install.Step{Name: "checking", Detail: m.Source})
+			}
+
 			refs, lsErr := fetcher.LsRemote(ctx, m.Source)
 			if lsErr == nil {
 				remoteSHA := refs["HEAD"]

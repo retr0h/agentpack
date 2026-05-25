@@ -41,55 +41,52 @@ plugin into the Claude Code plugin directory.`,
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
+		cli.Printf(
+			out,
+			"%s\n\n",
+			cli.Mute(out, "agentpack: syncing"),
+		)
+
 		results, err := pkgsync.Run(ctx, pkgsync.Options{
 			ConfigPath: syncConfigFlag,
 			Builder:    pkgsync.DefaultBuilder{},
 			Installer:  pkgsync.DefaultInstaller{},
+			OnStep: func(name string) {
+				cli.Printf(out, "  %s %s\n",
+					cli.Mute(out, "syncing"),
+					cli.Accent(out, name),
+				)
+			},
 		})
 		if err != nil {
 			return err
 		}
 
-		cli.Printf(
-			out,
-			"%s %s\n\n",
-			cli.Mute(out, "agentpack: syncing"),
-			cli.Mute(out, fmt.Sprintf("%d packages", len(results))),
-		)
+		cli.Print(out, "")
 
-		nameW := 0
-		for _, r := range results {
-			if len(r.Name) > nameW {
-				nameW = len(r.Name)
-			}
-		}
-
-		const pad = 2
 		failed := 0
 
 		for _, r := range results {
-			name := cli.Accent(out, cli.Pad(r.Name, nameW+pad))
 			switch r.Status {
 			case "installed":
 				cli.Printf(
-					out, "  %s%s  %s  %s\n",
-					name,
-					cli.Mute(out, "fetching..."),
+					out, "  %s %s  %s\n",
+					cli.OK(out, checkmark),
+					cli.Accent(out, r.Name),
 					cli.Mute(out, r.Version),
-					cli.OK(out, "installed"),
 				)
 			case "up to date":
 				cli.Printf(
-					out, "  %s%s  %s\n",
-					name,
+					out, "  %s %s  %s\n",
+					cli.OK(out, checkmark),
+					cli.Mute(out, r.Name),
 					cli.Mute(out, "up to date"),
-					cli.Mute(out, r.Version),
 				)
 			case "failed":
 				cli.Printf(
-					out, "  %s%s  %s\n",
-					name,
-					cli.Err(out, "failed"),
+					out, "  %s %s  %s\n",
+					cli.Err(out, "✗"),
+					cli.Accent(out, r.Name),
 					cli.Mute(out, r.Err.Error()),
 				)
 				failed++

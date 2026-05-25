@@ -42,6 +42,15 @@ import (
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
+// Step represents a completed remove action for real-time display.
+type Step struct {
+	// Path is the file path that was acted on.
+	Path string
+
+	// Skipped is true when the file was not removed (modified or protected).
+	Skipped bool
+}
+
 // Options configures a remove run.
 type Options struct {
 	// Name is the plugin identifier to remove.
@@ -50,6 +59,10 @@ type Options struct {
 	// LockfilePath is the path to the lockfile to update. When empty the
 	// global lockfile (~/.config/agentpack/global.yaml) is used.
 	LockfilePath string
+
+	// OnStep is called in real-time as each file is removed or skipped.
+	// When nil, no progress is reported.
+	OnStep func(Step)
 }
 
 // RemovedFile records a file that was successfully removed.
@@ -72,6 +85,13 @@ type Result struct {
 
 	// Skipped lists files that were not deleted because they were modified.
 	Skipped []RemovedFile
+}
+
+// emitStep calls opts.OnStep when the callback is set.
+func emitStep(opts Options, s Step) {
+	if opts.OnStep != nil {
+		opts.OnStep(s)
+	}
 }
 
 // Run removes the named plugin using the registry manifest to determine
@@ -99,6 +119,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		// SAFETY: never delete anything under .git/.
 		if containsGit(absPath) {
 			result.Skipped = append(result.Skipped, RemovedFile{Path: absPath, Skipped: true})
+			emitStep(opts, Step{Path: absPath, Skipped: true})
 
 			continue
 		}
@@ -108,6 +129,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		if checksumErr != nil || !ok {
 			// File is missing or user-modified; skip it.
 			result.Skipped = append(result.Skipped, RemovedFile{Path: absPath, Skipped: true})
+			emitStep(opts, Step{Path: absPath, Skipped: true})
 
 			continue
 		}
@@ -117,6 +139,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 
 		result.Removed = append(result.Removed, RemovedFile{Path: absPath})
+		emitStep(opts, Step{Path: absPath, Skipped: false})
 	}
 
 	// Remove the registry manifest.
