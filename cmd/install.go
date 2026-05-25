@@ -21,11 +21,17 @@
 package cmd
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/pkg/cli"
 	"github.com/retr0h/agentpack/pkg/install"
 )
+
+// checkmark is the Unicode check character used in install output.
+const checkmark = "✓"
 
 var installCmd = &cobra.Command{
 	Use:   "install <source>",
@@ -37,31 +43,72 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
+		source := args[0]
+		displayName := sourceBaseName(source)
+
+		cli.Printf(out, "%s %s\n\n", cli.Mute(out, "agentpack: installing"), cli.Accent(out, displayName))
+
 		// Targets defaults to nil so install.Run uses target.Detected().
 		result, err := install.Run(ctx, install.Options{
-			Source: args[0],
+			Source: source,
 		})
 		if err != nil {
 			return err
 		}
 
-		cli.Printf(
-			out,
-			"%s %s %s (%s)\n\n",
-			cli.Mute(out, "agentpack: installing"),
-			cli.Accent(out, result.Name),
-			cli.Mute(out, "v"+result.Version),
-			cli.Mute(out, result.SHA),
-		)
+		cli.Printf(out, "  %s cloning %s\n", cli.OK(out, checkmark), cli.Mute(out, source))
 
-		for targetName, dir := range result.Dirs {
-			cli.Printf(out, "  [%s] extracted to %s\n", cli.Mute(out, targetName), cli.Mute(out, dir))
+		// Collect target names in deterministic order for consistent output.
+		type targetRow struct {
+			displayName string
+			targetName  string
+			count       int
 		}
 
-		cli.Printf(out, "\n  %s installed\n", cli.OK(out, result.Name))
+		var rows []targetRow
+
+		for dn, tn := range result.Dirs {
+			rows = append(rows, targetRow{displayName: dn, targetName: tn, count: result.FileCounts[dn]})
+		}
+
+		for i, row := range rows {
+			prefix := "  ├─"
+			if i == len(rows)-1 {
+				prefix = "  └─"
+			}
+
+			cli.Printf(
+				out,
+				"%s %s  %s\n",
+				cli.Mute(out, prefix),
+				cli.Accent(out, cli.Pad(row.targetName, 12)),
+				cli.Mute(out, fmt.Sprintf("(%d %s)", row.count, plural(row.count, "file", "files"))),
+			)
+		}
+
+		cli.Printf(out, "\n  %s %s %s\n", cli.OK(out, checkmark), cli.Accent(out, result.Name), cli.Mute(out, "installed"))
 
 		return nil
 	},
+}
+
+// sourceBaseName extracts a short display name from a source path or URL.
+func sourceBaseName(source string) string {
+	s := source
+
+	// Strip ref fragment (#branch or #sha).
+	if idx := strings.LastIndex(s, "#"); idx >= 0 {
+		s = s[:idx]
+	}
+
+	s = strings.TrimSuffix(s, ".git")
+	s = strings.TrimSuffix(s, "/")
+
+	if idx := strings.LastIndex(s, "/"); idx >= 0 {
+		return s[idx+1:]
+	}
+
+	return s
 }
 
 func init() {

@@ -54,7 +54,7 @@ func New() *ClaudeCode {
 }
 
 func (c *ClaudeCode) Name() string        { return "claude-code" }
-func (c *ClaudeCode) DisplayName() string  { return "Claude Code" }
+func (c *ClaudeCode) DisplayName() string { return "Claude Code" }
 
 func (c *ClaudeCode) Detect() bool {
 	home, err := c.userHomeFunc()

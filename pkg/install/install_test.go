@@ -41,6 +41,7 @@ import (
 	"github.com/retr0h/agentpack/pkg/build"
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/target"
 	"github.com/retr0h/agentpack/pkg/target/mocks"
 )
@@ -279,7 +280,8 @@ func TestRun(t *testing.T) {
 		checkResult func(t *testing.T, r *install.Result)
 	}{
 		{
-			name: "installs archive to stub target",
+			name:       "installs archive to stub target",
+			noParallel: true,
 			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
@@ -295,6 +297,11 @@ description: A test plugin
 				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
 
 				return archivePath, []target.Target{m}
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				t.Cleanup(restore)
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -313,7 +320,8 @@ description: A test plugin
 			},
 		},
 		{
-			name: "installs to multiple targets",
+			name:       "installs to multiple targets",
+			noParallel: true,
 			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				dir := t.TempDir()
@@ -335,6 +343,11 @@ description: Multi-target plugin
 
 				return archivePath, []target.Target{m1, m2}
 			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				t.Cleanup(restore)
+			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
 
@@ -344,12 +357,18 @@ description: Multi-target plugin
 			},
 		},
 		{
-			name: "succeeds with no targets (empty list)",
+			name:       "succeeds with no targets (empty list)",
+			noParallel: true,
 			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
 				archivePath := buildArchiveWithMeta(t, "empty-targets-plugin", "1.0.0")
 
 				return archivePath, []target.Target{}
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				t.Cleanup(restore)
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -1282,6 +1301,110 @@ func TestFindAndReadMetadata(t *testing.T) {
 
 			if tt.check != nil {
 				tt.check(t, m)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestCollectInstalledFiles
+// --------------------------------------------------------------------------
+
+func TestCollectInstalledFiles(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		setup      func(t *testing.T) string
+		targetName string
+		wantErr    string
+		wantLen    int
+	}{
+		{
+			name: "collects files with SHA256 from a directory",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+
+				if err := os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# Skill"), 0o644); err != nil {
+					t.Fatalf("write skill.md: %v", err)
+				}
+
+				sub := filepath.Join(dir, "sub")
+				if err := os.MkdirAll(sub, 0o755); err != nil {
+					t.Fatalf("mkdir sub: %v", err)
+				}
+
+				if err := os.WriteFile(filepath.Join(sub, "agent.md"), []byte("# Agent"), 0o644); err != nil {
+					t.Fatalf("write agent.md: %v", err)
+				}
+
+				return dir
+			},
+			targetName: "claude-code",
+			wantLen:    2,
+		},
+		{
+			name: "returns empty slice for empty directory",
+			setup: func(t *testing.T) string {
+				t.Helper()
+
+				return t.TempDir()
+			},
+			targetName: "universal",
+			wantLen:    0,
+		},
+		{
+			name: "returns error when directory does not exist",
+			setup: func(t *testing.T) string {
+				t.Helper()
+
+				return filepath.Join(t.TempDir(), "nonexistent")
+			},
+			targetName: "claude-code",
+			wantErr:    "no such file or directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := tt.setup(t)
+			files, err := install.CollectInstalledFiles(dir, tt.targetName)
+
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(files) != tt.wantLen {
+				t.Errorf("len(files) = %d, want %d", len(files), tt.wantLen)
+			}
+
+			for _, f := range files {
+				if f.Target != tt.targetName {
+					t.Errorf("Target = %q, want %q", f.Target, tt.targetName)
+				}
+
+				if f.SHA256 == "" {
+					t.Errorf("SHA256 is empty for %s", f.Path)
+				}
+
+				if f.Path == "" {
+					t.Error("Path is empty")
+				}
 			}
 		})
 	}

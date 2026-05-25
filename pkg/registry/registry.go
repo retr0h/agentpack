@@ -32,6 +32,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// osUserHomeDir is a swappable wrapper around os.UserHomeDir so tests can
+// redirect registry writes to a temp directory without touching the real
+// ~/.config/agentpack/packages/ tree.
+var osUserHomeDir = os.UserHomeDir
+
+// SetOsUserHomeDir replaces the home-dir lookup function used by Dir (and
+// transitively by Save, Load, Remove, and List). It returns a restore
+// function that callers should defer so each test cleans up after itself.
+// This is intended for tests in other packages (e.g. list, install) that
+// write through the registry and must not pollute the real home directory.
+func SetOsUserHomeDir(fn func() (string, error)) func() {
+	orig := osUserHomeDir
+	osUserHomeDir = fn
+
+	return func() { osUserHomeDir = orig }
+}
+
 // InstalledFile records a single file placed on disk during an install.
 type InstalledFile struct {
 	// Path is the relative path of the file within its target directory.
@@ -76,7 +93,7 @@ type PackageManifest struct {
 // Dir returns the path to the package registry directory, creating it if it
 // does not exist. The directory is ~/.config/agentpack/packages/.
 func Dir() (string, error) {
-	home, err := os.UserHomeDir()
+	home, err := osUserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("home dir: %w", err)
 	}

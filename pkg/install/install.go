@@ -23,16 +23,20 @@ package install
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/retr0h/agentpack/pkg/archive"
 	"github.com/retr0h/agentpack/pkg/checksum"
 	"github.com/retr0h/agentpack/pkg/fetcher"
 	"github.com/retr0h/agentpack/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
@@ -42,6 +46,10 @@ var (
 	// creation failures.
 	osCreateTemp = os.CreateTemp
 	osMkdirTemp  = os.MkdirTemp
+
+	// registrySave is a swappable wrapper around registry.Save so tests can
+	// prevent writes to the real ~/.config/agentpack/packages/ directory.
+	registrySave = registry.Save
 )
 
 // Options configures an install run.
@@ -65,6 +73,8 @@ type Result struct {
 	SHA     string
 	// Dirs maps target display-name → installed directory.
 	Dirs map[string]string
+	// FileCounts maps target display-name → number of files installed.
+	FileCounts map[string]int
 }
 
 // Run installs from any source: .agentpack archive, git repo, or local path.
@@ -93,12 +103,21 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 	}
 	defer func() { _ = os.RemoveAll(cloneDir) }()
 
-	if err := f.Fetch(ctx, opts.Source, cloneDir); err != nil {
+	// Use FetchWithResult so we capture the resolved commit SHA.
+	gf, _ := f.(*fetcher.GitFetcher)
+
+	sha, err := gf.FetchWithResult(ctx, opts.Source, cloneDir)
+	if err != nil {
 		return nil, fmt.Errorf("fetch: %w", err)
 	}
 
 	name := nameFromSource(opts.Source)
-	meta := &metadata.Metadata{Name: name, Version: "latest"}
+	meta := &metadata.Metadata{
+		Name:           name,
+		Version:        "latest",
+		GitCommitSHA:   sha,
+		BuildTimestamp: time.Now().UTC().Format(time.RFC3339),
+	}
 
 	return installFromDir(ctx, opts, cloneDir, meta)
 }
@@ -206,6 +225,9 @@ func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *m
 	}
 
 	dirs := make(map[string]string)
+	fileCounts := make(map[string]int)
+
+	var allFiles []registry.InstalledFile
 
 	for _, tgt := range targets {
 		if err := ctx.Err(); err != nil {
@@ -225,17 +247,84 @@ func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *m
 			return nil, fmt.Errorf("install to %s: %w", tgt.Name(), installErr)
 		}
 
+		// Collect installed files from the source dir before removing it.
+		installed, collectErr := collectInstalledFiles(srcDir, tgt.Name())
+		if collectErr != nil {
+			_ = os.RemoveAll(srcDir)
+
+			return nil, fmt.Errorf("collect files for %s: %w", tgt.Name(), collectErr)
+		}
+
+		allFiles = append(allFiles, installed...)
+		fileCounts[tgt.DisplayName()] = len(installed)
+
 		_ = os.RemoveAll(srcDir)
 
 		dirs[tgt.DisplayName()] = tgt.Name()
 	}
 
+	// Save registry manifest.
+	manifest := &registry.PackageManifest{
+		Name:      meta.Name,
+		Source:    opts.Source,
+		SHA:       meta.GitCommitSHA,
+		Version:   meta.Version,
+		Installed: time.Now().UTC().Format(time.RFC3339),
+		Files:     allFiles,
+	}
+	if saveErr := registrySave(manifest); saveErr != nil {
+		return nil, fmt.Errorf("save registry manifest: %w", saveErr)
+	}
+
 	return &Result{
-		Name:    meta.Name,
-		Version: meta.Version,
-		SHA:     shortSHA(meta.GitCommitSHA),
-		Dirs:    dirs,
+		Name:       meta.Name,
+		Version:    meta.Version,
+		SHA:        shortSHA(meta.GitCommitSHA),
+		Dirs:       dirs,
+		FileCounts: fileCounts,
 	}, nil
+}
+
+// collectInstalledFiles walks dir and returns an InstalledFile record for
+// every regular file it contains. The SHA256 is computed from the file content.
+func collectInstalledFiles(dir, targetName string) ([]registry.InstalledFile, error) {
+	var files []registry.InstalledFile
+
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		rel, relErr := filepath.Rel(dir, path)
+		if relErr != nil {
+			return fmt.Errorf("rel path: %w", relErr)
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("read %s: %w", path, readErr)
+		}
+
+		h := sha256.Sum256(data)
+
+		files = append(files, registry.InstalledFile{
+			Path:   rel,
+			SHA256: hex.EncodeToString(h[:]),
+			Target: targetName,
+			Dir:    dir,
+		})
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
 }
 
 // copyToTemp makes a fresh copy of src into a new temp directory and returns

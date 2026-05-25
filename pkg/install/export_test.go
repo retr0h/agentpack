@@ -27,6 +27,7 @@ import (
 	"os"
 
 	"github.com/retr0h/agentpack/pkg/metadata"
+	"github.com/retr0h/agentpack/pkg/registry"
 )
 
 // ShortSHA exposes shortSHA for testing.
@@ -96,4 +97,20 @@ func MkdirTempFailAfterN(n int) func(string, string) (string, error) {
 // CopyToTemp exposes copyToTemp for testing.
 func CopyToTemp(ctx context.Context, src string) (string, error) {
 	return copyToTemp(ctx, src)
+}
+
+// CollectInstalledFiles exposes collectInstalledFiles for testing.
+func CollectInstalledFiles(dir, targetName string) ([]registry.InstalledFile, error) {
+	return collectInstalledFiles(dir, targetName)
+}
+
+// SetRegistrySave replaces the registrySave function for testing. It returns
+// a restore function that callers should defer so each test cleans up after
+// itself. Use this in non-parallel tests to prevent registry writes from
+// polluting the real ~/.config/agentpack/packages/ directory.
+func SetRegistrySave(fn func(*registry.PackageManifest) error) func() {
+	orig := registrySave
+	registrySave = fn
+
+	return func() { registrySave = orig }
 }

@@ -21,12 +21,25 @@
 package registry_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/retr0h/agentpack/pkg/registry"
 )
+
+// tempHome returns a SetOsUserHomeDir restore function that directs all
+// registry I/O to a fresh temp directory, preventing real-home pollution.
+func tempHome(t *testing.T) func() {
+	t.Helper()
+
+	tmp := t.TempDir()
+
+	return registry.SetOsUserHomeDir(func() (string, error) {
+		return tmp, nil
+	})
+}
 
 // --------------------------------------------------------------------------
 // TestSaveAndLoad
@@ -60,8 +73,8 @@ func TestSaveAndLoad(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmp := t.TempDir()
-			t.Setenv("HOME", tmp)
+			restore := tempHome(t)
+			defer restore()
 
 			err := registry.Save(tt.manifest)
 			if tt.wantErr != "" {
@@ -97,6 +110,58 @@ func TestSaveAndLoad(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
+// TestDir
+// --------------------------------------------------------------------------
+
+func TestDir(t *testing.T) {
+	tests := []struct {
+		name       string
+		homeFunc   func() (string, error)
+		wantSuffix string
+		wantErr    string
+	}{
+		{
+			name: "returns registry dir under temp home",
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			wantSuffix: filepath.Join(".config", "agentpack", "packages"),
+		},
+		{
+			name: "returns error when home dir lookup fails",
+			homeFunc: func() (string, error) {
+				return "", fmt.Errorf("no home")
+			},
+			wantErr: "home dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restore := registry.SetOsUserHomeDir(tt.homeFunc)
+			defer restore()
+
+			got, err := registry.Dir()
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error %q, got nil", tt.wantErr)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !filepath.IsAbs(got) {
+				t.Errorf("Dir() = %q, want absolute path", got)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
 // TestLoad
 // --------------------------------------------------------------------------
 
@@ -115,8 +180,8 @@ func TestLoad(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmp := t.TempDir()
-			t.Setenv("HOME", tmp)
+			restore := tempHome(t)
+			defer restore()
 
 			_, err := registry.Load(tt.pkgName)
 			if tt.wantErr != "" {
@@ -160,6 +225,7 @@ func TestRemove(t *testing.T) {
 			name: "remove nonexistent is no-op",
 			setup: func(t *testing.T) string {
 				t.Helper()
+
 				return "ghost"
 			},
 		},
@@ -167,8 +233,8 @@ func TestRemove(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmp := t.TempDir()
-			t.Setenv("HOME", tmp)
+			restore := tempHome(t)
+			defer restore()
 
 			pkgName := tt.setup(t)
 
@@ -227,8 +293,8 @@ func TestList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmp := t.TempDir()
-			t.Setenv("HOME", tmp)
+			restore := tempHome(t)
+			defer restore()
 
 			tt.setup(t)
 
