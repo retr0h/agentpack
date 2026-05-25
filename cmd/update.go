@@ -18,48 +18,54 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package cmd contains the agentpack cobra command tree.
 package cmd
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
-
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/pkg/cli"
-	_ "github.com/retr0h/agentpack/pkg/target/claudecode" // register Claude Code target
-	_ "github.com/retr0h/agentpack/pkg/target/cursor"     // register Cursor target
-	_ "github.com/retr0h/agentpack/pkg/target/universal"  // register Universal target
+	pkgupdate "github.com/retr0h/agentpack/pkg/update"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "agentpack",
-	Short: "The package manager for agentskills.io",
+var updateCmd = &cobra.Command{
+	Use:   "update <name>",
+	Short: "Update an installed agentpack plugin",
+	Long:  `Update re-installs the named plugin from its stored source URL and reports whether a new version was fetched.`,
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		out := cmd.OutOrStdout()
+
+		result, err := pkgupdate.Run(ctx, pkgupdate.Options{
+			Name: args[0],
+		})
+		if err != nil {
+			return err
+		}
+
+		cli.Printf(
+			out,
+			"%s %s\n\n",
+			cli.Mute(out, "agentpack: updating"),
+			cli.Accent(out, result.Name),
+		)
+
+		if result.Updated {
+			cli.Printf(
+				out,
+				"  %s  %s → %s\n",
+				cli.OK(out, "updated"),
+				cli.Mute(out, result.OldSHA[:7]),
+				cli.Mute(out, result.NewSHA[:7]),
+			)
+		} else {
+			cli.Printf(out, "  %s\n", cli.Mute(out, "already up to date"))
+		}
+
+		return nil
+	},
 }
 
-// Execute runs the root command; invoked by main.
-func Execute() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
-	rootCmd.SilenceUsage = true
-
-	defaultHelp := rootCmd.HelpFunc()
-	rootCmd.SetHelpFunc(func(c *cobra.Command, args []string) {
-		if c == rootCmd {
-			out := c.OutOrStdout()
-			_, _ = fmt.Fprintln(out)
-			_, _ = fmt.Fprint(out, cli.Banner(out))
-			_, _ = fmt.Fprintln(out)
-		}
-		defaultHelp(c, args)
-	})
-
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		os.Exit(1)
-	}
+func init() {
+	rootCmd.AddCommand(updateCmd)
 }

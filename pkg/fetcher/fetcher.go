@@ -43,9 +43,10 @@ var gitHosts = []string{
 
 // New returns the appropriate Fetcher for the given source URI.
 // It inspects the source string to select the matching backend:
-//   - github.com/, gitlab.com/, bitbucket.org/ → GitFetcher
+//   - github.com/, gitlab.com/, bitbucket.org/ — bare or https:// → GitFetcher
 //   - ends with .git → GitFetcher
-//   - http:// or https:// → HTTPFetcher
+//   - https://example.com/archive.agentpack (non-git host) → HTTPFetcher
+//   - http:// (non-git host) → HTTPFetcher
 //   - s3:// → error (not yet implemented)
 //   - gs:// → error (not yet implemented)
 //   - unknown scheme → error
@@ -60,12 +61,12 @@ func New(source string) (Fetcher, error) {
 	switch {
 	case isGitSource(bare):
 		return &GitFetcher{}, nil
-	case strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://"):
-		return &HTTPFetcher{}, nil
 	case strings.HasPrefix(source, "s3://"):
 		return nil, fmt.Errorf("s3 backend not yet implemented")
 	case strings.HasPrefix(source, "gs://"):
 		return nil, fmt.Errorf("gs backend not yet implemented")
+	case strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://"):
+		return &HTTPFetcher{}, nil
 	case strings.Contains(source, "://"):
 		return nil, fmt.Errorf("unknown scheme in source: %q", source)
 	default:
@@ -75,10 +76,20 @@ func New(source string) (Fetcher, error) {
 }
 
 // isGitSource returns true when bare (URL without fragment) looks like a git
-// repository reference: it matches a known host prefix or ends with ".git".
+// repository reference: it matches a known host prefix (with or without an
+// https:// scheme) or ends with ".git".
 func isGitSource(bare string) bool {
+	// Strip any https:// or http:// prefix for host comparison.
+	stripped := bare
+	for _, scheme := range []string{"https://", "http://"} {
+		if strings.HasPrefix(bare, scheme) {
+			stripped = bare[len(scheme):]
+			break
+		}
+	}
+
 	for _, host := range gitHosts {
-		if strings.HasPrefix(bare, host) {
+		if strings.HasPrefix(stripped, host) {
 			return true
 		}
 	}

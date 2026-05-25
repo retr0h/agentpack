@@ -93,6 +93,16 @@ func TestNew(t *testing.T) {
 			wantType: "*fetcher.HTTPFetcher",
 		},
 		{
+			name:     "https github.com URL returns GitFetcher",
+			source:   "https://github.com/org/repo",
+			wantType: "*fetcher.GitFetcher",
+		},
+		{
+			name:     "https gitlab.com URL returns GitFetcher",
+			source:   "https://gitlab.com/org/repo",
+			wantType: "*fetcher.GitFetcher",
+		},
+		{
 			name:    "s3 scheme returns error",
 			source:  "s3://bucket/archive.agentpack",
 			wantErr: "s3 backend not yet implemented",

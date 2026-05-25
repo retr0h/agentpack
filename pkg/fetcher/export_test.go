@@ -66,3 +66,13 @@ func ToGitURL(rawURL string) string {
 func IsSHA(ref string) bool {
 	return isSHA(ref)
 }
+
+// ExtractHost exposes extractHost for testing.
+func ExtractHost(gitURL string) string {
+	return extractHost(gitURL)
+}
+
+// NetrcAuth exposes netrcAuth for testing.
+func NetrcAuth(gitURL string) interface{} {
+	return netrcAuth(gitURL)
+}

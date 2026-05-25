@@ -18,48 +18,54 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package cmd contains the agentpack cobra command tree.
 package cmd
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
-
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/pkg/cli"
-	_ "github.com/retr0h/agentpack/pkg/target/claudecode" // register Claude Code target
-	_ "github.com/retr0h/agentpack/pkg/target/cursor"     // register Cursor target
-	_ "github.com/retr0h/agentpack/pkg/target/universal"  // register Universal target
+	pkgremove "github.com/retr0h/agentpack/pkg/remove"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "agentpack",
-	Short: "The package manager for agentskills.io",
+var removeCmd = &cobra.Command{
+	Use:   "remove <name>",
+	Short: "Remove an installed agentpack plugin",
+	Long: `Remove an installed agentpack plugin. Only the exact files recorded in
+the plugin registry are deleted. User-modified files are skipped. The .git
+directory is never touched.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		out := cmd.OutOrStdout()
+
+		result, err := pkgremove.Run(ctx, pkgremove.Options{
+			Name: args[0],
+		})
+		if err != nil {
+			return err
+		}
+
+		cli.Printf(
+			out,
+			"%s %s\n\n",
+			cli.Mute(out, "agentpack: removing"),
+			cli.Accent(out, result.Name),
+		)
+
+		for _, f := range result.Removed {
+			cli.Printf(out, "  %s %s\n", cli.OK(out, "removed"), cli.Mute(out, f.Path))
+		}
+
+		for _, f := range result.Skipped {
+			cli.Printf(out, "  %s %s\n", cli.Mute(out, "skipped"), cli.Mute(out, f.Path))
+		}
+
+		cli.Printf(out, "\n  %s removed\n", cli.OK(out, result.Name))
+
+		return nil
+	},
 }
 
-// Execute runs the root command; invoked by main.
-func Execute() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
-	rootCmd.SilenceUsage = true
-
-	defaultHelp := rootCmd.HelpFunc()
-	rootCmd.SetHelpFunc(func(c *cobra.Command, args []string) {
-		if c == rootCmd {
-			out := c.OutOrStdout()
-			_, _ = fmt.Fprintln(out)
-			_, _ = fmt.Fprint(out, cli.Banner(out))
-			_, _ = fmt.Fprintln(out)
-		}
-		defaultHelp(c, args)
-	})
-
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		os.Exit(1)
-	}
+func init() {
+	rootCmd.AddCommand(removeCmd)
 }
