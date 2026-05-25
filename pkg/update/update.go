@@ -18,61 +18,80 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package update re-installs an agentpack plugin from its stored source,
-// comparing the old and new resolved SHAs to detect whether an update
-// actually occurred.
+// Package update re-installs an agentpack plugin from its stored source.
 package update
 
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/retr0h/agentpack/pkg/fetcher"
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
 // Options configures an update run.
 type Options struct {
-	// Name is the plugin identifier to update.
-	Name string
+	Name   string
+	OnStep func(install.Step)
 }
 
 // Result holds the outcome of an update.
 type Result struct {
-	// Name is the plugin that was updated.
-	Name string
-
-	// OldSHA is the git commit SHA before the update.
-	OldSHA string
-
-	// NewSHA is the git commit SHA after the update.
-	NewSHA string
-
-	// Version is the new version string.
+	Name    string
+	OldSHA  string
+	NewSHA  string
 	Version string
-
-	// Updated is true when OldSHA != NewSHA.
 	Updated bool
 }
 
-// Run re-installs the named plugin from its stored source. It compares the
-// old and new resolved SHAs to determine whether a new version was installed.
+func shortSHA(s string) string {
+	if len(s) >= 7 {
+		return s[:7]
+	}
+
+	return s
+}
+
+// Run checks if an update is available and re-installs only if the remote
+// SHA differs from the installed SHA.
 func Run(ctx context.Context, opts Options) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	// Load the existing registry manifest to get the source.
 	m, err := registry.Load(opts.Name)
 	if err != nil {
 		return nil, fmt.Errorf("load registry manifest: %w", err)
 	}
 
-	oldSHA := m.SHA
+	oldSHA := shortSHA(m.SHA)
 
-	// Re-install from the stored source.
+	// Check if the source is a git repo — if so, check remote HEAD first.
+	f, fErr := fetcher.New(m.Source)
+	if fErr == nil {
+		if _, isGit := f.(*fetcher.GitFetcher); isGit {
+			refs, lsErr := fetcher.LsRemote(ctx, m.Source)
+			if lsErr == nil {
+				remoteSHA := refs["HEAD"]
+				remoteShort := shortSHA(remoteSHA)
+				if remoteShort == oldSHA || strings.HasPrefix(remoteSHA, m.SHA) {
+					return &Result{
+						Name:    opts.Name,
+						OldSHA:  oldSHA,
+						NewSHA:  oldSHA,
+						Version: m.Version,
+						Updated: false,
+					}, nil
+				}
+			}
+		}
+	}
+
 	installResult, err := install.Run(ctx, install.Options{
 		Source: m.Source,
+		OnStep: opts.OnStep,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("re-install: %w", err)

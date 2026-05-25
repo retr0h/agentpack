@@ -24,42 +24,50 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/pkg/cli"
+	"github.com/retr0h/agentpack/pkg/install"
 	pkgupdate "github.com/retr0h/agentpack/pkg/update"
 )
 
 var updateCmd = &cobra.Command{
 	Use:   "update <name>",
 	Short: "Update an installed agentpack plugin",
-	Long:  `Update re-installs the named plugin from its stored source URL and reports whether a new version was fetched.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
+		cli.Printf(out, "%s %s\n\n",
+			cli.Mute(out, "agentpack: updating"),
+			cli.Accent(out, args[0]),
+		)
+
 		result, err := pkgupdate.Run(ctx, pkgupdate.Options{
 			Name: args[0],
+			OnStep: func(s install.Step) {
+				cli.Printf(out, "  %s %s %s\n",
+					cli.OK(out, checkmark),
+					cli.Mute(out, s.Name),
+					cli.Mute(out, s.Detail),
+				)
+			},
 		})
 		if err != nil {
 			return err
 		}
 
-		cli.Printf(
-			out,
-			"%s %s\n\n",
-			cli.Mute(out, "agentpack: updating"),
-			cli.Accent(out, result.Name),
-		)
+		cli.Print(out, "")
 
 		if result.Updated {
-			cli.Printf(
-				out,
-				"  %s  %s → %s\n",
+			cli.Printf(out, "  %s %s → %s\n",
 				cli.OK(out, "updated"),
-				cli.Mute(out, result.OldSHA[:7]),
-				cli.Mute(out, result.NewSHA[:7]),
+				cli.Mute(out, result.OldSHA),
+				cli.Accent(out, result.NewSHA),
 			)
 		} else {
-			cli.Printf(out, "  %s\n", cli.Mute(out, "already up to date"))
+			cli.Printf(out, "  %s %s\n",
+				cli.OK(out, checkmark),
+				cli.Mute(out, "already up to date"),
+			)
 		}
 
 		return nil
