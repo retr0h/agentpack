@@ -10,3 +10,5 @@ docs/bun.lock
 coverage.out
 *.agentpack
 examples/*/.git/
+.agents/
+.claude/skills/
