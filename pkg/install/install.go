@@ -80,10 +80,18 @@ type Options struct {
 }
 
 // Result holds the outcome of a successful install.
+// Step represents a completed pipeline phase for display.
+type Step struct {
+	Name   string
+	Detail string
+}
+
 type Result struct {
 	Name    string
 	Version string
 	SHA     string
+	Source  string
+	Steps   []Step
 	// Dirs maps target display-name → installed directory.
 	Dirs map[string]string
 	// FileCounts maps target display-name → number of files installed.
@@ -116,13 +124,20 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 	}
 	defer func() { _ = os.RemoveAll(cloneDir) }()
 
-	// Use FetchWithResult so we capture the resolved commit SHA.
 	gf, _ := f.(*fetcher.GitFetcher)
+
+	cloneURL := opts.Source
+	if idx := strings.LastIndex(cloneURL, "#"); idx >= 0 {
+		cloneURL = cloneURL[:idx]
+	}
 
 	sha, err := gf.FetchWithResult(ctx, opts.Source, cloneDir)
 	if err != nil {
 		return nil, fmt.Errorf("fetch: %w", err)
 	}
+
+	var steps []Step
+	steps = append(steps, Step{Name: "cloning", Detail: cloneURL})
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -130,29 +145,29 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 
 	name := nameFromSource(opts.Source)
 
-	// Build a .agentpack archive from the cloned repo contents. This ensures
-	// every install path produces a verifiable, content-filtered archive per
-	// ADR-001 regardless of whether the source repo ships an agentpack.yaml.
 	archivePath, err := autoPackage(ctx, cloneDir, name, sha, opts.Skills, opts.Agents)
 	if err != nil {
 		return nil, fmt.Errorf("auto-package: %w", err)
 	}
 	defer func() { _ = os.Remove(archivePath) }()
 
+	// Count files in the archive for the step detail.
+	info, _ := os.Stat(archivePath)
+	sizeStr := ""
+	if info != nil {
+		sizeStr = fmt.Sprintf("(%s)", humanSize(info.Size()))
+	}
+	steps = append(steps, Step{Name: "building package", Detail: sizeStr})
+
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	// Persist the archive to the archives store so subsequent reinstalls do not
-	// require a network fetch.
 	storedPath, err := storeArchive(archivePath, name, sha)
 	if err != nil {
-		// Non-fatal: we still have the temp archive, proceed with install.
 		storedPath = archivePath
 	}
 
-	// Install using the standard archive path so checksum verification and
-	// metadata parsing are applied uniformly.
 	archiveOpts := opts
 	archiveOpts.OriginalSource = opts.Source
 	archiveOpts.Source = storedPath
@@ -162,7 +177,15 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 		return nil, fmt.Errorf("fetcher for stored archive: %w", err)
 	}
 
-	return runFromArchive(ctx, archiveOpts, archiveFetcher)
+	result, err := runFromArchive(ctx, archiveOpts, archiveFetcher)
+	if err != nil {
+		return nil, err
+	}
+
+	result.Steps = append(steps, result.Steps...)
+	result.Source = opts.Source
+
+	return result, nil
 }
 
 func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, error) {
@@ -228,7 +251,18 @@ func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Resu
 		return nil, err
 	}
 
-	return installFromDir(ctx, opts, tmpDir, meta)
+	result, err := installFromDir(ctx, opts, tmpDir, meta)
+	if err != nil {
+		return nil, err
+	}
+
+	verifyStep := Step{
+		Name:   "verified checksums",
+		Detail: fmt.Sprintf("%d/%d OK", len(verifyResults), len(verifyResults)),
+	}
+	result.Steps = append([]Step{verifyStep}, result.Steps...)
+
+	return result, nil
 }
 
 // nameFromSource extracts a plugin name from a source URL.
@@ -249,6 +283,15 @@ func nameFromSource(source string) string {
 }
 
 // installFromDir is the shared install path for both archive and git sources.
+func humanSize(bytes int64) string {
+	const kb = 1024
+	if bytes < kb {
+		return fmt.Sprintf("%d B", bytes)
+	}
+
+	return fmt.Sprintf("%d KB", bytes/kb)
+}
+
 func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *metadata.Metadata) (*Result, error) {
 	targets := opts.Targets
 	if len(targets) == 0 {

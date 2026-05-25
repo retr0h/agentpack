@@ -63,7 +63,17 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 			return err
 		}
 
-		cli.Printf(out, "  %s cloning %s\n", cli.OK(out, checkmark), cli.Mute(out, source))
+		for _, step := range result.Steps {
+			cli.Printf(out, "  %s %s %s\n",
+				cli.OK(out, checkmark),
+				cli.Mute(out, step.Name),
+				cli.Mute(out, step.Detail),
+			)
+		}
+
+		if len(result.Steps) > 0 {
+			cli.Print(out, "")
+		}
 
 		// Collect target names in deterministic order for consistent output.
 		type targetRow struct {
