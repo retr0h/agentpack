@@ -78,9 +78,9 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 
 			refs, lsErr := fetcher.LsRemote(ctx, m.Source)
 			if lsErr == nil {
-				remoteSHA := refs["HEAD"]
+				remoteSHA := resolveHEAD(refs)
 				remoteShort := shortSHA(remoteSHA)
-				if remoteShort == oldSHA || strings.HasPrefix(remoteSHA, m.SHA) {
+				if remoteSHA != "" && (remoteShort == oldSHA || strings.HasPrefix(remoteSHA, m.SHA)) {
 					return &Result{
 						Name:    opts.Name,
 						OldSHA:  oldSHA,
@@ -108,4 +108,23 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		Version: installResult.Version,
 		Updated: oldSHA != installResult.SHA,
 	}, nil
+}
+
+// resolveHEAD finds the actual HEAD SHA from ls-remote refs. go-git returns
+// HEAD as a zero hash for symbolic refs, so we fall back to refs/heads/main
+// or refs/heads/master.
+func resolveHEAD(refs map[string]string) string {
+	if sha, ok := refs["HEAD"]; ok && sha != "0000000000000000000000000000000000000000" {
+		return sha
+	}
+
+	if sha, ok := refs["refs/heads/main"]; ok {
+		return sha
+	}
+
+	if sha, ok := refs["refs/heads/master"]; ok {
+		return sha
+	}
+
+	return ""
 }

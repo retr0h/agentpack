@@ -21,7 +21,10 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -29,21 +32,50 @@ import (
 	"github.com/retr0h/agentpack/pkg/verify"
 )
 
+var verifySHA256 string
+
 var verifyCmd = &cobra.Command{
 	Use:   "verify <archive.agentpack>",
 	Short: "Verify checksums of a .agentpack archive",
-	Args:  cobra.ExactArgs(1),
+	Long: `Verify internal checksums of a .agentpack archive.
+
+With --sha256, also verify the archive itself against an external hash.
+This provides tamper detection for distributed archives — the builder
+publishes the SHA256 alongside the archive (like goreleaser checksums.txt).`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		result, err := verify.Run(ctx, args[0])
+		archivePath := args[0]
+
+		// External SHA256 verification (tamper detection).
+		if verifySHA256 != "" {
+			data, err := os.ReadFile(archivePath)
+			if err != nil {
+				return fmt.Errorf("read archive: %w", err)
+			}
+
+			h := sha256.Sum256(data)
+			actual := hex.EncodeToString(h[:])
+
+			if actual != verifySHA256 {
+				return fmt.Errorf(
+					"archive SHA256 mismatch\n  expected: %s\n  actual:   %s",
+					verifySHA256, actual,
+				)
+			}
+
+			cli.Printf(out, "  %s %s\n", cli.OK(out, checkmark), cli.Mute(out, "archive SHA256 verified"))
+		}
+
+		// Internal checksum verification (corruption detection).
+		result, err := verify.Run(ctx, archivePath)
 		if err != nil {
 			return err
 		}
 
-		cli.Printf(
-			out, "%s %s\n\n",
+		cli.Printf(out, "%s %s\n\n",
 			cli.Mute(out, "agentpack: verifying"),
 			cli.Accent(out, result.ArchiveName),
 		)
@@ -53,7 +85,6 @@ var verifyCmd = &cobra.Command{
 
 		for _, f := range result.Files {
 			if f.OK {
-				cli.Printf(out, "  %-60s %s\n", f.Path, cli.OK(out, "OK"))
 				passed++
 			} else {
 				cli.Printf(out, "  %-60s %s  %s\n", f.Path, cli.Err(out, "FAIL"), f.Err)
@@ -62,7 +93,10 @@ var verifyCmd = &cobra.Command{
 		}
 
 		total := passed + failed
-		cli.Printf(out, "\n  %d/%d files verified\n", passed, total)
+		cli.Printf(out, "  %s %s\n",
+			cli.OK(out, checkmark),
+			cli.Mute(out, fmt.Sprintf("internal checksums %d/%d OK", passed, total)),
+		)
 
 		if failed > 0 {
 			return fmt.Errorf("%d file(s) failed verification", failed)
@@ -73,5 +107,6 @@ var verifyCmd = &cobra.Command{
 }
 
 func init() {
+	verifyCmd.Flags().StringVar(&verifySHA256, "sha256", "", "verify archive against external SHA256 hash")
 	rootCmd.AddCommand(verifyCmd)
 }
