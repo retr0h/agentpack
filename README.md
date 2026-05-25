@@ -111,7 +111,7 @@ agentpack sync
 ## 📖 Documentation
 
 - [Architecture][] — driver design, install flow, content types
-- [Package Format][] — archive layout, manifest reference, MCP config
+- [Package Format (ADR-001)][] — archive schema, content types, build pipeline
 - [Development][] — dev setup, testing conventions, layout
 - [Contributing][] — commit style, lint chain, PR checklist
 
@@ -121,6 +121,6 @@ agentpack sync
 
 [MIT]: LICENSE
 [Architecture]: docs/architecture.md
-[Package Format]: docs/package-format.md
+[Package Format (ADR-001)]: docs/adr/001-agentpack-format.md
 [Development]: docs/development.md
 [Contributing]: docs/contributing.md

@@ -247,8 +247,8 @@ func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *m
 			return nil, fmt.Errorf("install to %s: %w", tgt.Name(), installErr)
 		}
 
-		// Collect installed files from the source dir before removing it.
-		installed, collectErr := collectInstalledFiles(srcDir, tgt.Name())
+		// Collect installed files by scanning the target's install dirs.
+		installed, collectErr := collectTargetFiles(dir, tgt, srcDir)
 		if collectErr != nil {
 			_ = os.RemoveAll(srcDir)
 
@@ -287,6 +287,48 @@ func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *m
 
 // collectInstalledFiles walks dir and returns an InstalledFile record for
 // every regular file it contains. The SHA256 is computed from the file content.
+// collectTargetFiles scans only the content dirs that exist in the source
+// (skills/, commands/, agents/) and records what was copied to the install dir.
+func collectTargetFiles(installDir string, tgt target.Target, srcDir string) ([]registry.InstalledFile, error) {
+	contentDirs := []string{"skills", "commands", "agents"}
+	var allFiles []registry.InstalledFile
+
+	for _, content := range contentDirs {
+		srcContent := filepath.Join(srcDir, content)
+		if _, err := os.Stat(srcContent); os.IsNotExist(err) {
+			continue
+		}
+
+		// Walk the source content dir and record relative paths.
+		err := filepath.WalkDir(srcContent, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil || d.IsDir() {
+				return walkErr
+			}
+
+			rel, _ := filepath.Rel(srcDir, path)
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+
+			h := sha256.Sum256(data)
+			allFiles = append(allFiles, registry.InstalledFile{
+				Path:   rel,
+				SHA256: hex.EncodeToString(h[:]),
+				Target: tgt.Name(),
+				Dir:    installDir,
+			})
+
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return allFiles, nil
+}
+
 func collectInstalledFiles(dir, targetName string) ([]registry.InstalledFile, error) {
 	var files []registry.InstalledFile
 
