@@ -53,27 +53,23 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 
 		cli.Printf(out, "%s %s\n\n", cli.Mute(out, "agentpack: installing"), cli.Accent(out, displayName))
 
-		// Targets defaults to nil so install.Run uses target.Detected().
 		result, err := install.Run(ctx, install.Options{
 			Source: source,
 			Skills: installSkills,
 			Agents: installAgents,
+			OnStep: func(s install.Step) {
+				cli.Printf(out, "  %s %s %s\n",
+					cli.OK(out, checkmark),
+					cli.Mute(out, s.Name),
+					cli.Mute(out, s.Detail),
+				)
+			},
 		})
 		if err != nil {
 			return err
 		}
 
-		for _, step := range result.Steps {
-			cli.Printf(out, "  %s %s %s\n",
-				cli.OK(out, checkmark),
-				cli.Mute(out, step.Name),
-				cli.Mute(out, step.Detail),
-			)
-		}
-
-		if len(result.Steps) > 0 {
-			cli.Print(out, "")
-		}
+		cli.Print(out, "")
 
 		// Collect target names in deterministic order for consistent output.
 		type targetRow struct {

@@ -73,6 +73,10 @@ type Options struct {
 	// overwritten to point at a local archive during the build-first pipeline.
 	OriginalSource string
 
+	// OnStep is called in real-time as each pipeline phase completes.
+	// When nil, steps are silently accumulated on the Result.
+	OnStep func(Step)
+
 	// Targets is the list of agent targets to install into. When nil or empty
 	// the global target registry is consulted and only detected targets are
 	// used.
@@ -136,8 +140,7 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 		return nil, fmt.Errorf("fetch: %w", err)
 	}
 
-	var steps []Step
-	steps = append(steps, Step{Name: "cloning", Detail: cloneURL})
+	emitStep(opts, Step{Name: "cloning", Detail: cloneURL})
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -157,7 +160,7 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 	if info != nil {
 		sizeStr = fmt.Sprintf("(%s)", humanSize(info.Size()))
 	}
-	steps = append(steps, Step{Name: "building package", Detail: sizeStr})
+	emitStep(opts, Step{Name: "building package", Detail: sizeStr})
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -182,7 +185,6 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 		return nil, err
 	}
 
-	result.Steps = append(steps, result.Steps...)
 	result.Source = opts.Source
 
 	return result, nil
@@ -251,18 +253,12 @@ func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Resu
 		return nil, err
 	}
 
-	result, err := installFromDir(ctx, opts, tmpDir, meta)
-	if err != nil {
-		return nil, err
-	}
-
-	verifyStep := Step{
+	emitStep(opts, Step{
 		Name:   "verified checksums",
 		Detail: fmt.Sprintf("%d/%d OK", len(verifyResults), len(verifyResults)),
-	}
-	result.Steps = append([]Step{verifyStep}, result.Steps...)
+	})
 
-	return result, nil
+	return installFromDir(ctx, opts, tmpDir, meta)
 }
 
 // nameFromSource extracts a plugin name from a source URL.
@@ -283,6 +279,12 @@ func nameFromSource(source string) string {
 }
 
 // installFromDir is the shared install path for both archive and git sources.
+func emitStep(opts Options, s Step) {
+	if opts.OnStep != nil {
+		opts.OnStep(s)
+	}
+}
+
 func humanSize(bytes int64) string {
 	const kb = 1024
 	if bytes < kb {
