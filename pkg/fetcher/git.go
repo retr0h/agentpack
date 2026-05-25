@@ -22,6 +22,7 @@ package fetcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -86,7 +87,7 @@ func (f *GitFetcher) FetchWithResult(ctx context.Context, source string, dest st
 
 	repo, err := gogit.PlainCloneContext(ctx, cachedRepo, false, cloneOpts)
 	if err != nil {
-		if err == gogit.ErrRepositoryAlreadyExists {
+		if errors.Is(err, gogit.ErrRepositoryAlreadyExists) {
 			repo, err = gogit.PlainOpen(cachedRepo)
 			if err != nil {
 				return "", fmt.Errorf("open cached repo: %w", err)
@@ -96,7 +97,7 @@ func (f *GitFetcher) FetchWithResult(ctx context.Context, source string, dest st
 			if fetchErr := repo.FetchContext(ctx, &gogit.FetchOptions{
 				Auth:  auth,
 				Force: true,
-			}); fetchErr != nil && fetchErr != gogit.NoErrAlreadyUpToDate {
+			}); fetchErr != nil && !errors.Is(fetchErr, gogit.NoErrAlreadyUpToDate) {
 				return "", fmt.Errorf("fetch: %w", fetchErr)
 			}
 		} else {

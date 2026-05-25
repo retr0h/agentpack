@@ -822,7 +822,7 @@ func TestBuildPlugin(t *testing.T) {
 
 			vfs, dir, p, meta := tt.setup(t)
 
-			testCtx := context.Context(context.Background())
+			testCtx := context.Background()
 			if tt.wantErr == "context canceled" {
 				testCtx = errOnlyContext{}
 			}

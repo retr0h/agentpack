@@ -35,7 +35,7 @@ import (
 type Metadata struct {
 	Name           string `json:"name"`
 	Version        string `json:"version"`
-	GitCommitSHA   string `json:"gitCommitSha"`
+	GitCommitSHA   string `json:"gitCommitSHA"`
 	GitBranch      string `json:"gitBranch"`
 	BuildTimestamp string `json:"buildTimestamp"`
 	BuilderVersion string `json:"builderVersion"`

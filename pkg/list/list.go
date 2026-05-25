@@ -22,7 +22,8 @@
 package list
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 
 	"github.com/retr0h/agentpack/pkg/registry"
@@ -60,8 +61,8 @@ func Run() ([]Entry, error) {
 		})
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Name < entries[j].Name
+	slices.SortFunc(entries, func(a, b Entry) int {
+		return cmp.Compare(a.Name, b.Name)
 	})
 
 	return entries, nil
@@ -81,7 +82,7 @@ func collectTargets(m *registry.PackageManifest) []string {
 		targets = append(targets, t)
 	}
 
-	sort.Strings(targets)
+	slices.Sort(targets)
 
 	return targets
 }
