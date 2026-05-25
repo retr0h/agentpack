@@ -55,8 +55,6 @@ var updateCmd = &cobra.Command{
 			return err
 		}
 
-		cli.Print(out, "")
-
 		if result.Updated {
 			cli.Printf(out, "  %s %s → %s\n",
 				cli.OK(out, "updated"),

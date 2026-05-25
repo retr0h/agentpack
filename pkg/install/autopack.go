@@ -195,11 +195,19 @@ func storeArchive(srcPath, name, sha string) (string, error) {
 		return "", err
 	}
 
-	archiveName := fmt.Sprintf("%s@%s.agentpack", name, shortSHA(sha))
-	dstPath := filepath.Join(dir, archiveName)
+	baseName := fmt.Sprintf("%s@%s", name, shortSHA(sha))
+	dstPath := filepath.Join(dir, baseName+".agentpack")
 
 	if err := copyFileAtomic(srcPath, dstPath); err != nil {
 		return "", fmt.Errorf("store archive: %w", err)
+	}
+
+	// Write the archive SHA256 alongside the package for tamper detection.
+	data, err := os.ReadFile(dstPath)
+	if err == nil {
+		h := sha256.Sum256(data)
+		shaPath := filepath.Join(dir, baseName+".sha256")
+		_ = os.WriteFile(shaPath, []byte(hex.EncodeToString(h[:])+"\n"), 0o644)
 	}
 
 	return dstPath, nil

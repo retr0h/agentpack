@@ -54,8 +54,12 @@ var showCmd = &cobra.Command{
 		cli.Printf(out, "%s %s\n", cli.Mute(out, "SHA:"), cli.Accent(out, shortSHAShow(m.SHA)))
 		cli.Printf(out, "%s %s\n", cli.Mute(out, "Installed:"), cli.Accent(out, installed))
 
-		archivePath := fmt.Sprintf("~/.config/agentpack/archives/%s@%s.agentpack", m.Name, shortSHAShow(m.SHA))
+		archiveBase := fmt.Sprintf("%s@%s", m.Name, shortSHAShow(m.SHA))
+		archivePath := fmt.Sprintf("~/.config/agentpack/archives/%s.agentpack", archiveBase)
 		cli.Printf(out, "%s %s\n", cli.Mute(out, "Archive:"), cli.Accent(out, archivePath))
+
+		shaFilePath := fmt.Sprintf("~/.config/agentpack/archives/%s.sha256", archiveBase)
+		cli.Printf(out, "%s %s\n", cli.Mute(out, "SHA256:"), cli.Mute(out, shaFilePath))
 		// Group files by target to show base dir once per target.
 		type targetGroup struct {
 			dir   string

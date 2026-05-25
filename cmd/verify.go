@@ -25,6 +25,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -48,6 +49,14 @@ publishes the SHA256 alongside the archive (like goreleaser checksums.txt).`,
 		out := cmd.OutOrStdout()
 
 		archivePath := args[0]
+
+		// Auto-detect .sha256 file alongside the archive if --sha256 not given.
+		if verifySHA256 == "" {
+			shaFile := strings.TrimSuffix(archivePath, ".agentpack") + ".sha256"
+			if data, err := os.ReadFile(shaFile); err == nil {
+				verifySHA256 = strings.TrimSpace(string(data))
+			}
+		}
 
 		// External SHA256 verification (tamper detection).
 		if verifySHA256 != "" {
