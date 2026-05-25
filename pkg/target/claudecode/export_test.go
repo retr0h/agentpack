@@ -18,65 +18,22 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package claudecode export_test.go exposes private helpers for white-box
-// testing.
 package claudecode
 
-import (
-	"context"
-	"os"
+import "os"
 
-	"github.com/retr0h/agentpack/pkg/manifest"
-	"github.com/retr0h/agentpack/pkg/target"
-)
-
-// SetUserHome replaces the userHomeFunc on cc for the duration of a test.
+// SetUserHome replaces userHomeFunc for testing.
 func SetUserHome(cc *ClaudeCode, fn func() (string, error)) {
 	cc.userHomeFunc = fn
 }
 
-// SetRenameFunc replaces the renameFunc on cc for the duration of a test.
-func SetRenameFunc(cc *ClaudeCode, fn func(string, string) error) {
-	cc.renameFunc = fn
-}
-
-// SetOsMkdirAll replaces the mkdirAllFunc on cc for the duration of a test.
+// SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(cc *ClaudeCode, fn func(string, os.FileMode) error) {
 	cc.mkdirAllFunc = fn
 }
 
-// SetOsRemoveAll replaces the removeAllFunc on cc for the duration of a test.
-func SetOsRemoveAll(cc *ClaudeCode, fn func(string) error) {
-	cc.removeAllFunc = fn
-}
-
-// WriteDescriptors exposes writeDescriptors for testing.
-func WriteDescriptors(cc *ClaudeCode, destDir string, opts target.InstallOpts) error {
-	return cc.writeDescriptors(destDir, opts)
-}
-
-// ReadManifestPlugin exposes readManifestPlugin for testing.
-func ReadManifestPlugin(dir string, opts target.InstallOpts) (manifest.Plugin, error) {
-	return readManifestPlugin(dir, opts)
-}
-
-// SynthPlugin exposes synthPlugin for testing.
-func SynthPlugin(opts target.InstallOpts) manifest.Plugin {
-	return synthPlugin(opts)
-}
-
-// CollectCommandPaths exposes collectCommandPaths for testing.
-func CollectCommandPaths(dir string) []string {
-	return collectCommandPaths(dir)
-}
-
-// CopyDir exposes copyDir for testing.
-func CopyDir(ctx context.Context, src string, dst string) error {
-	return copyDir(ctx, src, dst)
-}
-
 // CopyFile exposes copyFile for testing.
-func CopyFile(src string, dst string) error {
+func CopyFile(src, dst string) error {
 	return copyFile(src, dst)
 }
 

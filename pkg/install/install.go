@@ -49,6 +49,9 @@ type Options struct {
 	// Source is the local path or URL to the .agentpack archive.
 	Source string
 
+	// Dir is the root directory for installation (cwd for local, home for global).
+	Dir string
+
 	// Targets is the list of agent targets to install into. When nil or empty
 	// the global target registry is consulted and only detected targets are
 	// used.
@@ -64,14 +67,7 @@ type Result struct {
 	Dirs map[string]string
 }
 
-// Run installs a single .agentpack archive into every detected target.
-//
-// The pipeline:
-//  1. Fetch the archive (local copy or remote download) into a temp file.
-//  2. Extract the archive into a temp directory.
-//  3. Verify all checksums.
-//  4. Read .agentpack/metadata.json to obtain plugin identity.
-//  5. Call target.Install for each detected (or provided) agent target.
+// Run installs from any source: .agentpack archive, git repo, or local path.
 func Run(ctx context.Context, opts Options) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -82,7 +78,32 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("fetcher: %w", err)
 	}
 
-	// Fetch to a temp file.
+	// Git source: clone → install directly from the repo contents.
+	if _, isGit := f.(*fetcher.GitFetcher); isGit {
+		return runFromGit(ctx, opts, f)
+	}
+
+	return runFromArchive(ctx, opts, f)
+}
+
+func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, error) {
+	cloneDir, err := osMkdirTemp("", "agentpack-git-*")
+	if err != nil {
+		return nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(cloneDir) }()
+
+	if err := f.Fetch(ctx, opts.Source, cloneDir); err != nil {
+		return nil, fmt.Errorf("fetch: %w", err)
+	}
+
+	name := nameFromSource(opts.Source)
+	meta := &metadata.Metadata{Name: name, Version: "latest"}
+
+	return installFromDir(ctx, opts, cloneDir, meta)
+}
+
+func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, error) {
 	tmpFile, err := osCreateTemp("", "agentpack-install-*.agentpack")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
@@ -100,7 +121,6 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	// Extract to a temp dir for verification.
 	tmpDir, err := osMkdirTemp("", "agentpack-install-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
@@ -137,7 +157,6 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 	}
 
-	// Read metadata.
 	meta, err := findAndReadMetadata(tmpDir)
 	if err != nil {
 		return nil, err
@@ -147,16 +166,43 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	// Resolve the list of targets to install into.
+	return installFromDir(ctx, opts, tmpDir, meta)
+}
+
+// nameFromSource extracts a plugin name from a source URL.
+func nameFromSource(source string) string {
+	s := source
+	if idx := strings.LastIndex(s, "#"); idx >= 0 {
+		s = s[:idx]
+	}
+
+	s = strings.TrimSuffix(s, ".git")
+	s = strings.TrimSuffix(s, "/")
+
+	if idx := strings.LastIndex(s, "/"); idx >= 0 {
+		return s[idx+1:]
+	}
+
+	return s
+}
+
+// installFromDir is the shared install path for both archive and git sources.
+func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *metadata.Metadata) (*Result, error) {
 	targets := opts.Targets
 	if len(targets) == 0 {
 		targets = target.Detected()
+	}
+
+	dir := opts.Dir
+	if dir == "" {
+		dir, _ = os.Getwd()
 	}
 
 	installOpts := target.InstallOpts{
 		Name:    meta.Name,
 		Version: meta.Version,
 		Meta:    meta,
+		Dir:     dir,
 	}
 
 	dirs := make(map[string]string)
@@ -166,10 +212,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 			return nil, err
 		}
 
-		// Each target driver may consume (rename) its SourceDir. To support
-		// multiple targets we always supply a fresh copy of the extracted
-		// archive for each target.
-		srcDir, err := copyToTemp(ctx, tmpDir)
+		srcDir, err := copyToTemp(ctx, sourceDir)
 		if err != nil {
 			return nil, fmt.Errorf("prepare source for %s: %w", tgt.Name(), err)
 		}
@@ -182,7 +225,9 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 			return nil, fmt.Errorf("install to %s: %w", tgt.Name(), installErr)
 		}
 
-		dirs[tgt.DisplayName()] = srcDir
+		_ = os.RemoveAll(srcDir)
+
+		dirs[tgt.DisplayName()] = tgt.Name()
 	}
 
 	return &Result{

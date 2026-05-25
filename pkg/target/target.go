@@ -59,6 +59,9 @@ type InstallOpts struct {
 	// SourceDir is the temp directory containing the extracted archive content.
 	SourceDir string
 
+	// Dir is the root directory for installation (cwd or home).
+	Dir string
+
 	// Meta is the build metadata read from the extracted archive.
 	Meta *metadata.Metadata
 }
