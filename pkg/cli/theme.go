@@ -30,6 +30,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Checkmark is the Unicode check character used in step output.
+const Checkmark = "✓"
+
 // Theme is a palette covering agentpack's CLI surface.
 type Theme struct {
 	Name      string
@@ -123,4 +126,156 @@ func HumanSize(bytes int64) string {
 		return fmt.Sprintf("%d B", bytes)
 	}
 	return fmt.Sprintf("%d KB", bytes/kb)
+}
+
+// Plural returns singular when n == 1, otherwise pluralForm.
+func Plural(n int, singular, pluralForm string) string {
+	if n == 1 {
+		return singular
+	}
+	return pluralForm
+}
+
+// ShortSHA returns the first 7 characters of sha, or the full string if shorter.
+func ShortSHA(sha string) string {
+	if len(sha) >= 7 {
+		return sha[:7]
+	}
+	return sha
+}
+
+// SourceBaseName extracts a short display name from a source path or URL.
+// It strips ref fragments (#branch or #sha), trailing .git and trailing slashes.
+func SourceBaseName(source string) string {
+	s := source
+
+	// Strip ref fragment (#branch or #sha).
+	if idx := strings.LastIndex(s, "#"); idx >= 0 {
+		s = s[:idx]
+	}
+
+	s = strings.TrimSuffix(s, ".git")
+	s = strings.TrimSuffix(s, "/")
+
+	if idx := strings.LastIndex(s, "/"); idx >= 0 {
+		return s[idx+1:]
+	}
+
+	return s
+}
+
+// Header writes the standard command header: "agentpack: action name\n\n".
+func Header(w io.Writer, action, name string) {
+	Printf(w, "%s %s\n\n", Mute(w, "agentpack: "+action), Accent(w, name))
+}
+
+// StepLine writes a single step result line: "  ✓ name detail\n".
+func StepLine(w io.Writer, name, detail string) {
+	Printf(w, "  %s %s %s\n", OK(w, Checkmark), Mute(w, name), Mute(w, detail))
+}
+
+// TreeRow writes a tree-formatted row for a list of items.
+// isLast controls whether to use └─ (last item) or ├─ (non-last).
+// name is printed accented and padded to nameWidth; detail is muted.
+func TreeRow(w io.Writer, isLast bool, name string, nameWidth int, detail string) {
+	prefix := "  ├─"
+	if isLast {
+		prefix = "  └─"
+	}
+	Printf(w, "%s %s  %s\n",
+		Mute(w, prefix),
+		Accent(w, Pad(name, nameWidth)),
+		Mute(w, detail),
+	)
+}
+
+// Field writes a label/value pair: "Label: value\n".
+func Field(w io.Writer, label, value string) {
+	Printf(w, "%s %s\n", Mute(w, label+":"), Accent(w, value))
+}
+
+// FieldMuted writes a label/value pair where both label and value are muted.
+func FieldMuted(w io.Writer, label, value string) {
+	Printf(w, "%s %s\n", Mute(w, label+":"), Mute(w, value))
+}
+
+// TableColumn holds the display data for a single column in a Table.
+type TableColumn struct {
+	// Header is the column header text.
+	Header string
+	// Values are the per-row cell values.
+	Values []string
+	// Accent marks the column to render values in accent color instead of plain.
+	Accent bool
+	// Info marks the column to render values in info color.
+	Info bool
+	// Muted marks the column to render values in muted color (default for non-Accent/Info).
+	Muted bool
+}
+
+// Table renders an aligned table with muted headers and themed rows.
+// cols defines the columns; the last column's header is printed without trailing padding.
+func Table(w io.Writer, cols []TableColumn) {
+	const pad = 2
+
+	// Compute column widths from header and all values.
+	widths := make([]int, len(cols))
+	for i, col := range cols {
+		widths[i] = len(col.Header)
+		for _, v := range col.Values {
+			if len(v) > widths[i] {
+				widths[i] = len(v)
+			}
+		}
+	}
+
+	// Print header row.
+	var hdr strings.Builder
+	for i, col := range cols {
+		if i < len(cols)-1 {
+			hdr.WriteString(Pad(col.Header, widths[i]+pad))
+		} else {
+			hdr.WriteString(col.Header)
+		}
+	}
+	Printf(w, "%s\n", Mute(w, hdr.String()))
+
+	// Print data rows.
+	rows := 0
+	if len(cols) > 0 {
+		rows = len(cols[0].Values)
+	}
+	for r := range rows {
+		var line strings.Builder
+		for i, col := range cols {
+			val := ""
+			if r < len(col.Values) {
+				val = col.Values[r]
+			}
+			var rendered string
+			switch {
+			case col.Accent:
+				rendered = Accent(w, val)
+			case col.Info:
+				rendered = Info(w, val)
+			default:
+				rendered = Mute(w, val)
+			}
+			if i < len(cols)-1 {
+				// Padding must be applied before colour wrapping for alignment.
+				// We pad the raw value then re-render.
+				raw := Pad(val, widths[i]+pad)
+				switch {
+				case col.Accent:
+					rendered = Accent(w, raw)
+				case col.Info:
+					rendered = Info(w, raw)
+				default:
+					rendered = Mute(w, raw)
+				}
+			}
+			line.WriteString(rendered)
+		}
+		Printf(w, "%s\n", line.String())
+	}
 }

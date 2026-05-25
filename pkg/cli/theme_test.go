@@ -273,6 +273,460 @@ func TestHumanSize(t *testing.T) {
 	}
 }
 
+func TestCheckmark(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		want string
+	}{
+		{
+			name: "is Unicode check mark",
+			want: "✓",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if cli.Checkmark != tt.want {
+				t.Errorf("Checkmark = %q, want %q", cli.Checkmark, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlural(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		n          int
+		singular   string
+		pluralForm string
+		want       string
+	}{
+		{
+			name:       "returns singular when n is 1",
+			n:          1,
+			singular:   "plugin",
+			pluralForm: "plugins",
+			want:       "plugin",
+		},
+		{
+			name:       "returns plural when n is 0",
+			n:          0,
+			singular:   "plugin",
+			pluralForm: "plugins",
+			want:       "plugins",
+		},
+		{
+			name:       "returns plural when n is 2",
+			n:          2,
+			singular:   "file",
+			pluralForm: "files",
+			want:       "files",
+		},
+		{
+			name:       "returns plural when n is large",
+			n:          100,
+			singular:   "item",
+			pluralForm: "items",
+			want:       "items",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := cli.Plural(tt.n, tt.singular, tt.pluralForm)
+			if got != tt.want {
+				t.Errorf("Plural(%d, %q, %q) = %q, want %q", tt.n, tt.singular, tt.pluralForm, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShortSHA(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		sha  string
+		want string
+	}{
+		{
+			name: "truncates long SHA to 7 characters",
+			sha:  "abcdef1234567890",
+			want: "abcdef1",
+		},
+		{
+			name: "returns unchanged when exactly 7 characters",
+			sha:  "abcdef1",
+			want: "abcdef1",
+		},
+		{
+			name: "returns unchanged when shorter than 7",
+			sha:  "abc",
+			want: "abc",
+		},
+		{
+			name: "returns empty string for empty input",
+			sha:  "",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := cli.ShortSHA(tt.sha)
+			if got != tt.want {
+				t.Errorf("ShortSHA(%q) = %q, want %q", tt.sha, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSourceBaseName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{
+			name:   "extracts last path segment from URL",
+			source: "https://github.com/org/my-plugin",
+			want:   "my-plugin",
+		},
+		{
+			name:   "strips .git suffix",
+			source: "https://github.com/org/my-plugin.git",
+			want:   "my-plugin",
+		},
+		{
+			name:   "strips ref fragment",
+			source: "https://github.com/org/my-plugin#main",
+			want:   "my-plugin",
+		},
+		{
+			name:   "strips trailing slash",
+			source: "https://github.com/org/my-plugin/",
+			want:   "my-plugin",
+		},
+		{
+			name:   "strips .git and fragment together",
+			source: "https://github.com/org/my-plugin.git#abc123",
+			want:   "my-plugin",
+		},
+		{
+			name:   "returns plain name when no slashes",
+			source: "my-plugin",
+			want:   "my-plugin",
+		},
+		{
+			name:   "handles local file path",
+			source: "/home/user/archives/my-plugin.agentpack",
+			want:   "my-plugin.agentpack",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := cli.SourceBaseName(tt.source)
+			if got != tt.want {
+				t.Errorf("SourceBaseName(%q) = %q, want %q", tt.source, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStepLine(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		stepName   string
+		detail     string
+		wantSubstr string
+	}{
+		{
+			name:       "contains checkmark name and detail",
+			stepName:   "downloading",
+			detail:     "v1.2.3",
+			wantSubstr: "downloading",
+		},
+		{
+			name:       "contains checkmark character",
+			stepName:   "step",
+			detail:     "",
+			wantSubstr: "✓",
+		},
+		{
+			name:       "ends with newline",
+			stepName:   "done",
+			detail:     "ok",
+			wantSubstr: "\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cli.StepLine(&buf, tt.stepName, tt.detail)
+			got := buf.String()
+			if !strings.Contains(got, tt.wantSubstr) {
+				t.Errorf("StepLine output %q does not contain %q", got, tt.wantSubstr)
+			}
+		})
+	}
+}
+
+func TestTreeRow(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		isLast     bool
+		rowName    string
+		nameWidth  int
+		detail     string
+		wantSubstr string
+	}{
+		{
+			name:       "non-last row uses branch connector",
+			isLast:     false,
+			rowName:    "claude",
+			nameWidth:  12,
+			detail:     "(3 files)",
+			wantSubstr: "├─",
+		},
+		{
+			name:       "last row uses end connector",
+			isLast:     true,
+			rowName:    "cursor",
+			nameWidth:  12,
+			detail:     "(1 file)",
+			wantSubstr: "└─",
+		},
+		{
+			name:       "contains row name",
+			isLast:     false,
+			rowName:    "universal",
+			nameWidth:  12,
+			detail:     "(5 files)",
+			wantSubstr: "universal",
+		},
+		{
+			name:       "contains detail text",
+			isLast:     true,
+			rowName:    "target",
+			nameWidth:  12,
+			detail:     "(2 files)",
+			wantSubstr: "(2 files)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cli.TreeRow(&buf, tt.isLast, tt.rowName, tt.nameWidth, tt.detail)
+			got := buf.String()
+			if !strings.Contains(got, tt.wantSubstr) {
+				t.Errorf("TreeRow output %q does not contain %q", got, tt.wantSubstr)
+			}
+		})
+	}
+}
+
+func TestHeader(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		action     string
+		pluginName string
+		wantSubstr string
+	}{
+		{
+			name:       "contains action text",
+			action:     "installing",
+			pluginName: "my-plugin",
+			wantSubstr: "installing",
+		},
+		{
+			name:       "contains plugin name",
+			action:     "removing",
+			pluginName: "my-plugin",
+			wantSubstr: "my-plugin",
+		},
+		{
+			name:       "ends with double newline",
+			action:     "updating",
+			pluginName: "thing",
+			wantSubstr: "\n\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cli.Header(&buf, tt.action, tt.pluginName)
+			got := buf.String()
+			if !strings.Contains(got, tt.wantSubstr) {
+				t.Errorf("Header output %q does not contain %q", got, tt.wantSubstr)
+			}
+		})
+	}
+}
+
+func TestField(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		label      string
+		value      string
+		wantSubstr string
+	}{
+		{
+			name:       "contains label with colon",
+			label:      "Name",
+			value:      "my-plugin",
+			wantSubstr: "Name:",
+		},
+		{
+			name:       "contains value",
+			label:      "Version",
+			value:      "1.2.3",
+			wantSubstr: "1.2.3",
+		},
+		{
+			name:       "ends with newline",
+			label:      "Source",
+			value:      "https://example.com",
+			wantSubstr: "\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cli.Field(&buf, tt.label, tt.value)
+			got := buf.String()
+			if !strings.Contains(got, tt.wantSubstr) {
+				t.Errorf("Field output %q does not contain %q", got, tt.wantSubstr)
+			}
+		})
+	}
+}
+
+func TestFieldMuted(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		label      string
+		value      string
+		wantSubstr string
+	}{
+		{
+			name:       "contains label with colon",
+			label:      "SHA256",
+			value:      "~/.config/agentpack/archives/x.sha256",
+			wantSubstr: "SHA256:",
+		},
+		{
+			name:       "contains value",
+			label:      "Archive",
+			value:      "~/.config/agentpack/archives/x.agentpack",
+			wantSubstr: "~/.config/agentpack/archives/x.agentpack",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cli.FieldMuted(&buf, tt.label, tt.value)
+			got := buf.String()
+			if !strings.Contains(got, tt.wantSubstr) {
+				t.Errorf("FieldMuted output %q does not contain %q", got, tt.wantSubstr)
+			}
+		})
+	}
+}
+
+func TestTable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		cols       []cli.TableColumn
+		wantSubstr string
+		wantAbsent string
+	}{
+		{
+			name: "renders headers",
+			cols: []cli.TableColumn{
+				{Header: "NAME", Values: []string{"alpha"}},
+				{Header: "VERSION", Values: []string{"1.0"}},
+			},
+			wantSubstr: "NAME",
+		},
+		{
+			name: "renders row values",
+			cols: []cli.TableColumn{
+				{Header: "NAME", Values: []string{"my-plugin"}, Accent: true},
+				{Header: "VERSION", Values: []string{"2.3.4"}},
+			},
+			wantSubstr: "my-plugin",
+		},
+		{
+			name: "renders multiple rows",
+			cols: []cli.TableColumn{
+				{Header: "NAME", Values: []string{"alpha", "beta"}, Accent: true},
+				{Header: "VERSION", Values: []string{"1.0", "2.0"}},
+			},
+			wantSubstr: "beta",
+		},
+		{
+			name:       "empty columns renders nothing",
+			cols:       []cli.TableColumn{},
+			wantSubstr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cli.Table(&buf, tt.cols)
+			got := buf.String()
+			if tt.wantSubstr != "" && !strings.Contains(got, tt.wantSubstr) {
+				t.Errorf("Table output %q does not contain %q", got, tt.wantSubstr)
+			}
+		})
+	}
+}
+
 func TestBannerWithFile(t *testing.T) {
 	t.Parallel()
 

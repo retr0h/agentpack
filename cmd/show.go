@@ -48,18 +48,19 @@ var showCmd = &cobra.Command{
 			installed = installed[:idx]
 		}
 
-		cli.Printf(out, "%s %s\n", cli.Mute(out, "Name:"), cli.Accent(out, m.Name))
-		cli.Printf(out, "%s %s\n", cli.Mute(out, "Version:"), cli.Accent(out, m.Version))
-		cli.Printf(out, "%s %s\n", cli.Mute(out, "Source:"), cli.Accent(out, m.Source))
-		cli.Printf(out, "%s %s\n", cli.Mute(out, "SHA:"), cli.Accent(out, shortSHAShow(m.SHA)))
-		cli.Printf(out, "%s %s\n", cli.Mute(out, "Installed:"), cli.Accent(out, installed))
+		cli.Field(out, "Name", m.Name)
+		cli.Field(out, "Version", m.Version)
+		cli.Field(out, "Source", m.Source)
+		cli.Field(out, "SHA", cli.ShortSHA(m.SHA))
+		cli.Field(out, "Installed", installed)
 
-		archiveBase := fmt.Sprintf("%s@%s", m.Name, shortSHAShow(m.SHA))
+		archiveBase := fmt.Sprintf("%s@%s", m.Name, cli.ShortSHA(m.SHA))
 		archivePath := fmt.Sprintf("~/.config/agentpack/archives/%s.agentpack", archiveBase)
-		cli.Printf(out, "%s %s\n", cli.Mute(out, "Archive:"), cli.Accent(out, archivePath))
+		cli.Field(out, "Archive", archivePath)
 
 		shaFilePath := fmt.Sprintf("~/.config/agentpack/archives/%s.sha256", archiveBase)
-		cli.Printf(out, "%s %s\n", cli.Mute(out, "SHA256:"), cli.Mute(out, shaFilePath))
+		cli.FieldMuted(out, "SHA256", shaFilePath)
+
 		// Group files by target to show base dir once per target.
 		type targetGroup struct {
 			dir   string
@@ -90,22 +91,13 @@ var showCmd = &cobra.Command{
 			for _, f := range g.files {
 				cli.Printf(out, "  %s  %s\n",
 					cli.Mute(out, f.Path),
-					cli.Mute(out, shortSHAShow(f.SHA256)),
+					cli.Mute(out, cli.ShortSHA(f.SHA256)),
 				)
 			}
 		}
 
 		return nil
 	},
-}
-
-// shortSHAShow truncates a hex string to 7 characters for display.
-func shortSHAShow(s string) string {
-	if len(s) >= 7 {
-		return s[:7]
-	}
-
-	return s
 }
 
 func init() {

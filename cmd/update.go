@@ -36,19 +36,12 @@ var updateCmd = &cobra.Command{
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		cli.Printf(out, "%s %s\n\n",
-			cli.Mute(out, "agentpack: updating"),
-			cli.Accent(out, args[0]),
-		)
+		cli.Header(out, "updating", args[0])
 
 		result, err := pkgupdate.Run(ctx, pkgupdate.Options{
 			Name: args[0],
 			OnStep: func(s install.Step) {
-				cli.Printf(out, "  %s %s %s\n",
-					cli.OK(out, checkmark),
-					cli.Mute(out, s.Name),
-					cli.Mute(out, s.Detail),
-				)
+				cli.StepLine(out, s.Name, s.Detail)
 			},
 		})
 		if err != nil {
@@ -63,7 +56,7 @@ var updateCmd = &cobra.Command{
 			)
 		} else {
 			cli.Printf(out, "  %s %s\n",
-				cli.OK(out, checkmark),
+				cli.OK(out, cli.Checkmark),
 				cli.Mute(out, "already up to date"),
 			)
 		}

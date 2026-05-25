@@ -22,16 +22,12 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/pkg/cli"
 	"github.com/retr0h/agentpack/pkg/install"
 )
-
-// checkmark is the Unicode check character used in install output.
-const checkmark = "✓"
 
 var (
 	installSkills []string
@@ -49,20 +45,16 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 		out := cmd.OutOrStdout()
 
 		source := args[0]
-		displayName := sourceBaseName(source)
+		displayName := cli.SourceBaseName(source)
 
-		cli.Printf(out, "%s %s\n\n", cli.Mute(out, "agentpack: installing"), cli.Accent(out, displayName))
+		cli.Header(out, "installing", displayName)
 
 		result, err := install.Run(ctx, install.Options{
 			Source: source,
 			Skills: installSkills,
 			Agents: installAgents,
 			OnStep: func(s install.Step) {
-				cli.Printf(out, "  %s %s %s\n",
-					cli.OK(out, checkmark),
-					cli.Mute(out, s.Name),
-					cli.Mute(out, s.Detail),
-				)
+				cli.StepLine(out, s.Name, s.Detail)
 			},
 		})
 		if err != nil {
@@ -85,43 +77,13 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 		}
 
 		for i, row := range rows {
-			prefix := "  ├─"
-			if i == len(rows)-1 {
-				prefix = "  └─"
-			}
-
-			cli.Printf(
-				out,
-				"%s %s  %s\n",
-				cli.Mute(out, prefix),
-				cli.Accent(out, cli.Pad(row.targetName, 12)),
-				cli.Mute(out, fmt.Sprintf("(%d %s)", row.count, plural(row.count, "file", "files"))),
-			)
+			cli.TreeRow(out, i == len(rows)-1, row.targetName, 12, fmt.Sprintf("(%d %s)", row.count, cli.Plural(row.count, "file", "files")))
 		}
 
-		cli.Printf(out, "\n  %s %s %s\n", cli.OK(out, checkmark), cli.Accent(out, result.Name), cli.Mute(out, "installed"))
+		cli.Printf(out, "\n  %s %s %s\n", cli.OK(out, cli.Checkmark), cli.Accent(out, result.Name), cli.Mute(out, "installed"))
 
 		return nil
 	},
-}
-
-// sourceBaseName extracts a short display name from a source path or URL.
-func sourceBaseName(source string) string {
-	s := source
-
-	// Strip ref fragment (#branch or #sha).
-	if idx := strings.LastIndex(s, "#"); idx >= 0 {
-		s = s[:idx]
-	}
-
-	s = strings.TrimSuffix(s, ".git")
-	s = strings.TrimSuffix(s, "/")
-
-	if idx := strings.LastIndex(s, "/"); idx >= 0 {
-		return s[idx+1:]
-	}
-
-	return s
 }
 
 func init() {

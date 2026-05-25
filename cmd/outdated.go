@@ -64,8 +64,8 @@ var outdatedCmd = &cobra.Command{
 					out,
 					"  %s  %s → %s\n",
 					cli.Accent(out, e.Name),
-					cli.Mute(out, shortSHA7(e.InstalledSHA)),
-					cli.Mute(out, shortSHA7(e.RemoteSHA)),
+					cli.Mute(out, cli.ShortSHA(e.InstalledSHA)),
+					cli.Mute(out, cli.ShortSHA(e.RemoteSHA)),
 				)
 			} else {
 				cli.Printf(
@@ -79,15 +79,6 @@ var outdatedCmd = &cobra.Command{
 
 		return nil
 	},
-}
-
-// shortSHA7 returns the first 7 characters of sha, or the full string if shorter.
-func shortSHA7(sha string) string {
-	if len(sha) >= 7 {
-		return sha[:7]
-	}
-
-	return sha
 }
 
 func init() {

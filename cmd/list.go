@@ -45,70 +45,39 @@ var listCmd = &cobra.Command{
 			return nil
 		}
 
-		nameW := len("NAME")
-		versionW := len("VERSION")
-		shaW := len("SHA")
-		sourceW := len("SOURCE")
-		targetsW := len("TARGETS")
+		names := make([]string, len(entries))
+		versions := make([]string, len(entries))
+		shas := make([]string, len(entries))
+		sources := make([]string, len(entries))
+		targets := make([]string, len(entries))
+		installed := make([]string, len(entries))
 
-		for _, e := range entries {
-			if len(e.Name) > nameW {
-				nameW = len(e.Name)
-			}
-
-			if len(e.Version) > versionW {
-				versionW = len(e.Version)
-			}
-
-			if len(e.SHA) > shaW {
-				shaW = len(e.SHA)
-			}
-
-			if len(e.Source) > sourceW {
-				sourceW = len(e.Source)
-			}
-
-			if len(e.Targets) > targetsW {
-				targetsW = len(e.Targets)
-			}
+		for i, e := range entries {
+			names[i] = e.Name
+			versions[i] = e.Version
+			shas[i] = e.SHA
+			sources[i] = e.Source
+			targets[i] = e.Targets
+			installed[i] = e.Installed
 		}
 
-		const pad = 2
-
-		hdr := cli.Pad("NAME", nameW+pad) +
-			cli.Pad("VERSION", versionW+pad) +
-			cli.Pad("SHA", shaW+pad) +
-			cli.Pad("SOURCE", sourceW+pad) +
-			cli.Pad("TARGETS", targetsW+pad) +
-			"INSTALLED"
-		cli.Printf(out, "%s\n", cli.Mute(out, hdr))
-
-		for _, e := range entries {
-			name := cli.Accent(out, cli.Pad(e.Name, nameW+pad))
-			version := cli.Pad(e.Version, versionW+pad)
-			sha := cli.Mute(out, cli.Pad(e.SHA, shaW+pad))
-			source := cli.Mute(out, cli.Pad(e.Source, sourceW+pad))
-			targets := cli.Mute(out, cli.Pad(e.Targets, targetsW+pad))
-			installed := cli.Info(out, e.Installed)
-			cli.Printf(out, "%s%s%s%s%s%s\n", name, version, sha, source, targets, installed)
-		}
+		cli.Table(out, []cli.TableColumn{
+			{Header: "NAME", Values: names, Accent: true},
+			{Header: "VERSION", Values: versions},
+			{Header: "SHA", Values: shas, Muted: true},
+			{Header: "SOURCE", Values: sources, Muted: true},
+			{Header: "TARGETS", Values: targets, Muted: true},
+			{Header: "INSTALLED", Values: installed, Info: true},
+		})
 
 		cli.Printf(
 			out, "\n%d %s installed\n",
 			len(entries),
-			plural(len(entries), "plugin", "plugins"),
+			cli.Plural(len(entries), "plugin", "plugins"),
 		)
 
 		return nil
 	},
-}
-
-func plural(n int, singular, pluralForm string) string {
-	if n == 1 {
-		return singular
-	}
-
-	return pluralForm
 }
 
 func init() {

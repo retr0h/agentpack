@@ -71,14 +71,14 @@ plugin into the Claude Code plugin directory.`,
 			case "installed":
 				cli.Printf(
 					out, "  %s %s  %s\n",
-					cli.OK(out, checkmark),
+					cli.OK(out, cli.Checkmark),
 					cli.Accent(out, r.Name),
 					cli.Mute(out, r.Version),
 				)
 			case "up to date":
 				cli.Printf(
 					out, "  %s %s  %s\n",
-					cli.OK(out, checkmark),
+					cli.OK(out, cli.Checkmark),
 					cli.Mute(out, r.Name),
 					cli.Mute(out, "up to date"),
 				)
@@ -96,7 +96,7 @@ plugin into the Claude Code plugin directory.`,
 		cli.Printf(
 			out, "\n%d %s synced\n",
 			len(results),
-			plural(len(results), "plugin", "plugins"),
+			cli.Plural(len(results), "plugin", "plugins"),
 		)
 
 		if failed > 0 {

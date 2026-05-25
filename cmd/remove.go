@@ -40,12 +40,7 @@ directory is never touched.`,
 
 		name := args[0]
 
-		cli.Printf(
-			out,
-			"%s %s\n\n",
-			cli.Mute(out, "agentpack: removing"),
-			cli.Accent(out, name),
-		)
+		cli.Header(out, "removing", name)
 
 		result, err := pkgremove.Run(ctx, pkgremove.Options{
 			Name: name,
@@ -53,7 +48,7 @@ directory is never touched.`,
 				if s.Skipped {
 					cli.Printf(out, "  %s %s\n", cli.Mute(out, "skipped"), cli.Mute(out, s.Path))
 				} else {
-					cli.Printf(out, "  %s %s\n", cli.OK(out, "removed"), cli.Mute(out, s.Path))
+					cli.StepLine(out, "removed", s.Path)
 				}
 			},
 		})

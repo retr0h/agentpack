@@ -75,7 +75,7 @@ publishes the SHA256 alongside the archive (like goreleaser checksums.txt).`,
 				)
 			}
 
-			cli.Printf(out, "  %s %s\n", cli.OK(out, checkmark), cli.Mute(out, "archive SHA256 verified"))
+			cli.StepLine(out, "archive SHA256 verified", "")
 		}
 
 		// Internal checksum verification (corruption detection).
@@ -102,10 +102,7 @@ publishes the SHA256 alongside the archive (like goreleaser checksums.txt).`,
 		}
 
 		total := passed + failed
-		cli.Printf(out, "  %s %s\n",
-			cli.OK(out, checkmark),
-			cli.Mute(out, fmt.Sprintf("internal checksums %d/%d OK", passed, total)),
-		)
+		cli.StepLine(out, fmt.Sprintf("internal checksums %d/%d OK", passed, total), "")
 
 		if failed > 0 {
 			return fmt.Errorf("%d file(s) failed verification", failed)
