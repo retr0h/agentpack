@@ -33,10 +33,10 @@ go build -o agentpack .
 
 ```bash
 agentpack install github.com/org/skills-repo                    # install from git
-agentpack install github.com/org/repo --skill review             # install one skill
-agentpack install plugin.agentpack                               # install from archive
+agentpack install github.com/org/repo#v1.0.0                    # pin to a tag
+agentpack install github.com/org/repo --skill review             # one skill only
 agentpack list                                                   # show installed
-agentpack show my-plugin                                         # show package details
+agentpack show my-plugin                                         # package details
 agentpack update my-plugin                                       # update to latest
 agentpack outdated                                               # check for updates
 agentpack remove my-plugin                                       # uninstall
@@ -49,8 +49,8 @@ agentpack remove my-plugin                                       # uninstall
 | Install from git | Any GitHub/GitLab/Bitbucket repo, with `--skill` / `--agent` filters |
 | Install from archive | `.agentpack` files via local path, URL, or offline transfer |
 | Build packages | `agentpack build` from `agentpack.yaml` manifest |
-| Verify | SHA256 checksum verification of every file |
-| List / Show | See what's installed, where it came from, every file tracked |
+| Verify | SHA256 checksum verification — internal + external (`--sha256`) |
+| List / Show | See what's installed, source, SHA, every file tracked |
 | Update / Outdated | Check for and apply updates from git sources |
 | Remove | Safe uninstall — only deletes files agentpack installed |
 | Multi-agent | Claude Code, Cursor, Copilot, Gemini CLI, Codex, OpenCode, Windsurf |
@@ -58,49 +58,10 @@ agentpack remove my-plugin                                       # uninstall
 | Offline | `.agentpack` archives work without git, npm, or any toolchain |
 | Netrc | Private repo support via `~/.netrc` credentials |
 
-## 📋 Manifest
-
-```yaml
-name: my-plugin
-version: 1.0.0
-description: "My skills package"
-
-skills:
-  - skills/*.md
-commands:
-  - commands/*.md
-hooks:
-  - hooks/hooks.json
-  - hooks/*.sh
-mcp:
-  - type: remote
-    name: my-api
-    url: "https://mcp.example.com/v1"
-```
-
-See [`examples/`](examples/) for single-plugin and multi-plugin manifests.
-
-## 🔄 Declarative Sync
-
-```yaml
-# agentpack-packages.yaml
-packages:
-  - name: security-skills
-    git: github.com/org/security-skills
-    ref: v1.0.0
-  - name: devops-skills
-    git: github.com/org/devops-skills
-  - name: offline-plugin
-    source: ~/Downloads/plugin.agentpack
-```
-
-```bash
-agentpack sync
-```
-
 ## 📖 Documentation
 
-- [Package Format (ADR-001)][] — archive schema, content types, build pipeline
+- [Configuration][] — install, build, sync, verify usage
+- [Package Format (ADR-001)][] — archive schema, content types
 - [Architecture][] — driver design, install flow
 - [Development][] — dev setup, testing conventions
 - [Contributing][] — commit style, PR checklist
@@ -110,6 +71,7 @@ agentpack sync
 [MIT][]
 
 [MIT]: LICENSE
+[Configuration]: docs/configuration.md
 [Package Format (ADR-001)]: docs/adr/001-agentpack-format.md
 [Architecture]: docs/architecture.md
 [Development]: docs/development.md
