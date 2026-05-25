@@ -34,8 +34,7 @@ var listCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		out := cmd.OutOrStdout()
 
-		// Pass nil so list.Run uses all registered targets.
-		entries, err := list.Run(nil)
+		entries, err := list.Run()
 		if err != nil {
 			return err
 		}
@@ -46,18 +45,13 @@ var listCmd = &cobra.Command{
 			return nil
 		}
 
-		// Calculate column widths.
-		targetW := len("TARGET")
 		nameW := len("NAME")
 		versionW := len("VERSION")
 		shaW := len("SHA")
-		dateW := len("INSTALLED")
+		sourceW := len("SOURCE")
+		targetsW := len("TARGETS")
 
 		for _, e := range entries {
-			if len(e.Target) > targetW {
-				targetW = len(e.Target)
-			}
-
 			if len(e.Name) > nameW {
 				nameW = len(e.Name)
 			}
@@ -70,27 +64,33 @@ var listCmd = &cobra.Command{
 				shaW = len(e.SHA)
 			}
 
-			if len(e.Installed) > dateW {
-				dateW = len(e.Installed)
+			if len(e.Source) > sourceW {
+				sourceW = len(e.Source)
+			}
+
+			if len(e.Targets) > targetsW {
+				targetsW = len(e.Targets)
 			}
 		}
 
 		const pad = 2
 
-		hdr := cli.Pad("TARGET", targetW+pad) +
-			cli.Pad("NAME", nameW+pad) +
+		hdr := cli.Pad("NAME", nameW+pad) +
 			cli.Pad("VERSION", versionW+pad) +
 			cli.Pad("SHA", shaW+pad) +
+			cli.Pad("SOURCE", sourceW+pad) +
+			cli.Pad("TARGETS", targetsW+pad) +
 			"INSTALLED"
 		cli.Printf(out, "%s\n", cli.Mute(out, hdr))
 
 		for _, e := range entries {
-			tgt := cli.Mute(out, cli.Pad(e.Target, targetW+pad))
 			name := cli.Accent(out, cli.Pad(e.Name, nameW+pad))
 			version := cli.Pad(e.Version, versionW+pad)
 			sha := cli.Mute(out, cli.Pad(e.SHA, shaW+pad))
+			source := cli.Mute(out, cli.Pad(e.Source, sourceW+pad))
+			targets := cli.Mute(out, cli.Pad(e.Targets, targetsW+pad))
 			installed := cli.Info(out, e.Installed)
-			cli.Printf(out, "%s%s%s%s%s\n", tgt, name, version, sha, installed)
+			cli.Printf(out, "%s%s%s%s%s%s\n", name, version, sha, source, targets, installed)
 		}
 
 		cli.Printf(
@@ -103,7 +103,6 @@ var listCmd = &cobra.Command{
 	},
 }
 
-// plural returns singular when n == 1, otherwise plural.
 func plural(n int, singular, pluralForm string) string {
 	if n == 1 {
 		return singular

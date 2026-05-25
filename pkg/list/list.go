@@ -18,62 +18,86 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package list aggregates installed agentpack plugins across all registered
-// targets.
+// Package list reads from the registry to show installed packages.
 package list
 
 import (
-	"fmt"
 	"sort"
+	"strings"
 
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/pkg/registry"
 )
 
-// Entry represents a single installed agentpack plugin found by any target.
+// Entry represents a single installed package.
 type Entry struct {
 	Name      string
 	Version   string
 	SHA       string
-	Installed string // build timestamp from metadata.json
-	Dir       string // path to the installed plugin directory
-	Target    string // which target (agent) it was found in
+	Source    string
+	Targets   string
+	Installed string
 }
 
-// Run queries each provided target for installed plugins and returns them
-// aggregated and sorted by (Target, Name). When targets is nil or empty,
-// target.All() is used so all registered targets are scanned.
-func Run(targets []target.Target) ([]Entry, error) {
-	if len(targets) == 0 {
-		targets = target.All()
+// Run reads from the registry and returns all installed packages.
+func Run() ([]Entry, error) {
+	manifests, err := registry.List()
+	if err != nil {
+		return nil, err
 	}
 
 	var entries []Entry
 
-	for _, tgt := range targets {
-		plugins, err := tgt.List()
-		if err != nil {
-			return nil, fmt.Errorf("list %s: %w", tgt.Name(), err)
-		}
+	for _, m := range manifests {
+		targets := collectTargets(m)
 
-		for _, p := range plugins {
-			entries = append(entries, Entry{
-				Name:      p.Name,
-				Version:   p.Version,
-				SHA:       p.SHA,
-				Installed: p.Installed,
-				Dir:       p.Dir,
-				Target:    p.Target,
-			})
-		}
+		entries = append(entries, Entry{
+			Name:      m.Name,
+			Version:   m.Version,
+			SHA:       shortSHA(m.SHA),
+			Source:    m.Source,
+			Targets:   strings.Join(targets, ", "),
+			Installed: formatDate(m.Installed),
+		})
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Target != entries[j].Target {
-			return entries[i].Target < entries[j].Target
-		}
-
 		return entries[i].Name < entries[j].Name
 	})
 
 	return entries, nil
+}
+
+func collectTargets(m *registry.PackageManifest) []string {
+	seen := make(map[string]bool)
+
+	for _, f := range m.Files {
+		if !seen[f.Target] {
+			seen[f.Target] = true
+		}
+	}
+
+	var targets []string
+	for t := range seen {
+		targets = append(targets, t)
+	}
+
+	sort.Strings(targets)
+
+	return targets
+}
+
+func shortSHA(sha string) string {
+	if len(sha) >= 7 {
+		return sha[:7]
+	}
+
+	return sha
+}
+
+func formatDate(ts string) string {
+	if idx := strings.IndexByte(ts, 'T'); idx > 0 {
+		return ts[:idx]
+	}
+
+	return ts
 }
