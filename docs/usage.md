@@ -203,11 +203,14 @@ file is auto-detected — no `--sha256` flag needed.
 Project-local installs write to the current directory:
 
 ```
-.claude/skills/       Claude Code
-.claude/commands/     Claude Code
-.claude/agents/       Claude Code
-.cursor/rules/        Cursor
-.agents/skills/       Codex, Gemini CLI, OpenCode (universal)
+.claude/skills/          Claude Code
+.claude/commands/        Claude Code
+.claude/agents/          Claude Code
+.cursor/rules/{name}/    Cursor
+.windsurf/rules/{name}/  Windsurf
+.github/copilot/{name}/  GitHub Copilot
+.gemini/skills/{name}/   Gemini CLI
+.agents/skills/{name}/   Universal
 ```
 
 ## Inspecting packages

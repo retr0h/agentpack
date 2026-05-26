@@ -11,7 +11,7 @@ set -euo pipefail
 APP=agentpack
 
 # Visual style — ACCENT is magenta #c678dd (R:198 G:120 B:221),
-# must match ThemeMaxheadroom in internal/cli/theme.go.
+# must match ThemeDark in internal/cli/theme.go.
 MUTED='\033[0;2m'
 RED='\033[0;31m'
 ACCENT='\033[38;2;198;120;221m'

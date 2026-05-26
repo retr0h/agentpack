@@ -53,14 +53,14 @@ type Target interface {
 }
 ```
 
-| Driver       | Agent          | Install directory                           | Detect                |
-| ------------ | -------------- | ------------------------------------------- | --------------------- |
-| `ClaudeCode` | Claude Code    | `.claude/skills/`, `/commands/`, `/agents/` | `~/.claude/` exists   |
-| `Cursor`     | Cursor         | `.cursor/rules/{name}/`                     | `~/.cursor/` exists   |
-| `Windsurf`   | Windsurf       | `.windsurf/rules/{name}/`                   | `~/.windsurf/` exists |
-| `Copilot`    | GitHub Copilot | `.github/copilot/{name}/`                   | `.github/` in cwd     |
-| `Gemini`     | Gemini CLI     | `.gemini/skills/{name}/`                    | `~/.gemini/` exists   |
-| `Universal`  | `.agents/`     | `.agents/skills/{name}/`                    | always                |
+| Driver       | Agent          | Install directory                                         | Detect                |
+| ------------ | -------------- | --------------------------------------------------------- | --------------------- |
+| `ClaudeCode` | Claude Code    | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` | `~/.claude/` exists   |
+| `Cursor`     | Cursor         | `.cursor/rules/{name}/`                                   | `~/.cursor/` exists   |
+| `Windsurf`   | Windsurf       | `.windsurf/rules/{name}/`                                 | `~/.windsurf/` exists |
+| `Copilot`    | GitHub Copilot | `.github/copilot/{name}/`                                 | `.github/` in cwd     |
+| `Gemini`     | Gemini CLI     | `.gemini/skills/{name}/`                                  | `~/.gemini/` exists   |
+| `Universal`  | Universal      | `.agents/skills/{name}/`                                  | always                |
 
 Drivers self-register via `init()` + blank import in `cmd/root.go`.
 
