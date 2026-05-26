@@ -38,6 +38,7 @@ import (
 	"github.com/retr0h/agentpack/internal/packages"
 	"github.com/retr0h/agentpack/internal/safety"
 	"github.com/retr0h/agentpack/pkg/install"
+	"github.com/retr0h/agentpack/pkg/target"
 )
 
 type installer interface {
@@ -47,9 +48,9 @@ type installer interface {
 var pkgInstaller installer = install.New()
 
 var (
-	installSkills []string
-	installAgents []string
-	installTrust  bool
+	installSkills  []string
+	installTargets []string
+	installTrust   bool
 )
 
 var addCmd = &cobra.Command{
@@ -73,10 +74,15 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 			}
 		}
 
+		targets, targetErr := resolveTargets(installTargets)
+		if targetErr != nil {
+			return targetErr
+		}
+
 		result, err := pkgInstaller.Run(ctx, install.Options{
 			Source:       source,
 			Skills:       installSkills,
-			Agents:       installAgents,
+			Targets:      targets,
 			OnStep:       onStep,
 			ContentCheck: buildContentCheck(cmd, installTrust),
 		})
@@ -280,13 +286,42 @@ func buildContentCheck(cmd *cobra.Command, trust bool) func(*safety.Classificati
 	}
 }
 
+func resolveTargets(names []string) ([]target.Target, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+
+	all := target.All()
+	byName := make(map[string]target.Target, len(all))
+	for _, t := range all {
+		byName[t.Name()] = t
+	}
+
+	resolved := make([]target.Target, 0, len(names))
+	for _, name := range names {
+		t, ok := byName[name]
+		if !ok {
+			valid := make([]string, len(all))
+			for i, a := range all {
+				valid[i] = a.Name()
+			}
+
+			return nil, fmt.Errorf("unknown target %q (valid: %s)", name, strings.Join(valid, ", "))
+		}
+
+		resolved = append(resolved, t)
+	}
+
+	return resolved, nil
+}
+
 func init() {
 	rootCmd.AddCommand(addCmd)
 
 	addCmd.Flags().
 		StringArrayVar(&installSkills, "skill", nil, "include only named skill subdirs from the source (may be repeated)")
 	addCmd.Flags().
-		StringArrayVar(&installAgents, "agent", nil, "include only named agent subdirs from the source (may be repeated)")
+		StringArrayVar(&installTargets, "target", nil, "install to specific target(s) only (see list --targets)")
 	addCmd.Flags().
 		BoolVar(&installTrust, "trust", false, "skip executable content prompt (for CI)")
 }
