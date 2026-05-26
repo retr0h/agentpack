@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 80">
+  <style>
+    .top { fill: #888888; font-family: monospace; font-size: 24px; }
+    .bot { fill: #c678dd; font-family: monospace; font-size: 24px; }
+  </style>
+  <text class="top" x="50%" y="32" text-anchor="middle">█▀█ █▀▀ █▀▀ █▄░█ ▀█▀ █▀█ █▀█ █▀▀ █▄▀</text>
+  <text class="bot" x="50%" y="64" text-anchor="middle">█▀█ █▄█ ██▄ █░▀█ ░█░ █▀▀ █▀█ █▄▄ █░█</text>
+</svg>

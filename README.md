@@ -1,18 +1,28 @@
-[![go report card](https://goreportcard.com/badge/github.com/retr0h/agentpack?style=for-the-badge)](https://goreportcard.com/report/github.com/retr0h/agentpack)
-[![license](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=for-the-badge)](LICENSE)
-[![build](https://img.shields.io/github/actions/workflow/status/retr0h/agentpack/go.yml?style=for-the-badge)](https://github.com/retr0h/agentpack/actions/workflows/go.yml)
-[![codecov](https://img.shields.io/codecov/c/github/retr0h/agentpack?style=for-the-badge)](https://codecov.io/gh/retr0h/agentpack)
-[![conventional commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=for-the-badge)](https://conventionalcommits.org)
-[![built with just](https://img.shields.io/badge/Built_with-Just-black?style=for-the-badge&logo=just&logoColor=white)](https://just.systems)
-![github commit activity](https://img.shields.io/github/commit-activity/m/retr0h/agentpack?style=for-the-badge)
+<p align="center">
+  <picture>
+    <source srcset="docs/assets/logo-dark.svg" media="(prefers-color-scheme: dark)">
+    <source srcset="docs/assets/logo-light.svg" media="(prefers-color-scheme: light)">
+    <img src="docs/assets/logo-dark.svg" alt="agentpack" width="500">
+  </picture>
+</p>
 
-# agentpack
+<p align="center">The native package manager for <a href="https://agentskills.io">agentskills.io</a>.</p>
 
-The native package manager for [agentskills.io](https://agentskills.io).
+<p align="center">
+  <a href="https://goreportcard.com/report/github.com/retr0h/agentpack"><img alt="go report card" src="https://goreportcard.com/badge/github.com/retr0h/agentpack?style=for-the-badge"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-brightgreen.svg?style=for-the-badge"></a>
+  <a href="https://github.com/retr0h/agentpack/actions/workflows/go.yml"><img alt="build" src="https://img.shields.io/github/actions/workflow/status/retr0h/agentpack/go.yml?style=for-the-badge"></a>
+  <a href="https://codecov.io/gh/retr0h/agentpack"><img alt="codecov" src="https://img.shields.io/codecov/c/github/retr0h/agentpack?style=for-the-badge"></a>
+  <a href="https://conventionalcommits.org"><img alt="conventional commits" src="https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=for-the-badge"></a>
+  <a href="https://just.systems"><img alt="built with just" src="https://img.shields.io/badge/Built_with-Just-black?style=for-the-badge&logo=just&logoColor=white"></a>
+  <img alt="github commit activity" src="https://img.shields.io/github/commit-activity/m/retr0h/agentpack?style=for-the-badge">
+</p>
 
+<p align="center">
 Install, manage, and distribute AI agent skills across Claude Code,
 Cursor, Copilot, Gemini CLI, Windsurf, and any agent supporting the
-`.agents/` convention.
+<code>.agents/</code> convention.
+</p>
 
 ## 📦 Install
 
