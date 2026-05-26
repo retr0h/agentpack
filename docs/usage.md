@@ -171,8 +171,8 @@ Then install:
 agentpack install
 ```
 
-When `agentpack.lock` exists, locked SHAs are used for reproducibility.
-Running `agentpack add` also updates both the yaml and the lockfile.
+When `agentpack.lock` exists, locked SHAs are used for reproducibility. Running
+`agentpack add` also updates both the yaml and the lockfile.
 
 ## Verifying packages
 

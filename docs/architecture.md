@@ -12,13 +12,14 @@ agentpack.yaml → [build] → .agentpack archive → [fetcher] → [target] →
 ```
 
 1. **Build** reads `agentpack.yaml`, resolves content, and produces a
-   checksummed `.agentpack` archive (see [ADR-001](adr/001-agentpack-format.md)).
+   checksummed `.agentpack` archive (see
+   [ADR-001](adr/001-agentpack-format.md)).
 2. **Fetcher** retrieves content from a source (local file, HTTP, git).
-3. **Target** installs content into the right locations for a specific AI
-   coding agent.
+3. **Target** installs content into the right locations for a specific AI coding
+   agent.
 4. **Install** orchestrates fetch → build → install from a declarative
-   `agentpack-packages.yaml`, using locked SHAs for reproducibility
-   (see [ADR-003](adr/003-dependency-management.md)).
+   `agentpack-packages.yaml`, using locked SHAs for reproducibility (see
+   [ADR-003](adr/003-dependency-management.md)).
 
 ## Driver interfaces
 
@@ -31,14 +32,14 @@ type Fetcher interface {
 ```
 
 | Driver        | Scheme                                | Status      |
-|---------------|---------------------------------------|-------------|
+| ------------- | ------------------------------------- | ----------- |
 | `FileFetcher` | `/`, `./`, `~/`                       | implemented |
 | `HTTPFetcher` | `http://`, `https://`                 | implemented |
 | `GitFetcher`  | `github.com/`, `gitlab.com/`, `*.git` | implemented |
 
-`fetcher.New(source)` detects the scheme and returns the right driver.
-The `GitFetcher` uses [go-git](https://github.com/go-git/go-git) for
-clone caching and version checkout — no external git binary needed.
+`fetcher.New(source)` detects the scheme and returns the right driver. The
+`GitFetcher` uses [go-git](https://github.com/go-git/go-git) for clone caching
+and version checkout — no external git binary needed.
 
 ### Target — where to INSTALL content
 
@@ -52,21 +53,21 @@ type Target interface {
 }
 ```
 
-| Driver       | Agent          | Install directory                 | Detect                   |
-|--------------|----------------|-----------------------------------|--------------------------|
-| `ClaudeCode` | Claude Code    | `.claude/skills/`, `/commands/`, `/agents/` | `~/.claude/` exists |
-| `Cursor`     | Cursor         | `.cursor/rules/{name}/`           | `~/.cursor/` exists      |
-| `Windsurf`   | Windsurf       | `.windsurf/rules/{name}/`         | `~/.windsurf/` exists    |
-| `Copilot`    | GitHub Copilot | `.github/copilot/{name}/`         | `.github/` in cwd        |
-| `Gemini`     | Gemini CLI     | `.gemini/skills/{name}/`          | `~/.gemini/` exists      |
-| `Universal`  | `.agents/`     | `.agents/skills/{name}/`          | always                   |
+| Driver       | Agent          | Install directory                           | Detect                |
+| ------------ | -------------- | ------------------------------------------- | --------------------- |
+| `ClaudeCode` | Claude Code    | `.claude/skills/`, `/commands/`, `/agents/` | `~/.claude/` exists   |
+| `Cursor`     | Cursor         | `.cursor/rules/{name}/`                     | `~/.cursor/` exists   |
+| `Windsurf`   | Windsurf       | `.windsurf/rules/{name}/`                   | `~/.windsurf/` exists |
+| `Copilot`    | GitHub Copilot | `.github/copilot/{name}/`                   | `.github/` in cwd     |
+| `Gemini`     | Gemini CLI     | `.gemini/skills/{name}/`                    | `~/.gemini/` exists   |
+| `Universal`  | `.agents/`     | `.agents/skills/{name}/`                    | always                |
 
 Drivers self-register via `init()` + blank import in `cmd/root.go`.
 
 ### Install pipeline interfaces
 
-The install pipeline (pkg/sync) uses injectable interfaces so it can be
-tested with mockgen mocks without real git repos, builds, or installs:
+The install pipeline (pkg/sync) uses injectable interfaces so it can be tested
+with mockgen mocks without real git repos, builds, or installs:
 
 ```go
 type Builder interface {
@@ -88,16 +89,16 @@ agentpack.lock            ← resolved snapshot (what you got)
 .config/agentpack/packages/  ← runtime registry (what's installed)
 ```
 
-`add` updates the yaml + lock. `install` reads the yaml + lock and
-installs everything. `del` removes from yaml + lock + disk.
+`add` updates the yaml + lock. `install` reads the yaml + lock and installs
+everything. `del` removes from yaml + lock + disk.
 
 ## Content types
 
-Archives are organized by type, not by platform. No binary executables
-are permitted (see [ADR-001](adr/001-agentpack-format.md)).
+Archives are organized by type, not by platform. No binary executables are
+permitted (see [ADR-001](adr/001-agentpack-format.md)).
 
 | Type     | Directory   | Description                            |
-|----------|-------------|----------------------------------------|
+| -------- | ----------- | -------------------------------------- |
 | skills   | `skills/`   | Markdown skill files                   |
 | commands | `commands/` | Slash command definitions              |
 | hooks    | `hooks/`    | Hook definitions + scripts             |

@@ -170,7 +170,10 @@ func (c *ClaudeCode) installMCP(ctx context.Context, srcDir, settingsPath string
 }
 
 // installHooks merges hooks/hooks.json from srcDir into settingsPath.
-func (c *ClaudeCode) installHooks(_ context.Context, srcDir, settingsPath, pluginName string) error {
+func (c *ClaudeCode) installHooks(
+	_ context.Context,
+	srcDir, settingsPath, pluginName string,
+) error {
 	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
 	if _, err := os.Stat(hooksFile); os.IsNotExist(err) {
 		return nil

@@ -313,7 +313,12 @@ func TestLockfile_Set(t *testing.T) {
 			initial: []lock.LockedPackage{
 				{Name: "existing", Source: "github.com/org/old", SHA: "old1234"},
 			},
-			set:     lock.LockedPackage{Name: "existing", Source: "github.com/org/old", SHA: "new5678", Ref: "v2.0.0"},
+			set: lock.LockedPackage{
+				Name:   "existing",
+				Source: "github.com/org/old",
+				SHA:    "new5678",
+				Ref:    "v2.0.0",
+			},
 			wantLen: 1,
 			wantSHA: "new5678",
 			wantRef: "v2.0.0",
@@ -409,8 +414,10 @@ func TestLockfile_Find(t *testing.T) {
 		wantName string
 	}{
 		{
-			name:     "find existing entry",
-			initial:  []lock.LockedPackage{{Name: "found", Source: "github.com/org/found", SHA: "abc"}},
+			name: "find existing entry",
+			initial: []lock.LockedPackage{
+				{Name: "found", Source: "github.com/org/found", SHA: "abc"},
+			},
 			find:     "found",
 			wantName: "found",
 		},

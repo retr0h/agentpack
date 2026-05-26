@@ -97,8 +97,8 @@ needs. The interface is defined in the CONSUMING package, not the producing
 package. The consuming code accepts the interface (nil defaults to the real
 implementation) and calls through it.
 
-This applies to `cmd/` too — each cmd file defines an unexported interface
-for the `pkg/` type it uses:
+This applies to `cmd/` too — each cmd file defines an unexported interface for
+the `pkg/` type it uses:
 
 ```go
 // cmd/add.go
@@ -117,7 +117,7 @@ Two themes in `internal/cli/theme.go` — auto-detected via
 `termenv.HasDarkBackground()`:
 
 | Role   | Dark (`ThemeDark`) | Light (`ThemeLight`)   |
-|--------|--------------------|-----------------------|
+| ------ | ------------------ | ---------------------- |
 | Accent | `#c678dd` magenta  | `#9b59b6` purple       |
 | OK     | `#50fa7b` green    | `#27ae60` forest green |
 | Err    | `#ff6ec7` pink     | `#e74c3c` red          |
