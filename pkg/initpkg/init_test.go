@@ -79,7 +79,14 @@ func TestRun(t *testing.T) {
 			setup: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte("name: existing\n"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(
+						filepath.Join(dir, "agentpack.yaml"),
+						[]byte("name: existing\n"),
+						0o644,
+					),
+				)
 				return dir
 			},
 			wantErr: "agentpack.yaml already exists",
