@@ -165,7 +165,11 @@ func HumanSize(bytes int64) string {
 }
 
 // CollectTargetFiles exposes collectTargetFiles for testing.
-func CollectTargetFiles(installDir string, tgt target.Target, srcDir string) ([]registry.InstalledFile, error) {
+func CollectTargetFiles(
+	installDir string,
+	tgt target.Target,
+	srcDir string,
+) ([]registry.InstalledFile, error) {
 	return collectTargetFiles(installDir, tgt, srcDir)
 }
 

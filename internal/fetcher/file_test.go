@@ -33,7 +33,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/pkg/fetcher"
+	"github.com/retr0h/agentpack/internal/fetcher"
 )
 
 // failOnCloseWriter is an io.WriteCloser that succeeds on Write but fails on Close.
@@ -96,7 +96,13 @@ func TestFileFetcherFetch(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				dir := t.TempDir()
-				return filepath.Join(dir, "nonexistent.agentpack"), filepath.Join(dir, "dest.agentpack")
+				return filepath.Join(
+						dir,
+						"nonexistent.agentpack",
+					), filepath.Join(
+						dir,
+						"dest.agentpack",
+					)
 			},
 			wantErr: "open source",
 		},

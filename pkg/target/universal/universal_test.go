@@ -362,7 +362,13 @@ func TestUniversal_CopyFile(t *testing.T) {
 			name: "read error on missing src",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "missing.txt"), filepath.Join(t.TempDir(), "dst.txt")
+				return filepath.Join(
+						t.TempDir(),
+						"missing.txt",
+					), filepath.Join(
+						t.TempDir(),
+						"dst.txt",
+					)
 			},
 			wantErr: "read",
 		},

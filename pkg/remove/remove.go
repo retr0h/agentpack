@@ -23,11 +23,12 @@
 //
 // Usage:
 //
-//	result, err := remove.Run(ctx, remove.Options{
+//	r := remove.New()
+//	result, err := r.Run(ctx, remove.Options{
 //	    Name: "my-plugin",
 //	})
 //
-// SAFETY INVARIANT: Remove never walks directories and never deletes any path
+// SAFETY INVARIANT: Remover never walks directories and never deletes any path
 // that contains ".git". Every deletion is guarded by:
 //  1. The path comes from the registry manifest (explicit list).
 //  2. The path does NOT contain ".git".
@@ -45,6 +46,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/retr0h/agentpack/internal/lockfile"
@@ -108,27 +110,26 @@ type Result struct {
 	Skipped []RemovedFile
 }
 
-// defaultRegistry wraps the package-level registry functions to satisfy Registry.
+// defaultRegistry wraps registry.New() to satisfy Registry.
 type defaultRegistry struct{}
 
 func (defaultRegistry) Load(name string) (*registry.PackageManifest, error) {
-	return registry.Load(name)
+	return registry.New().Load(name)
 }
 
 func (defaultRegistry) Remove(name string) error {
-	return registry.Remove(name)
+	return registry.New().Remove(name)
 }
 
-// emitStep calls opts.OnStep when the callback is set.
-func emitStep(opts Options, s Step) {
-	if opts.OnStep != nil {
-		opts.OnStep(s)
-	}
-}
+// Remover safely uninstalls plugins using their registry manifest.
+type Remover struct{}
+
+// New returns a new Remover.
+func New() *Remover { return &Remover{} }
 
 // Run removes the named plugin using the registry manifest to determine
 // exactly which files to delete. It never walks directories.
-func Run(ctx context.Context, opts Options) (*Result, error) {
+func (r *Remover) Run(ctx context.Context, opts Options) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -209,18 +210,22 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	return result, nil
 }
 
+// emitStep calls opts.OnStep when the callback is set.
+func emitStep(opts Options, s Step) {
+	if opts.OnStep != nil {
+		opts.OnStep(s)
+	}
+}
+
 // containsGit returns true when path contains a ".git" component, which would
 // indicate an attempt to delete version-control internals.
 func containsGit(path string) bool {
 	clean := filepath.Clean(path)
 
-	for _, part := range strings.Split(clean, string(filepath.Separator)) {
-		if part == ".git" {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(
+		strings.Split(clean, string(filepath.Separator)),
+		".git",
+	)
 }
 
 // matchesChecksum returns true when the file at path has the expected SHA256.

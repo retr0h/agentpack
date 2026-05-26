@@ -22,7 +22,8 @@
 //
 // Usage:
 //
-//	result, err := verify.Run(ctx, "/path/to/plugin-v1.0.0.agentpack")
+//	v := verify.New()
+//	result, err := v.Run(ctx, verify.Options{ArchivePath: "/path/to/plugin-v1.0.0.agentpack"})
 //	if err != nil { ... }
 //	for _, f := range result.Files {
 //	    if !f.OK { fmt.Printf("FAIL %s: %s\n", f.Path, f.Err) }
@@ -41,9 +42,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/checksum"
-	"github.com/retr0h/agentpack/pkg/archive"
 )
+
+// Options configures a verify run.
+type Options struct {
+	ArchivePath string
+}
 
 // osMkdirTemp is swappable for testing.
 var osMkdirTemp = os.MkdirTemp
@@ -61,11 +67,19 @@ type Result struct {
 	Files       []FileResult
 }
 
+// Verifier orchestrates an archive verification run.
+type Verifier struct{}
+
+// New returns a new Verifier.
+func New() *Verifier { return &Verifier{} }
+
 // Run extracts a .agentpack archive to a temp directory, locates checksums.txt,
 // and verifies every file listed in it. It returns a Result describing each
 // file's verification status. A non-nil error is returned only when the
 // overall operation cannot proceed (e.g. cannot extract or find checksums.txt).
-func Run(ctx context.Context, archivePath string) (*Result, error) {
+func (v *Verifier) Run(ctx context.Context, opts Options) (*Result, error) {
+	archivePath := opts.ArchivePath
+
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

@@ -179,7 +179,7 @@ func TestInstall(t *testing.T) {
 			homeFunc: func() (string, error) {
 				return t.TempDir(), nil
 			},
-			check: func(t *testing.T, _ string) {},
+			check: func(_ *testing.T, _ string) {},
 		},
 		{
 			name: "home dir error when opts.Dir is empty",
@@ -270,7 +270,14 @@ func TestClaudeCode_List(t *testing.T) {
 			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
 				home := t.TempDir()
-				mdir := filepath.Join(home, ".claude", "plugins", "marketplaces", "my-plugin", ".agentpack")
+				mdir := filepath.Join(
+					home,
+					".claude",
+					"plugins",
+					"marketplaces",
+					"my-plugin",
+					".agentpack",
+				)
 				writeJSON(t, filepath.Join(mdir, "metadata.json"), metadata.Metadata{
 					Name:           "my-plugin",
 					Version:        "v1.0.0",
@@ -297,7 +304,14 @@ func TestClaudeCode_List(t *testing.T) {
 			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
 				home := t.TempDir()
-				mdir := filepath.Join(home, ".claude", "plugins", "marketplaces", "bad-plugin", ".agentpack")
+				mdir := filepath.Join(
+					home,
+					".claude",
+					"plugins",
+					"marketplaces",
+					"bad-plugin",
+					".agentpack",
+				)
 				writeFile(t, filepath.Join(mdir, "metadata.json"), "not-json{{{")
 				return func() (string, error) { return home, nil }
 			},
@@ -375,7 +389,13 @@ func TestCopyFile(t *testing.T) {
 			name: "read error on missing src",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				return filepath.Join(t.TempDir(), "nonexistent.txt"), filepath.Join(t.TempDir(), "dst.txt")
+				return filepath.Join(
+						t.TempDir(),
+						"nonexistent.txt",
+					), filepath.Join(
+						t.TempDir(),
+						"dst.txt",
+					)
 			},
 			wantErr: "read",
 		},

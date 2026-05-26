@@ -38,13 +38,7 @@ type builder interface {
 	Run(ctx context.Context, vfs avfs.VFS, opts build.Options) ([]build.Result, error)
 }
 
-type defaultBuilder struct{}
-
-func (defaultBuilder) Run(ctx context.Context, vfs avfs.VFS, opts build.Options) ([]build.Result, error) {
-	return build.Run(ctx, vfs, opts)
-}
-
-var pkgBuilder builder = defaultBuilder{}
+var pkgBuilder builder = build.New()
 
 var buildCmd = &cobra.Command{
 	Use:   "build [plugin-names...]",
@@ -68,15 +62,20 @@ are built. Otherwise all plugins in the manifest are built.`,
 			return err
 		}
 
+		if outputFormat == "json" {
+			return jsonOutput(out, results)
+		}
+
 		for _, r := range results {
 			cli.Printf(
 				out,
-				"%s %s %s\n\n  %s  (%s)\n  sha256: %s\n\n",
+				"%s %s %s\n\n  %s  %s\n  %s %s\n\n",
 				cli.Mute(out, "agentpack: building"),
 				cli.Accent(out, r.Name),
-				cli.Mute(out, "v"+r.Version),
+				"v"+r.Version,
 				filepath.Base(r.ArchivePath),
 				cli.Mute(out, cli.HumanSize(r.Size)),
+				cli.Mute(out, "sha256:"),
 				cli.Mute(out, r.SHA256),
 			)
 		}

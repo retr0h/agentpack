@@ -31,13 +31,7 @@ type lister interface {
 	Run() ([]list.Entry, error)
 }
 
-type defaultLister struct{}
-
-func (defaultLister) Run() ([]list.Entry, error) {
-	return list.Run()
-}
-
-var pkgLister lister = defaultLister{}
+var pkgLister lister = list.New()
 
 var listCmd = &cobra.Command{
 	Use:   "list",
@@ -51,6 +45,10 @@ var listCmd = &cobra.Command{
 			return err
 		}
 
+		if outputFormat == "json" {
+			return jsonOutput(out, entries)
+		}
+
 		if len(entries) == 0 {
 			cli.Print(out, "no plugins installed")
 
@@ -60,26 +58,26 @@ var listCmd = &cobra.Command{
 		names := make([]string, len(entries))
 		versions := make([]string, len(entries))
 		shas := make([]string, len(entries))
-		sources := make([]string, len(entries))
 		targets := make([]string, len(entries))
 		installed := make([]string, len(entries))
+		sources := make([]string, len(entries))
 
 		for i, e := range entries {
 			names[i] = e.Name
 			versions[i] = e.Version
 			shas[i] = e.SHA
-			sources[i] = e.Source
 			targets[i] = e.Targets
 			installed[i] = e.Installed
+			sources[i] = e.Source
 		}
 
 		cli.Table(out, []cli.TableColumn{
 			{Header: "NAME", Values: names, Accent: true},
 			{Header: "VERSION", Values: versions},
 			{Header: "SHA", Values: shas, Muted: true},
-			{Header: "SOURCE", Values: sources, Muted: true},
-			{Header: "TARGETS", Values: targets, Muted: true},
+			{Header: "TARGETS", Values: targets, Tag: true},
 			{Header: "INSTALLED", Values: installed, Info: true},
+			{Header: "SOURCE", Values: sources, Muted: true},
 		})
 
 		cli.Printf(

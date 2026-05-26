@@ -34,13 +34,7 @@ type installer interface {
 	Run(ctx context.Context, opts install.Options) (*install.Result, error)
 }
 
-type defaultInstaller struct{}
-
-func (defaultInstaller) Run(ctx context.Context, opts install.Options) (*install.Result, error) {
-	return install.Run(ctx, opts)
-}
-
-var pkgInstaller installer = defaultInstaller{}
+var pkgInstaller installer = install.New()
 
 var (
 	installSkills []string
@@ -60,18 +54,26 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 		source := args[0]
 		displayName := cli.SourceBaseName(source)
 
-		cli.Header(out, "installing", displayName)
+		var onStep func(install.Step)
+		if outputFormat != "json" {
+			cli.Header(out, "installing", displayName)
+			onStep = func(s install.Step) {
+				cli.StepLine(out, s.Name, s.Detail)
+			}
+		}
 
 		result, err := pkgInstaller.Run(ctx, install.Options{
 			Source: source,
 			Skills: installSkills,
 			Agents: installAgents,
-			OnStep: func(s install.Step) {
-				cli.StepLine(out, s.Name, s.Detail)
-			},
+			OnStep: onStep,
 		})
 		if err != nil {
 			return err
+		}
+
+		if outputFormat == "json" {
+			return jsonOutput(out, result)
 		}
 
 		cli.Print(out, "")
@@ -86,14 +88,36 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 		var rows []targetRow
 
 		for dn, tn := range result.Dirs {
-			rows = append(rows, targetRow{displayName: dn, targetName: tn, count: result.FileCounts[dn]})
+			rows = append(
+				rows,
+				targetRow{displayName: dn, targetName: tn, count: result.FileCounts[dn]},
+			)
 		}
 
 		for i, row := range rows {
-			cli.TreeRow(out, i == len(rows)-1, row.targetName, 12, fmt.Sprintf("(%d %s)", row.count, cli.Plural(row.count, "file", "files")))
+			prefix := "  ├─"
+			if i == len(rows)-1 {
+				prefix = "  └─"
+			}
+			cli.Printf(
+				out,
+				"%s %s  %s\n",
+				cli.Mute(out, prefix),
+				cli.Tag(out, cli.Pad(row.targetName, 12)),
+				cli.Mute(
+					out,
+					fmt.Sprintf("(%d %s)", row.count, cli.Plural(row.count, "file", "files")),
+				),
+			)
 		}
 
-		cli.Printf(out, "\n  %s %s %s\n", cli.OK(out, cli.Checkmark), cli.Accent(out, result.Name), cli.Mute(out, "installed"))
+		cli.Printf(
+			out,
+			"\n  %s %s %s\n",
+			cli.OK(out, cli.Checkmark),
+			cli.Accent(out, result.Name),
+			cli.Mute(out, "installed"),
+		)
 
 		return nil
 	},
@@ -102,6 +126,8 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 func init() {
 	rootCmd.AddCommand(installCmd)
 
-	installCmd.Flags().StringArrayVar(&installSkills, "skill", nil, "install only specific skill(s) by name (may be repeated)")
-	installCmd.Flags().StringArrayVar(&installAgents, "agent", nil, "install only specific agent(s) by name (may be repeated)")
+	installCmd.Flags().
+		StringArrayVar(&installSkills, "skill", nil, "install only specific skill(s) by name (may be repeated)")
+	installCmd.Flags().
+		StringArrayVar(&installAgents, "agent", nil, "install only specific agent(s) by name (may be repeated)")
 }

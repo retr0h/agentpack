@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/pkg/fetcher"
+	"github.com/retr0h/agentpack/internal/fetcher"
 )
 
 func TestNew(t *testing.T) {

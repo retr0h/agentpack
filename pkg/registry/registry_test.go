@@ -99,7 +99,8 @@ func TestDir(t *testing.T) {
 			restore := registry.SetOsUserHomeDir(tt.homeFunc(t))
 			defer restore()
 
-			got, err := registry.Dir()
+			r := registry.New()
+			got, err := r.Dir()
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.wantErr)
@@ -131,7 +132,12 @@ func TestSave(t *testing.T) {
 				Source:  "github.com/org/repo",
 				Version: "1.0.0",
 				Files: []registry.InstalledFile{
-					{Path: "skills/foo.md", SHA256: "abc123", Target: "claude-code", Dir: "/tmp/dir"},
+					{
+						Path:   "skills/foo.md",
+						SHA256: "abc123",
+						Target: "claude-code",
+						Dir:    "/tmp/dir",
+					},
 				},
 			},
 		},
@@ -170,7 +176,8 @@ func TestSave(t *testing.T) {
 				tt.setup(t, pkgDir)
 			}
 
-			err := registry.Save(tt.manifest)
+			r := registry.New()
+			err := r.Save(tt.manifest)
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.wantErr)
@@ -202,7 +209,8 @@ func TestSaveDirFailure(t *testing.T) {
 			})
 			defer restore()
 
-			err := registry.Save(&registry.PackageManifest{Name: "x", Source: "s"})
+			r := registry.New()
+			err := r.Save(&registry.PackageManifest{Name: "x", Source: "s"})
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
@@ -225,7 +233,12 @@ func TestSaveAndLoad(t *testing.T) {
 				Source:  "github.com/org/repo",
 				Version: "1.0.0",
 				Files: []registry.InstalledFile{
-					{Path: "skills/foo.md", SHA256: "abc123", Target: "claude-code", Dir: "/tmp/dir"},
+					{
+						Path:   "skills/foo.md",
+						SHA256: "abc123",
+						Target: "claude-code",
+						Dir:    "/tmp/dir",
+					},
 				},
 			},
 		},
@@ -243,9 +256,10 @@ func TestSaveAndLoad(t *testing.T) {
 			_, restore := tempHome(t)
 			defer restore()
 
-			require.NoError(t, registry.Save(tt.manifest))
+			r := registry.New()
+			require.NoError(t, r.Save(tt.manifest))
 
-			got, err := registry.Load(tt.manifest.Name)
+			got, err := r.Load(tt.manifest.Name)
 			require.NoError(t, err)
 			assert.Equal(t, tt.manifest.Name, got.Name)
 			assert.Equal(t, tt.manifest.Source, got.Source)
@@ -293,7 +307,10 @@ func TestLoad(t *testing.T) {
 				path := filepath.Join(pkgDir, name+".yaml")
 				// A tab at the start of a continuation line violates YAML indentation
 				// rules and causes yaml.v3 to return a parse error.
-				require.NoError(t, os.WriteFile(path, []byte("name: test\n\tversion: 1.0\n"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(path, []byte("name: test\n\tversion: 1.0\n"), 0o644),
+				)
 				return name
 			},
 			wantErr: "parse manifest",
@@ -311,7 +328,8 @@ func TestLoad(t *testing.T) {
 
 			pkgName := tt.setup(t, pkgDir)
 
-			_, err := registry.Load(pkgName)
+			r := registry.New()
+			_, err := r.Load(pkgName)
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.wantErr)
@@ -337,8 +355,9 @@ func TestRemove(t *testing.T) {
 			name: "remove existing manifest",
 			setup: func(t *testing.T, _ string) string {
 				t.Helper()
+				r := registry.New()
 				m := &registry.PackageManifest{Name: "to-remove", Source: "src"}
-				require.NoError(t, registry.Save(m))
+				require.NoError(t, r.Save(m))
 				return "to-remove"
 			},
 		},
@@ -376,7 +395,8 @@ func TestRemove(t *testing.T) {
 
 			pkgName := tt.setup(t, pkgDir)
 
-			err := registry.Remove(pkgName)
+			r := registry.New()
+			err := r.Remove(pkgName)
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.wantErr)
@@ -385,7 +405,7 @@ func TestRemove(t *testing.T) {
 
 			require.NoError(t, err)
 
-			dir, dirErr := registry.Dir()
+			dir, dirErr := r.Dir()
 			require.NoError(t, dirErr)
 			_, statErr := os.Stat(filepath.Join(dir, pkgName+".yaml"))
 			assert.True(t, os.IsNotExist(statErr))
@@ -412,7 +432,8 @@ func TestLoadDirFailure(t *testing.T) {
 			})
 			defer restore()
 
-			_, err := registry.Load("any-pkg")
+			r := registry.New()
+			_, err := r.Load("any-pkg")
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
@@ -438,7 +459,8 @@ func TestRemoveDirFailure(t *testing.T) {
 			})
 			defer restore()
 
-			err := registry.Remove("some-pkg")
+			r := registry.New()
+			err := r.Remove("some-pkg")
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
@@ -465,8 +487,12 @@ func TestList(t *testing.T) {
 			name: "lists all saved manifests",
 			setup: func(t *testing.T, _ string) {
 				t.Helper()
+				r := registry.New()
 				for _, n := range []string{"alpha", "beta", "gamma"} {
-					require.NoError(t, registry.Save(&registry.PackageManifest{Name: n, Source: "src"}))
+					require.NoError(
+						t,
+						r.Save(&registry.PackageManifest{Name: n, Source: "src"}),
+					)
 				}
 			},
 			wantLen: 3,
@@ -475,9 +501,16 @@ func TestList(t *testing.T) {
 			name: "skips subdirectories and non-yaml files",
 			setup: func(t *testing.T, pkgDir string) {
 				t.Helper()
-				require.NoError(t, registry.Save(&registry.PackageManifest{Name: "valid", Source: "src"}))
+				r := registry.New()
+				require.NoError(
+					t,
+					r.Save(&registry.PackageManifest{Name: "valid", Source: "src"}),
+				)
 				// Write a non-yaml file (should be skipped).
-				require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "notes.txt"), []byte("ignore"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(pkgDir, "notes.txt"), []byte("ignore"), 0o644),
+				)
 				// Create a subdirectory (should be skipped).
 				require.NoError(t, os.Mkdir(filepath.Join(pkgDir, "subdir"), 0o755))
 			},
@@ -489,7 +522,14 @@ func TestList(t *testing.T) {
 				t.Helper()
 				// A tab at the start of a continuation line causes yaml.v3 to return
 				// a parse error.
-				require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "bad.yaml"), []byte("name: test\n\tversion: 1.0\n"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(
+						filepath.Join(pkgDir, "bad.yaml"),
+						[]byte("name: test\n\tversion: 1.0\n"),
+						0o644,
+					),
+				)
 			},
 			wantErr: "parse manifest",
 		},
@@ -506,7 +546,8 @@ func TestList(t *testing.T) {
 
 			tt.setup(t, pkgDir)
 
-			got, err := registry.List()
+			r := registry.New()
+			got, err := r.List()
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.wantErr)
@@ -538,7 +579,8 @@ func TestListDirFailure(t *testing.T) {
 			})
 			defer restore()
 
-			_, err := registry.List()
+			r := registry.New()
+			_, err := r.List()
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})

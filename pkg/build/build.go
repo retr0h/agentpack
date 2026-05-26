@@ -23,7 +23,8 @@
 // Usage:
 //
 //	vfs := osfs.NewWithNoIdm()
-//	results, err := build.Run(ctx, vfs, build.Options{
+//	b := build.New()
+//	results, err := b.Run(ctx, vfs, build.Options{
 //	    Dir:   "/path/to/repo",        // must be a git repo
 //	    Names: []string{"my-skill"},   // empty = all plugins
 //	})
@@ -46,11 +47,17 @@ import (
 	"github.com/avfs/avfs"
 	"gopkg.in/yaml.v3"
 
+	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/checksum"
+	"github.com/retr0h/agentpack/internal/manifest"
 	"github.com/retr0h/agentpack/internal/metadata"
-	"github.com/retr0h/agentpack/pkg/archive"
-	"github.com/retr0h/agentpack/pkg/manifest"
 )
+
+// Builder orchestrates the agentpack build pipeline.
+type Builder struct{}
+
+// New returns a new Builder ready to run build pipelines.
+func New() *Builder { return &Builder{} }
 
 // Options configures a build run.
 type Options struct {
@@ -69,7 +76,7 @@ type Result struct {
 }
 
 // Run executes the build pipeline for all selected plugins.
-func Run(ctx context.Context, vfs avfs.VFS, opts Options) ([]Result, error) {
+func (b *Builder) Run(ctx context.Context, vfs avfs.VFS, opts Options) ([]Result, error) {
 	m, err := manifest.Load(ctx, vfs, opts.Dir)
 	if err != nil {
 		return nil, err

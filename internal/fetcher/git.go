@@ -43,7 +43,11 @@ type GitFetcher struct{}
 //   - "github.com/org/repo"            — resolved to https://github.com/org/repo.git
 //   - "https://github.com/org/repo.git" — used as-is
 //   - Either form may include "#ref" to specify a tag, branch, or SHA.
-func (f *GitFetcher) FetchWithResult(ctx context.Context, source string, dest string) (string, error) {
+func (f *GitFetcher) FetchWithResult(
+	ctx context.Context,
+	source string,
+	dest string,
+) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}

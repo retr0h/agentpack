@@ -18,29 +18,15 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package sync
+package cmd
 
 import (
-	"context"
-
-	"github.com/avfs/avfs/vfs/osfs"
-
-	"github.com/retr0h/agentpack/pkg/build"
-	"github.com/retr0h/agentpack/pkg/install"
+	"encoding/json"
+	"io"
 )
 
-// DefaultBuilder wraps build.Run as a Builder.
-type DefaultBuilder struct{}
-
-// Build builds all plugins in the given directory.
-func (DefaultBuilder) Build(ctx context.Context, dir string) ([]build.Result, error) {
-	return build.New().Run(ctx, osfs.NewWithNoIdm(), build.Options{Dir: dir})
-}
-
-// DefaultInstaller wraps install.Run as an Installer.
-type DefaultInstaller struct{}
-
-// Install installs a single archive.
-func (DefaultInstaller) Install(ctx context.Context, source string) (*install.Result, error) {
-	return install.New().Run(ctx, install.Options{Source: source})
+func jsonOutput(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
 }

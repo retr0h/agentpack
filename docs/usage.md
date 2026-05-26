@@ -1,4 +1,4 @@
-# Configuration
+# Usage
 
 ## Installing packages
 
@@ -68,7 +68,7 @@ Create `agentpack.yaml` in your repo root:
 ```yaml
 name: my-plugin
 version: 1.0.0
-description: "My skills package"
+description: 'My skills package'
 
 skills:
   - skills/*.md
@@ -82,10 +82,10 @@ hooks:
 mcp:
   - type: remote
     name: my-api
-    url: "https://mcp.example.com/v1"
+    url: 'https://mcp.example.com/v1'
   - type: ux
     name: my-server
-    package: "@mycompany/my-mcp-server"
+    package: '@mycompany/my-mcp-server'
 settings:
   - settings/*.json
 ```
@@ -96,9 +96,9 @@ Then build:
 agentpack build
 ```
 
-This produces `my-plugin-1.0.0.agentpack` — a checksummed archive ready
-to distribute. The SHA256 hash is printed to stdout for publishing
-alongside the archive.
+This produces `my-plugin-1.0.0.agentpack` — a checksummed archive ready to
+distribute. The SHA256 hash is printed to stdout for publishing alongside the
+archive.
 
 ### Multi-plugin manifests
 
@@ -106,14 +106,14 @@ For repos with multiple plugins or non-standard layouts:
 
 ```yaml
 author:
-  name: "Ops Team"
-  email: "ops@example.com"
+  name: 'Ops Team'
+  email: 'ops@example.com'
 license: MIT
 
 plugins:
   - name: k8s-helpers
     version: 2.0.0
-    description: "Kubernetes workflow skills"
+    description: 'Kubernetes workflow skills'
     skills:
       - src: prompts/kubernetes/*.md
         dest: skills/
@@ -123,7 +123,7 @@ plugins:
 
   - name: terraform-linter
     version: 1.3.0
-    description: "Terraform plan review"
+    description: 'Terraform plan review'
     skills:
       - src: prompts/terraform/*.md
         dest: skills/
@@ -142,8 +142,8 @@ agentpack init
 ```
 
 Generates `.claude-plugin/marketplace.json` and `plugin.json` from
-`agentpack.yaml` so the repo works as a native Claude Code marketplace
-via `git clone`.
+`agentpack.yaml` so the repo works as a native Claude Code marketplace via
+`git clone`.
 
 ## Declarative sync
 
@@ -185,8 +185,8 @@ External SHA256 (tamper detection):
 agentpack verify plugin.agentpack --sha256 6dddd656a1c5eefb...
 ```
 
-When the archive is stored in `~/.config/agentpack/archives/`, the
-`.sha256` file is auto-detected — no `--sha256` flag needed.
+When the archive is stored in `~/.config/agentpack/archives/`, the `.sha256`
+file is auto-detected — no `--sha256` flag needed.
 
 ## File locations
 
@@ -206,3 +206,32 @@ Project-local installs write to the current directory:
 .cursor/rules/        Cursor
 .agents/skills/       Codex, Gemini CLI, OpenCode (universal)
 ```
+
+## Inspecting packages
+
+Peek inside an `.agentpack` archive before installing:
+
+```bash
+agentpack inspect plugin.agentpack
+```
+
+Shows package metadata, file listing with sizes, SHA checksums, and integrity
+verification.
+
+## Examples
+
+### Manifest examples
+
+How to write `agentpack.yaml` for different project layouts:
+
+- [`manifests/single-plugin/`](../examples/manifests/single-plugin/) — standard
+  layout with skills, commands, hooks, agents, MCP, settings
+- [`manifests/multi-plugin/`](../examples/manifests/multi-plugin/) — monorepo
+  with nonstandard directories, src/dest remapping
+
+### Go library
+
+Using agentpack packages programmatically:
+
+- [`go/install/`](../examples/go/install/) — install a package from a git repo
+- [`go/list/`](../examples/go/list/) — list installed packages

@@ -22,7 +22,8 @@
 //
 // Usage:
 //
-//	results, err := sync.Run(ctx, sync.Options{
+//	s := sync.New()
+//	results, err := s.Run(ctx, sync.Options{
 //	    ConfigPath: "agentpack-packages.yaml",
 //	    Builder:    sync.DefaultBuilder{},
 //	    Installer:  sync.DefaultInstaller{},
@@ -42,7 +43,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/retr0h/agentpack/pkg/fetcher"
+	"github.com/retr0h/agentpack/internal/fetcher"
 )
 
 // PackagesFile represents the top-level structure of agentpack-packages.yaml.
@@ -79,8 +80,14 @@ type Options struct {
 	OnStep func(name string)
 }
 
+// Syncer orchestrates a declarative plugin sync run.
+type Syncer struct{}
+
+// New returns a new Syncer.
+func New() *Syncer { return &Syncer{} }
+
 // Run reads configPath and installs or updates every declared package.
-func Run(ctx context.Context, opts Options) ([]Result, error) {
+func (s *Syncer) Run(ctx context.Context, opts Options) ([]Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -122,7 +129,9 @@ func Run(ctx context.Context, opts Options) ([]Result, error) {
 
 func syncSourcePackage(ctx context.Context, pkg Package, opts Options) []Result {
 	if opts.Installer == nil {
-		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no installer configured")}}
+		return []Result{
+			{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no installer configured")},
+		}
 	}
 
 	r, err := opts.Installer.Install(ctx, pkg.Source)
@@ -146,7 +155,9 @@ func syncGitPackage(ctx context.Context, pkg Package, opts Options) []Result {
 
 	cloneDir, err := os.MkdirTemp("", "agentpack-sync-git-*")
 	if err != nil {
-		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("create temp dir: %w", err)}}
+		return []Result{
+			{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("create temp dir: %w", err)},
+		}
 	}
 	defer func() { _ = os.RemoveAll(cloneDir) }()
 
@@ -155,7 +166,9 @@ func syncGitPackage(ctx context.Context, pkg Package, opts Options) []Result {
 	}
 
 	if opts.Builder == nil {
-		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no builder configured")}}
+		return []Result{
+			{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no builder configured")},
+		}
 	}
 
 	buildResults, err := opts.Builder.Build(ctx, cloneDir)
@@ -164,7 +177,9 @@ func syncGitPackage(ctx context.Context, pkg Package, opts Options) []Result {
 	}
 
 	if opts.Installer == nil {
-		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no installer configured")}}
+		return []Result{
+			{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no installer configured")},
+		}
 	}
 
 	var results []Result

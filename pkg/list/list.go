@@ -22,15 +22,17 @@
 //
 // Usage:
 //
-//	entries, err := list.Run()
+//	l := list.New()
+//	entries, err := l.Run()
 //
 // Run returns all installed plugins sorted by name. The Registry parameter
-// in the options struct accepts nil, in which case the production registry
+// in RunWithRegistry accepts nil, in which case the production registry
 // implementation is used. Pass a custom Registry to inject a test double.
 package list
 
 import (
 	"cmp"
+	"encoding/hex"
 	"slices"
 	"strings"
 
@@ -43,11 +45,11 @@ type Registry interface {
 	List() ([]*registry.PackageManifest, error)
 }
 
-// defaultRegistry wraps the package-level registry.List to satisfy Registry.
+// defaultRegistry wraps registry.New().List to satisfy Registry.
 type defaultRegistry struct{}
 
 func (defaultRegistry) List() ([]*registry.PackageManifest, error) {
-	return registry.List()
+	return registry.New().List()
 }
 
 // Entry represents a single installed package.
@@ -60,15 +62,21 @@ type Entry struct {
 	Installed string
 }
 
+// Lister reads installed packages from the registry.
+type Lister struct{}
+
+// New returns a new Lister.
+func New() *Lister { return &Lister{} }
+
 // Run reads from the registry and returns all installed packages sorted by name.
 // It uses the production registry.List implementation.
-func Run() ([]Entry, error) {
-	return RunWithRegistry(nil)
+func (l *Lister) Run() ([]Entry, error) {
+	return l.RunWithRegistry(nil)
 }
 
 // RunWithRegistry is like Run but allows injecting a custom Registry
 // implementation for testing.
-func RunWithRegistry(reg Registry) ([]Entry, error) {
+func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 	if reg == nil {
 		reg = defaultRegistry{}
 	}
@@ -85,9 +93,9 @@ func RunWithRegistry(reg Registry) ([]Entry, error) {
 
 		entries = append(entries, Entry{
 			Name:      m.Name,
-			Version:   m.Version,
+			Version:   shortVersion(m.Version),
 			SHA:       shortSHA(m.SHA),
-			Source:    m.Source,
+			Source:    shortSource(m.Source),
 			Targets:   strings.Join(targets, ", "),
 			Installed: formatDate(m.Installed),
 		})
@@ -109,7 +117,7 @@ func collectTargets(m *registry.PackageManifest) []string {
 		}
 	}
 
-	var targets []string
+	targets := make([]string, 0, len(seen))
 	for t := range seen {
 		targets = append(targets, t)
 	}
@@ -133,4 +141,33 @@ func formatDate(ts string) string {
 	}
 
 	return ts
+}
+
+func shortVersion(v string) string {
+	if looksLikeSHA(v) {
+		return v[:7]
+	}
+
+	return v
+}
+
+func shortSource(s string) string {
+	s = strings.TrimPrefix(s, "https://")
+	s = strings.TrimPrefix(s, "http://")
+
+	if idx := strings.IndexByte(s, '#'); idx >= 0 {
+		s = s[:idx]
+	}
+
+	return s
+}
+
+func looksLikeSHA(s string) bool {
+	if len(s) < 40 {
+		return false
+	}
+
+	_, err := hex.DecodeString(s[:40])
+
+	return err == nil
 }

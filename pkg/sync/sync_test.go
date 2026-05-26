@@ -32,8 +32,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	fetcherMocks "github.com/retr0h/agentpack/internal/fetcher/mocks"
 	"github.com/retr0h/agentpack/pkg/build"
-	fetcherMocks "github.com/retr0h/agentpack/pkg/fetcher/mocks"
 	"github.com/retr0h/agentpack/pkg/install"
 	pkgsync "github.com/retr0h/agentpack/pkg/sync"
 	syncMocks "github.com/retr0h/agentpack/pkg/sync/mocks"
@@ -51,7 +51,7 @@ func newCancelAfterFirstErrCtx() *cancelAfterFirstErrCtx {
 }
 
 func (c *cancelAfterFirstErrCtx) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterFirstErrCtx) Done() <-chan struct{}        { return nil }
+func (c *cancelAfterFirstErrCtx) Done() <-chan struct{}       { return nil }
 func (c *cancelAfterFirstErrCtx) Value(_ any) any             { return nil }
 
 func (c *cancelAfterFirstErrCtx) Err() error {
@@ -262,7 +262,7 @@ func TestRun(t *testing.T) {
 		{
 			name: "missing config file",
 			yaml: "",
-			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+			setupMocks: func(_ *gomock.Controller) (pkgsync.Options, func()) {
 				return pkgsync.Options{}, func() {}
 			},
 			wantErr: "read",
@@ -270,7 +270,7 @@ func TestRun(t *testing.T) {
 		{
 			name: "invalid YAML",
 			yaml: "packages:\n  - name: [unclosed\n",
-			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+			setupMocks: func(_ *gomock.Controller) (pkgsync.Options, func()) {
 				return pkgsync.Options{}, func() {}
 			},
 			wantErr: "parse",
@@ -279,7 +279,7 @@ func TestRun(t *testing.T) {
 			name:      "context cancelled before processing",
 			yaml:      "packages:\n  - name: p\n    source: /tmp/p.agentpack\n",
 			cancelCtx: true,
-			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+			setupMocks: func(_ *gomock.Controller) (pkgsync.Options, func()) {
 				return pkgsync.Options{}, func() {}
 			},
 			wantErr: "context canceled",
@@ -309,7 +309,7 @@ func TestRun(t *testing.T) {
 		{
 			name: "no installer configured for source package",
 			yaml: "packages:\n  - name: no-installer\n    source: /tmp/no-installer.agentpack\n",
-			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+			setupMocks: func(_ *gomock.Controller) (pkgsync.Options, func()) {
 				return pkgsync.Options{
 					Installer: nil,
 				}, func() {}
@@ -458,7 +458,7 @@ func TestRun(t *testing.T) {
 
 			defer cancel()
 
-			results, err := pkgsync.Run(ctx, opts)
+			results, err := pkgsync.New().Run(ctx, opts)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

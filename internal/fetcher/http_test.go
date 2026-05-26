@@ -34,7 +34,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/pkg/fetcher"
+	"github.com/retr0h/agentpack/internal/fetcher"
 )
 
 // httpFailOnCloseWriter is an io.WriteCloser that succeeds on Write but fails on Close.

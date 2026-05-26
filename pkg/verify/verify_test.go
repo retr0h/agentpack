@@ -38,7 +38,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/pkg/archive"
+	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/pkg/verify"
 )
 
@@ -53,7 +53,7 @@ type cancelAfterN struct {
 func newCancelAfterN(n int) *cancelAfterN { return &cancelAfterN{n: n} }
 
 func (c *cancelAfterN) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterN) Done() <-chan struct{}        { return nil }
+func (c *cancelAfterN) Done() <-chan struct{}       { return nil }
 func (c *cancelAfterN) Value(_ any) any             { return nil }
 func (c *cancelAfterN) Err() error {
 	c.call++
@@ -418,7 +418,7 @@ func TestRun(t *testing.T) {
 			archivePath := tt.archivePath(t)
 			ctx := tt.ctx()
 
-			result, err := verify.Run(ctx, archivePath)
+			result, err := verify.New().Run(ctx, verify.Options{ArchivePath: archivePath})
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

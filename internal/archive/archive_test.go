@@ -39,7 +39,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/pkg/archive"
+	"github.com/retr0h/agentpack/internal/archive"
 )
 
 // --------------------------------------------------------------------------
@@ -684,7 +684,10 @@ func TestExtract(t *testing.T) {
 				t.Helper()
 				// Create a regular file at the path where the directory "conflict"
 				// would land. MkdirAll cannot replace a file with a directory.
-				require.NoError(t, os.WriteFile(filepath.Join(destDir, "conflict"), []byte("file"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(destDir, "conflict"), []byte("file"), 0o644),
+				)
 			},
 			wantErr: "mkdir",
 		},

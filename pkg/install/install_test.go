@@ -39,8 +39,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/metadata"
-	"github.com/retr0h/agentpack/pkg/archive"
 	"github.com/retr0h/agentpack/pkg/build"
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/registry"
@@ -141,11 +141,14 @@ func initGitRepo(t *testing.T, dir string) {
 func buildTestArchive(t *testing.T, dir string, manifestContent string) string {
 	t.Helper()
 
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte(manifestContent), 0o644))
+	require.NoError(
+		t,
+		os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte(manifestContent), 0o644),
+	)
 
 	vfs := osfs.NewWithNoIdm()
 
-	results, err := build.Run(context.Background(), vfs, build.Options{Dir: dir})
+	results, err := build.New().Run(context.Background(), vfs, build.Options{Dir: dir})
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 
@@ -308,7 +311,9 @@ description: A test plugin
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
-				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				restore := install.SetRegistrySave(
+					func(_ *registry.PackageManifest) error { return nil },
+				)
 				t.Cleanup(restore)
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
@@ -344,7 +349,9 @@ description: Multi-target plugin
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
-				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				restore := install.SetRegistrySave(
+					func(_ *registry.PackageManifest) error { return nil },
+				)
 				t.Cleanup(restore)
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
@@ -363,7 +370,9 @@ description: Multi-target plugin
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
-				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				restore := install.SetRegistrySave(
+					func(_ *registry.PackageManifest) error { return nil },
+				)
 				t.Cleanup(restore)
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
@@ -392,7 +401,9 @@ description: step test
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
-				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				restore := install.SetRegistrySave(
+					func(_ *registry.PackageManifest) error { return nil },
+				)
 				t.Cleanup(restore)
 			},
 			checkSteps: func(t *testing.T, steps []install.Step) {
@@ -617,7 +628,9 @@ description: target fail test
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("fail-target").AnyTimes()
 				m.EXPECT().DisplayName().Return("Fail Target").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(errors.New("target install error"))
+				m.EXPECT().
+					Install(gomock.Any(), gomock.Any()).
+					Return(errors.New("target install error"))
 
 				return archivePath, []target.Target{m}
 			},
@@ -762,7 +775,7 @@ description: ctx inside targets loop
 				onStep = func(s install.Step) { steps = append(steps, s) }
 			}
 
-			r, err := install.Run(ctx, install.Options{
+			r, err := install.New().Run(ctx, install.Options{
 				Source:  archivePath,
 				Targets: targets,
 				OnStep:  onStep,
@@ -929,8 +942,18 @@ func TestCopyDir(t *testing.T) {
 				src := filepath.Join(dir, "src")
 
 				require.NoError(t, os.MkdirAll(filepath.Join(src, "subdir"), 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(src, "file.txt"), []byte("root"), 0o644))
-				require.NoError(t, os.WriteFile(filepath.Join(src, "subdir", "nested.txt"), []byte("nested"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, "file.txt"), []byte("root"), 0o644),
+				)
+				require.NoError(
+					t,
+					os.WriteFile(
+						filepath.Join(src, "subdir", "nested.txt"),
+						[]byte("nested"),
+						0o644,
+					),
+				)
 
 				return src, filepath.Join(dir, "dst")
 			},
@@ -953,7 +976,10 @@ func TestCopyDir(t *testing.T) {
 				src := filepath.Join(dir, "src")
 
 				require.NoError(t, os.MkdirAll(src, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(src, "file.txt"), []byte("data"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, "file.txt"), []byte("data"), 0o644),
+				)
 
 				return src, filepath.Join(dir, "dst")
 			},
@@ -969,7 +995,10 @@ func TestCopyDir(t *testing.T) {
 				subdir := filepath.Join(src, "subdir")
 
 				require.NoError(t, os.MkdirAll(subdir, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(subdir, "file.txt"), []byte("x"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(subdir, "file.txt"), []byte("x"), 0o644),
+				)
 				require.NoError(t, os.Chmod(subdir, 0o000))
 
 				t.Cleanup(func() { _ = os.Chmod(subdir, 0o755) })
@@ -1241,11 +1270,17 @@ func TestCollectInstalledFiles(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# Skill"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# Skill"), 0o644),
+				)
 
 				sub := filepath.Join(dir, "sub")
 				require.NoError(t, os.MkdirAll(sub, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(sub, "agent.md"), []byte("# Agent"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(sub, "agent.md"), []byte("# Agent"), 0o644),
+				)
 
 				return dir
 			},
@@ -1469,11 +1504,17 @@ func TestCollectTargetFiles(t *testing.T) {
 
 				skillDir := filepath.Join(installDir, ".claude", "skills")
 				require.NoError(t, os.MkdirAll(skillDir, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(skillDir, "skill.md"), []byte("# skill"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(skillDir, "skill.md"), []byte("# skill"), 0o644),
+				)
 
 				cmdDir := filepath.Join(installDir, ".claude", "commands")
 				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(cmdDir, "cmd.md"), []byte("# cmd"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(cmdDir, "cmd.md"), []byte("# cmd"), 0o644),
+				)
 
 				return installDir, t.TempDir()
 			},
@@ -1488,7 +1529,10 @@ func TestCollectTargetFiles(t *testing.T) {
 
 				rulesDir := filepath.Join(installDir, ".cursor", "rules")
 				require.NoError(t, os.MkdirAll(rulesDir, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(rulesDir, "rule.md"), []byte("# rule"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(rulesDir, "rule.md"), []byte("# rule"), 0o644),
+				)
 
 				return installDir, t.TempDir()
 			},
@@ -1503,7 +1547,10 @@ func TestCollectTargetFiles(t *testing.T) {
 
 				agentsDir := filepath.Join(installDir, ".agents", "skills")
 				require.NoError(t, os.MkdirAll(agentsDir, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "skill.md"), []byte("# skill"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(agentsDir, "skill.md"), []byte("# skill"), 0o644),
+				)
 
 				return installDir, t.TempDir()
 			},
@@ -1527,7 +1574,10 @@ func TestCollectTargetFiles(t *testing.T) {
 
 				agentsDir := filepath.Join(installDir, ".agents", "skills")
 				require.NoError(t, os.MkdirAll(agentsDir, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "skill.md"), []byte("# skill"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(agentsDir, "skill.md"), []byte("# skill"), 0o644),
+				)
 
 				return installDir, t.TempDir()
 			},
@@ -1635,7 +1685,13 @@ func TestCopyFileAtomic(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 
-				return filepath.Join(dir, "nonexistent.agentpack"), filepath.Join(dir, "dst.agentpack")
+				return filepath.Join(
+						dir,
+						"nonexistent.agentpack",
+					), filepath.Join(
+						dir,
+						"dst.agentpack",
+					)
 			},
 			wantErr: "open",
 		},
@@ -1746,11 +1802,15 @@ func TestRunFromGit(t *testing.T) {
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
-				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				restore := install.SetRegistrySave(
+					func(_ *registry.PackageManifest) error { return nil },
+				)
 				t.Cleanup(restore)
 				// Redirect archives dir so storeArchive doesn't write to real home.
 				archivesDir := t.TempDir()
-				restoreArchives := install.SetArchivesDir(func() (string, error) { return archivesDir, nil })
+				restoreArchives := install.SetArchivesDir(
+					func() (string, error) { return archivesDir, nil },
+				)
 				t.Cleanup(restoreArchives)
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
@@ -1775,10 +1835,14 @@ func TestRunFromGit(t *testing.T) {
 			},
 			injectFuncs: func(t *testing.T) {
 				t.Helper()
-				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				restore := install.SetRegistrySave(
+					func(_ *registry.PackageManifest) error { return nil },
+				)
 				t.Cleanup(restore)
 				archivesDir := t.TempDir()
-				restoreArchives := install.SetArchivesDir(func() (string, error) { return archivesDir, nil })
+				restoreArchives := install.SetArchivesDir(
+					func() (string, error) { return archivesDir, nil },
+				)
 				t.Cleanup(restoreArchives)
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
@@ -1817,7 +1881,7 @@ func TestRunFromGit(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			source, targets := tt.setup(t, ctrl)
 
-			r, err := install.Run(context.Background(), install.Options{
+			r, err := install.New().Run(context.Background(), install.Options{
 				Source:  source,
 				Targets: targets,
 			})

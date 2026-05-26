@@ -22,7 +22,8 @@
 //
 // Usage:
 //
-//	result, err := update.Run(ctx, update.Options{
+//	u := update.New()
+//	result, err := u.Run(ctx, update.Options{
 //	    Name: "my-plugin",
 //	})
 //
@@ -37,7 +38,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/retr0h/agentpack/pkg/fetcher"
+	"github.com/retr0h/agentpack/internal/fetcher"
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
@@ -89,23 +90,32 @@ func shortSHA(s string) string {
 	return s
 }
 
-// defaultRegistryLoader wraps registry.Load to satisfy RegistryLoader.
+// defaultRegistryLoader wraps registry.New().Load to satisfy RegistryLoader.
 type defaultRegistryLoader struct{}
 
 func (defaultRegistryLoader) Load(name string) (*registry.PackageManifest, error) {
-	return registry.Load(name)
+	return registry.New().Load(name)
 }
 
-// defaultInstaller wraps install.Run to satisfy Installer.
+// defaultInstaller wraps install.New().Run to satisfy Installer.
 type defaultInstaller struct{}
 
-func (defaultInstaller) Install(ctx context.Context, opts install.Options) (*install.Result, error) {
-	return install.Run(ctx, opts)
+func (defaultInstaller) Install(
+	ctx context.Context,
+	opts install.Options,
+) (*install.Result, error) {
+	return install.New().Run(ctx, opts)
 }
+
+// Updater orchestrates an update check and re-install run.
+type Updater struct{}
+
+// New returns a new Updater.
+func New() *Updater { return &Updater{} }
 
 // Run checks if an update is available and re-installs only if the remote
 // SHA differs from the installed SHA.
-func Run(ctx context.Context, opts Options) (*Result, error) {
+func (u *Updater) Run(ctx context.Context, opts Options) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -139,7 +149,8 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 			if lsErr == nil {
 				remoteSHA := resolveHEAD(refs)
 				remoteShort := shortSHA(remoteSHA)
-				if remoteSHA != "" && (remoteShort == oldSHA || strings.HasPrefix(remoteSHA, m.SHA)) {
+				if remoteSHA != "" &&
+					(remoteShort == oldSHA || strings.HasPrefix(remoteSHA, m.SHA)) {
 					return &Result{
 						Name:    opts.Name,
 						OldSHA:  oldSHA,

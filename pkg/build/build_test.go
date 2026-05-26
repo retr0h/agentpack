@@ -37,9 +37,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/retr0h/agentpack/internal/manifest"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/build"
-	"github.com/retr0h/agentpack/pkg/manifest"
 )
 
 // --------------------------------------------------------------------------
@@ -103,7 +103,7 @@ func (statAlwaysErrorVFS) Stat(string) (fs.FileInfo, error) {
 type errOnlyContext struct{}
 
 func (errOnlyContext) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (errOnlyContext) Done() <-chan struct{}        { return nil }
+func (errOnlyContext) Done() <-chan struct{}       { return nil }
 func (errOnlyContext) Err() error                  { return errors.New("context canceled") }
 func (errOnlyContext) Value(_ any) any             { return nil }
 
@@ -324,7 +324,14 @@ plugins:
 
 				skillDir := filepath.Join(dir, "skills")
 				require.NoError(t, os.MkdirAll(skillDir, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(skillDir, "intro.md"), []byte("# Intro"), fs.FileMode(0o644)))
+				require.NoError(
+					t,
+					os.WriteFile(
+						filepath.Join(skillDir, "intro.md"),
+						[]byte("# Intro"),
+						fs.FileMode(0o644),
+					),
+				)
 
 				writeManifest(t, dir, `
 name: skill-plugin
@@ -407,7 +414,10 @@ mcp:
 
 				// Write a .mcp.json config file.
 				mcpContent := `{"mcpServers":{"my-srv":{"url":"https://example.com"}}}`
-				require.NoError(t, os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(mcpContent), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(mcpContent), 0o644),
+				)
 
 				writeManifest(t, dir, `
 name: mcp-config-plugin
@@ -506,7 +516,7 @@ plugins:
 			defer cancel()
 
 			vfs := osfs.NewWithNoIdm()
-			results, err := build.Run(ctx, vfs, opts)
+			results, err := build.New().Run(ctx, vfs, opts)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -599,7 +609,11 @@ func TestComputeArchiveChecksums(t *testing.T) {
 			var entries []build.ChecksumEntry
 			var err error
 			if tt.useOSFS {
-				entries, err = build.ComputeArchiveChecksums(testCtx, osfs.NewWithNoIdm(), tt.files(t))
+				entries, err = build.ComputeArchiveChecksums(
+					testCtx,
+					osfs.NewWithNoIdm(),
+					tt.files(t),
+				)
 			} else {
 				entries, err = build.ComputeArchiveChecksums(testCtx, memfs.New(), tt.files(t))
 			}
@@ -639,7 +653,10 @@ func TestBuildPlugin(t *testing.T) {
 				initGitRepo(t, dir)
 				vfs := osfs.NewWithNoIdm()
 				p := manifest.Plugin{Name: "test-plugin", Version: "1.0.0", Description: "desc"}
-				meta := &metadata.Metadata{GitCommitSHA: "abc1234", BuildTimestamp: "2026-01-01T00:00:00Z"}
+				meta := &metadata.Metadata{
+					GitCommitSHA:   "abc1234",
+					BuildTimestamp: "2026-01-01T00:00:00Z",
+				}
 				return vfs, dir, p, meta
 			},
 		},

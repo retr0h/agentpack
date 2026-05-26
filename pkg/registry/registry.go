@@ -25,21 +25,23 @@
 //
 // Usage:
 //
+//	r := registry.New()
+//
 //	// Save an installation manifest.
-//	err := registry.Save(&registry.PackageManifest{
+//	err := r.Save(&registry.PackageManifest{
 //	    Name:    "my-plugin",
 //	    Source:  "github.com/org/repo",
 //	    Files:   installedFiles,
 //	})
 //
 //	// Load a manifest by name.
-//	m, err := registry.Load("my-plugin")
+//	m, err := r.Load("my-plugin")
 //
 //	// List all installed manifests.
-//	manifests, err := registry.List()
+//	manifests, err := r.List()
 //
 //	// Remove a manifest.
-//	err = registry.Remove("my-plugin")
+//	err = r.Remove("my-plugin")
 package registry
 
 import (
@@ -108,9 +110,15 @@ type PackageManifest struct {
 	Files []InstalledFile `yaml:"files"`
 }
 
+// Registry manages per-package installation manifests.
+type Registry struct{}
+
+// New returns a new Registry ready to manage installation manifests.
+func New() *Registry { return &Registry{} }
+
 // Dir returns the path to the package registry directory, creating it if it
 // does not exist. The directory is ~/.config/agentpack/packages/.
-func Dir() (string, error) {
+func (r *Registry) Dir() (string, error) {
 	home, err := osUserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("home dir: %w", err)
@@ -125,8 +133,8 @@ func Dir() (string, error) {
 }
 
 // Save writes m to the registry directory. The file is named {m.Name}.yaml.
-func Save(m *PackageManifest) error {
-	dir, err := Dir()
+func (r *Registry) Save(m *PackageManifest) error {
+	dir, err := r.Dir()
 	if err != nil {
 		return err
 	}
@@ -146,8 +154,8 @@ func Save(m *PackageManifest) error {
 
 // Load reads the registry manifest for name. It returns an error when the
 // manifest does not exist.
-func Load(name string) (*PackageManifest, error) {
-	dir, err := Dir()
+func (r *Registry) Load(name string) (*PackageManifest, error) {
+	dir, err := r.Dir()
 	if err != nil {
 		return nil, err
 	}
@@ -173,8 +181,8 @@ func Load(name string) (*PackageManifest, error) {
 
 // Remove deletes the registry manifest for name. It is a no-op when the
 // manifest does not exist.
-func Remove(name string) error {
-	dir, err := Dir()
+func (r *Registry) Remove(name string) error {
+	dir, err := r.Dir()
 	if err != nil {
 		return err
 	}
@@ -188,8 +196,8 @@ func Remove(name string) error {
 }
 
 // List returns all PackageManifests stored in the registry directory.
-func List() ([]*PackageManifest, error) {
-	dir, err := Dir()
+func (r *Registry) List() ([]*PackageManifest, error) {
+	dir, err := r.Dir()
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +220,7 @@ func List() ([]*PackageManifest, error) {
 
 		name := e.Name()[:len(e.Name())-len(".yaml")]
 
-		m, loadErr := Load(name)
+		m, loadErr := r.Load(name)
 		if loadErr != nil {
 			return nil, loadErr
 		}

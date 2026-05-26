@@ -32,15 +32,20 @@ go build -o agentpack .
 ## 🚀 Quick Start
 
 ```bash
-agentpack install github.com/org/skills-repo                    # install from git
-agentpack install github.com/org/repo#v1.0.0                    # pin to a tag
-agentpack install github.com/org/repo --skill review             # one skill only
-agentpack list                                                   # show installed
-agentpack show my-plugin                                         # package details
-agentpack update my-plugin                                       # update to latest
-agentpack outdated                                               # check for updates
-agentpack remove my-plugin                                       # uninstall
+agentpack install github.com/org/skills-repo          # install from git
+agentpack install github.com/org/repo#v1.0.0          # pin to a tag
+agentpack install github.com/org/repo --skill review  # one skill only
+agentpack list                                        # show installed
+agentpack show my-plugin                              # package details
+agentpack inspect plugin.agentpack                    # peek inside an archive
+agentpack verify plugin.agentpack                     # verify checksums
+agentpack update my-plugin                            # update to latest
+agentpack outdated                                    # check for updates
+agentpack remove my-plugin                            # uninstall
+agentpack sync                                        # sync from agentpack.yaml
 ```
+
+See [Usage][] for full details.
 
 ## ✨ Features
 
@@ -49,6 +54,7 @@ agentpack remove my-plugin                                       # uninstall
 | Install from git | Any GitHub/GitLab/Bitbucket repo, with `--skill` / `--agent` filters |
 | Install from archive | `.agentpack` files via local path, URL, or offline transfer |
 | Build packages | `agentpack build` from `agentpack.yaml` manifest |
+| Inspect | Peek inside `.agentpack` archives — metadata, files, checksums |
 | Verify | SHA256 checksum verification — internal + external (`--sha256`) |
 | List / Show | See what's installed, source, SHA, every file tracked |
 | Update / Outdated | Check for and apply updates from git sources |
@@ -60,7 +66,7 @@ agentpack remove my-plugin                                       # uninstall
 
 ## 📖 Documentation
 
-- [Configuration][] — install, build, sync, verify usage
+- [Usage][] — install, build, sync, verify, inspect, examples
 - [Package Format (ADR-001)][] — archive schema, content types
 - [Architecture][] — driver design, install flow
 - [Development][] — dev setup, testing conventions
@@ -71,7 +77,7 @@ agentpack remove my-plugin                                       # uninstall
 [MIT][]
 
 [MIT]: LICENSE
-[Configuration]: docs/configuration.md
+[Usage]: docs/usage.md
 [Package Format (ADR-001)]: docs/adr/001-agentpack-format.md
 [Architecture]: docs/architecture.md
 [Development]: docs/development.md

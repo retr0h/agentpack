@@ -31,7 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/pkg/fetcher"
+	"github.com/retr0h/agentpack/internal/fetcher"
 )
 
 // --------------------------------------------------------------------------
@@ -249,9 +249,19 @@ func TestCopyWorktree(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				src := t.TempDir()
-				require.NoError(t, os.WriteFile(filepath.Join(src, "file.txt"), []byte("hello"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, "file.txt"), []byte("hello"), 0o644),
+				)
 				require.NoError(t, os.MkdirAll(filepath.Join(src, ".git"), 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(src, ".git", "HEAD"), []byte("ref: refs/heads/main"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(
+						filepath.Join(src, ".git", "HEAD"),
+						[]byte("ref: refs/heads/main"),
+						0o644,
+					),
+				)
 				return src, t.TempDir()
 			},
 			check: func(t *testing.T, dst string) {
@@ -268,7 +278,14 @@ func TestCopyWorktree(t *testing.T) {
 				t.Helper()
 				src := t.TempDir()
 				require.NoError(t, os.MkdirAll(filepath.Join(src, "subdir"), 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(src, "subdir", "nested.txt"), []byte("nested"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(
+						filepath.Join(src, "subdir", "nested.txt"),
+						[]byte("nested"),
+						0o644,
+					),
+				)
 				return src, t.TempDir()
 			},
 			check: func(t *testing.T, dst string) {
@@ -290,7 +307,10 @@ func TestCopyWorktree(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				src := t.TempDir()
-				require.NoError(t, os.WriteFile(filepath.Join(src, "file.txt"), []byte("data"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, "file.txt"), []byte("data"), 0o644),
+				)
 				return src, t.TempDir()
 			},
 			customCtx: func() context.Context {
@@ -305,8 +325,14 @@ func TestCopyWorktree(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				src := t.TempDir()
-				require.NoError(t, os.WriteFile(filepath.Join(src, ".git"), []byte("worktree: something"), 0o644))
-				require.NoError(t, os.WriteFile(filepath.Join(src, "README.md"), []byte("readme"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, ".git"), []byte("worktree: something"), 0o644),
+				)
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, "README.md"), []byte("readme"), 0o644),
+				)
 				return src, t.TempDir()
 			},
 			check: func(t *testing.T, dst string) {
@@ -326,7 +352,10 @@ func TestCopyWorktree(t *testing.T) {
 				}
 				src := t.TempDir()
 				require.NoError(t, os.MkdirAll(filepath.Join(src, "subdir"), 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(src, "subdir", "f.txt"), []byte("x"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, "subdir", "f.txt"), []byte("x"), 0o644),
+				)
 				dst := t.TempDir()
 				require.NoError(t, os.Chmod(dst, 0o555))
 				t.Cleanup(func() { _ = os.Chmod(dst, 0o755) })

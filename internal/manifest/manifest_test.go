@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/retr0h/agentpack/pkg/manifest"
+	"github.com/retr0h/agentpack/internal/manifest"
 )
 
 // --------------------------------------------------------------------------

@@ -33,13 +33,7 @@ type remover interface {
 	Run(ctx context.Context, opts pkgremove.Options) (*pkgremove.Result, error)
 }
 
-type defaultRemover struct{}
-
-func (defaultRemover) Run(ctx context.Context, opts pkgremove.Options) (*pkgremove.Result, error) {
-	return pkgremove.Run(ctx, opts)
-}
-
-var pkgRemover remover = defaultRemover{}
+var pkgRemover remover = pkgremove.New()
 
 var removeCmd = &cobra.Command{
 	Use:   "remove <name>",
@@ -54,23 +48,37 @@ directory is never touched.`,
 
 		name := args[0]
 
-		cli.Header(out, "removing", name)
-
-		result, err := pkgRemover.Run(ctx, pkgremove.Options{
-			Name: name,
-			OnStep: func(s pkgremove.Step) {
+		var onStep func(pkgremove.Step)
+		if outputFormat != "json" {
+			cli.Header(out, "removing", name)
+			onStep = func(s pkgremove.Step) {
 				if s.Skipped {
 					cli.Printf(out, "  %s %s\n", cli.Mute(out, "skipped"), cli.Mute(out, s.Path))
 				} else {
 					cli.StepLine(out, "removed", s.Path)
 				}
-			},
+			}
+		}
+
+		result, err := pkgRemover.Run(ctx, pkgremove.Options{
+			Name:   name,
+			OnStep: onStep,
 		})
 		if err != nil {
 			return err
 		}
 
-		cli.Printf(out, "\n  %s removed\n", cli.OK(out, result.Name))
+		if outputFormat == "json" {
+			return jsonOutput(out, result)
+		}
+
+		cli.Printf(
+			out,
+			"\n  %s %s %s\n",
+			cli.OK(out, cli.Checkmark),
+			cli.Accent(out, result.Name),
+			cli.Mute(out, "removed"),
+		)
 
 		return nil
 	},

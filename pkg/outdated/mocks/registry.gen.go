@@ -54,3 +54,18 @@ func (mr *MockRegistryMockRecorder) List() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockRegistry)(nil).List))
 }
+
+// Load mocks base method.
+func (m *MockRegistry) Load(name string) (*registry.PackageManifest, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Load", name)
+	ret0, _ := ret[0].(*registry.PackageManifest)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Load indicates an expected call of Load.
+func (mr *MockRegistryMockRecorder) Load(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockRegistry)(nil).Load), name)
+}

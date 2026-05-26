@@ -51,6 +51,7 @@ pkg/archive/                  Tarball creation and extraction
 pkg/build/                    Build pipeline orchestration
 pkg/fetcher/                  Fetch drivers (file, http, git)
 pkg/fetcher/mocks/            Generated MockFetcher
+pkg/inspect/                  Archive inspection
 pkg/install/                  Install pipeline orchestration
 pkg/list/                     List installed plugins
 pkg/list/mocks/               Generated MockRegistry
@@ -74,8 +75,8 @@ pkg/verify/                   Archive verification
 
 ## Testing conventions
 
-**Every public function MUST have a table-driven test.** One table per
-function, with rows covering both the happy path and every failure mode.
+**Every public function MUST have a table-driven test.** One table per function,
+with rows covering both the happy path and every failure mode.
 
 **One test file per production file.** `archive.go` → `archive_test.go`.
 
@@ -104,14 +105,14 @@ if got != want { t.Errorf("got %v, want %v", got, want) }
 ### Virtual filesystem
 
 Tests use [AVFS](https://github.com/avfs/avfs) for virtual filesystem:
-production uses `osfs.NewWithNoIdm()`, tests use `memfs.New()`, error
-injection wraps `memfs` with a custom struct overriding methods.
+production uses `osfs.NewWithNoIdm()`, tests use `memfs.New()`, error injection
+wraps `memfs` with a custom struct overriding methods.
 
 ### Interface mocking
 
-Use [mockgen](https://github.com/uber-go/mock) for interface mocks.
-Never hand-roll mock structs. Generated mocks live in `mocks/`
-subdirectories alongside the interface they mock.
+Use [mockgen](https://github.com/uber-go/mock) for interface mocks. Never
+hand-roll mock structs. Generated mocks live in `mocks/` subdirectories
+alongside the interface they mock.
 
 Generate with `//go:generate` directives in `mocks/generate.go`:
 
@@ -121,18 +122,18 @@ Regenerate all mocks:
 
     go generate ./...
 
-VFS error-injecting wrappers (wrapping `avfs.VFS` to return errors)
-are NOT mocks — they are test decorators and are fine hand-rolled.
+VFS error-injecting wrappers (wrapping `avfs.VFS` to return errors) are NOT
+mocks — they are test decorators and are fine hand-rolled.
 
 ### Interfaces where consumed
 
-Every package that calls another package defines a small interface for
-what it needs. The interface is defined in the CONSUMING package, not
-the producing package. The consuming code accepts the interface (nil
-defaults to the real implementation) and calls through it.
+Every package that calls another package defines a small interface for what it
+needs. The interface is defined in the CONSUMING package, not the producing
+package. The consuming code accepts the interface (nil defaults to the real
+implementation) and calls through it.
 
-This applies to `cmd/` too — each cmd file defines an unexported
-interface for the pkg/ function it calls:
+This applies to `cmd/` too — each cmd file defines an unexported interface for
+the pkg/ function it calls:
 
 ```go
 // cmd/install.go
@@ -151,6 +152,38 @@ var pkgInstaller installer = defaultInstaller{}
 
 Then `RunE` calls `pkgInstaller.Run(...)` instead of `install.Run(...)`.
 
+## Brand and theming
+
+Two themes in `internal/cli/theme.go` — auto-detected via
+`termenv.HasDarkBackground()`:
+
+| Role   | Dark (`ThemeDark`) | Light (`ThemeLight`)   |
+| ------ | ------------------ | ---------------------- |
+| Accent | `#c678dd` magenta  | `#9b59b6` purple       |
+| OK     | `#50fa7b` green    | `#27ae60` forest green |
+| Err    | `#ff6ec7` pink     | `#e74c3c` red          |
+| Info   | `#00d4ff` cyan     | `#2980b9` blue         |
+| Tag    | `#ffb86c` orange   | `#d35400` burnt orange |
+| Mute   | faint              | `#888888` gray         |
+
+`install.sh` must use the same accent RGB as `ThemeDark` for the banner.
+
+Color roles across CLI output:
+
+- **Accent** — package names, headlines
+- **White (plain)** — versions, file paths, important readable values
+- **Tag** — targets/categories (claude-code, cursor, universal)
+- **Info** — dates, timestamps
+- **OK** — checkmarks, success states
+- **Err** — failures, mismatches
+- **Mute** — labels, SHAs, sources, secondary metadata
+
+## Architecture Decision Records
+
+Significant design decisions are recorded as ADRs in `docs/adr/`. Write a new
+ADR when changing the archive format, adding a target, or altering the security
+model.
+
 ## Commit messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
@@ -159,6 +192,6 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - **Subject**: max 50 chars, imperative mood, no period
 - **Body**: wrap at 72 chars, blank line after subject
 - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
-- **Scopes**: `cli`, `archive`, `build`, `checksum`, `fetcher`, `install`,
-  `list`, `lockfile`, `manifest`, `metadata`, `outdated`, `plugin`, `registry`,
-  `remove`, `sync`, `target`, `update`, `verify`
+- **Scopes**: `cli`, `archive`, `build`, `checksum`, `fetcher`, `inspect`,
+  `install`, `list`, `lockfile`, `manifest`, `metadata`, `outdated`, `plugin`,
+  `registry`, `remove`, `sync`, `target`, `update`, `verify`

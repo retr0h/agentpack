@@ -28,9 +28,9 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/retr0h/agentpack/pkg/outdated"
 	outdatedmocks "github.com/retr0h/agentpack/pkg/outdated/mocks"
@@ -49,7 +49,7 @@ func newCancelAfterFirstErrCtx() *cancelAfterFirstErrCtx {
 }
 
 func (c *cancelAfterFirstErrCtx) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterFirstErrCtx) Done() <-chan struct{}        { return nil }
+func (c *cancelAfterFirstErrCtx) Done() <-chan struct{}       { return nil }
 func (c *cancelAfterFirstErrCtx) Value(_ any) any             { return nil }
 
 func (c *cancelAfterFirstErrCtx) Err() error {
@@ -146,7 +146,8 @@ func TestRun(t *testing.T) {
 				tt.setup(t, home)
 			}
 
-			entries, err := outdated.Run(ctx, tt.names)
+			c := outdated.New()
+			entries, err := c.Run(ctx, tt.names)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -208,10 +209,8 @@ func TestRunWithOptions(t *testing.T) {
 			setupMocks: func(reg *outdatedmocks.MockRegistry, _ *outdatedmocks.MockRemoteChecker) {
 				reg.EXPECT().List().Return(nil, nil)
 			},
-			extraOpts: func(opts *outdated.Options) {
-				// OnStep will be set by checkSteps wrapper
-			},
-			wantLen: 0,
+			extraOpts: func(_ *outdated.Options) {},
+			wantLen:   0,
 			checkSteps: func(t *testing.T, steps []string) {
 				t.Helper()
 				assert.Empty(t, steps)
@@ -239,7 +238,11 @@ func TestRunWithOptions(t *testing.T) {
 			name: "outdated plugin produces outdated entry",
 			setupMocks: func(reg *outdatedmocks.MockRegistry, checker *outdatedmocks.MockRemoteChecker) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "my-plugin", Source: "https://example.com/plugin.agentpack", SHA: "oldshavalue"},
+					{
+						Name:   "my-plugin",
+						Source: "https://example.com/plugin.agentpack",
+						SHA:    "oldshavalue",
+					},
 				}, nil)
 				checker.EXPECT().
 					LsRemote(gomock.Any(), "https://example.com/plugin.agentpack").
@@ -255,7 +258,11 @@ func TestRunWithOptions(t *testing.T) {
 			name: "ls-remote failure produces non-outdated entry with empty remote SHA",
 			setupMocks: func(reg *outdatedmocks.MockRegistry, checker *outdatedmocks.MockRemoteChecker) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "my-plugin", Source: "https://example.com/plugin.agentpack", SHA: "abc123"},
+					{
+						Name:   "my-plugin",
+						Source: "https://example.com/plugin.agentpack",
+						SHA:    "abc123",
+					},
 				}, nil)
 				checker.EXPECT().
 					LsRemote(gomock.Any(), "https://example.com/plugin.agentpack").
@@ -290,7 +297,11 @@ func TestRunWithOptions(t *testing.T) {
 			name: "HEAD not found in remote refs produces non-outdated entry with empty remote SHA",
 			setupMocks: func(reg *outdatedmocks.MockRegistry, checker *outdatedmocks.MockRemoteChecker) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "my-plugin", Source: "https://example.com/plugin.agentpack", SHA: "abc123"},
+					{
+						Name:   "my-plugin",
+						Source: "https://example.com/plugin.agentpack",
+						SHA:    "abc123",
+					},
 				}, nil)
 				checker.EXPECT().
 					LsRemote(gomock.Any(), "https://example.com/plugin.agentpack").
@@ -308,7 +319,11 @@ func TestRunWithOptions(t *testing.T) {
 			setupMocks: func(reg *outdatedmocks.MockRegistry, checker *outdatedmocks.MockRemoteChecker) {
 				sha := "mainsha1234567890abc"
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "my-plugin", Source: "https://example.com/plugin.agentpack", SHA: "oldshavalue"},
+					{
+						Name:   "my-plugin",
+						Source: "https://example.com/plugin.agentpack",
+						SHA:    "oldshavalue",
+					},
 				}, nil)
 				checker.EXPECT().
 					LsRemote(gomock.Any(), "https://example.com/plugin.agentpack").
@@ -326,7 +341,11 @@ func TestRunWithOptions(t *testing.T) {
 			setupMocks: func(reg *outdatedmocks.MockRegistry, checker *outdatedmocks.MockRemoteChecker) {
 				sha := "mastersha123456789ab"
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "my-plugin", Source: "https://example.com/plugin.agentpack", SHA: "oldshavalue"},
+					{
+						Name:   "my-plugin",
+						Source: "https://example.com/plugin.agentpack",
+						SHA:    "oldshavalue",
+					},
 				}, nil)
 				checker.EXPECT().
 					LsRemote(gomock.Any(), "https://example.com/plugin.agentpack").
@@ -410,7 +429,8 @@ func TestRunWithOptions(t *testing.T) {
 				opts.OnStep = func(name string) { steps = append(steps, name) }
 			}
 
-			entries, err := outdated.RunWithOptions(ctx, opts)
+			c := outdated.New()
+			entries, err := c.RunWithOptions(ctx, opts)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

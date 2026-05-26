@@ -34,13 +34,7 @@ type updater interface {
 	Run(ctx context.Context, opts pkgupdate.Options) (*pkgupdate.Result, error)
 }
 
-type defaultUpdater struct{}
-
-func (defaultUpdater) Run(ctx context.Context, opts pkgupdate.Options) (*pkgupdate.Result, error) {
-	return pkgupdate.Run(ctx, opts)
-}
-
-var pkgUpdater updater = defaultUpdater{}
+var pkgUpdater updater = pkgupdate.New()
 
 var updateCmd = &cobra.Command{
 	Use:   "update <name>",
@@ -50,26 +44,36 @@ var updateCmd = &cobra.Command{
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		cli.Header(out, "updating", args[0])
+		var onStep func(install.Step)
+		if outputFormat != "json" {
+			cli.Header(out, "updating", args[0])
+			onStep = func(s install.Step) {
+				cli.StepLine(out, s.Name, s.Detail)
+			}
+		}
 
 		result, err := pkgUpdater.Run(ctx, pkgupdate.Options{
-			Name: args[0],
-			OnStep: func(s install.Step) {
-				cli.StepLine(out, s.Name, s.Detail)
-			},
+			Name:   args[0],
+			OnStep: onStep,
 		})
 		if err != nil {
 			return err
 		}
 
+		if outputFormat == "json" {
+			return jsonOutput(out, result)
+		}
+
 		if result.Updated {
-			cli.Printf(out, "  %s %s → %s\n",
+			cli.Printf(
+				out, "  %s %s → %s\n",
 				cli.OK(out, "updated"),
 				cli.Mute(out, result.OldSHA),
 				cli.Accent(out, result.NewSHA),
 			)
 		} else {
-			cli.Printf(out, "  %s %s\n",
+			cli.Printf(
+				out, "  %s %s\n",
 				cli.OK(out, cli.Checkmark),
 				cli.Mute(out, "already up to date"),
 			)

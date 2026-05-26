@@ -6,11 +6,10 @@ Accepted
 
 ## Context
 
-AI coding agents (Claude Code, Cursor, Copilot, Gemini CLI, Codex,
-OpenCode, Windsurf) need a standard way to distribute and install
-skills, commands, hooks, agents, MCP configs, and settings. There is
-no existing package format for this — agentskills.io defines content
-conventions but not packaging.
+AI coding agents (Claude Code, Cursor, Copilot, Gemini CLI, Codex, OpenCode,
+Windsurf) need a standard way to distribute and install skills, commands, hooks,
+agents, MCP configs, and settings. There is no existing package format for this
+— agentskills.io defines content conventions but not packaging.
 
 ## Decision
 
@@ -25,33 +24,33 @@ Naming convention: `{name}-{version}.agentpack` when version is known,
 
 The archive contains ONLY these recognized content directories:
 
-| Type | Directory | Format | Description |
-|------|-----------|--------|-------------|
-| skills | `skills/` | Markdown (SKILL.md in subdirs) | Agent skills |
-| commands | `commands/` | Markdown | Slash commands |
-| agents | `agents/` | Markdown | Agent definitions |
-| hooks | `hooks/` | JSON + shell scripts | Event hooks |
-| mcp | `mcp/` | JSON | MCP server configs (remote/ux only) |
-| settings | `settings/` | JSON | Settings fragments |
+| Type     | Directory   | Format                         | Description                         |
+| -------- | ----------- | ------------------------------ | ----------------------------------- |
+| skills   | `skills/`   | Markdown (SKILL.md in subdirs) | Agent skills                        |
+| commands | `commands/` | Markdown                       | Slash commands                      |
+| agents   | `agents/`   | Markdown                       | Agent definitions                   |
+| hooks    | `hooks/`    | JSON + shell scripts           | Event hooks                         |
+| mcp      | `mcp/`      | JSON                           | MCP server configs (remote/ux only) |
+| settings | `settings/` | JSON                           | Settings fragments                  |
 
 ### Excluded content
 
 These are NEVER included in a package, even if present in the source:
 
-| Excluded | Reason |
-|----------|--------|
-| `.git/` | Repository metadata |
-| `.github/`, `.gitlab/` | CI/CD configuration |
-| `README.md`, `LICENSE`, `CONTRIBUTING.md` | Repository docs |
-| `CODE_OF_CONDUCT.md`, `SECURITY.md` | Repository governance |
-| `CITATION.cff` | Citation metadata |
-| `tools/`, `scripts/` (at root) | Repository tooling |
-| `mappings/`, `assets/`, `images/` | Non-content resources |
-| `.gitignore`, `.gitattributes` | Git configuration |
-| `index.json` | Registry indexes |
-| Binary executables | Security policy — no binaries |
-| `node_modules/`, `vendor/` | Dependency dirs |
-| `.claude-plugin/` | Generated at install by target drivers |
+| Excluded                                  | Reason                                 |
+| ----------------------------------------- | -------------------------------------- |
+| `.git/`                                   | Repository metadata                    |
+| `.github/`, `.gitlab/`                    | CI/CD configuration                    |
+| `README.md`, `LICENSE`, `CONTRIBUTING.md` | Repository docs                        |
+| `CODE_OF_CONDUCT.md`, `SECURITY.md`       | Repository governance                  |
+| `CITATION.cff`                            | Citation metadata                      |
+| `tools/`, `scripts/` (at root)            | Repository tooling                     |
+| `mappings/`, `assets/`, `images/`         | Non-content resources                  |
+| `.gitignore`, `.gitattributes`            | Git configuration                      |
+| `index.json`                              | Registry indexes                       |
+| Binary executables                        | Security policy — no binaries          |
+| `node_modules/`, `vendor/`                | Dependency dirs                        |
+| `.claude-plugin/`                         | Generated at install by target drivers |
 
 ### Metadata
 
@@ -93,7 +92,7 @@ The optional build manifest declares what to include:
 ```yaml
 name: my-plugin
 version: 1.0.0
-description: "My plugin"
+description: 'My plugin'
 
 skills:
   - skills/**/*
@@ -105,12 +104,11 @@ hooks:
 mcp:
   - type: remote
     name: my-api
-    url: "https://mcp.example.com/v1"
+    url: 'https://mcp.example.com/v1'
 ```
 
-When `agentpack.yaml` is absent (e.g. installing from a third-party
-repo), the builder auto-generates one by scanning for standard content
-directories.
+When `agentpack.yaml` is absent (e.g. installing from a third-party repo), the
+builder auto-generates one by scanning for standard content directories.
 
 ### Build pipeline
 
@@ -120,11 +118,11 @@ Every install goes through the build step:
 source → clone/fetch → build .agentpack → store → install
 ```
 
-| Source | How the package is built |
-|--------|------------------------|
-| Git repo with `agentpack.yaml` | `build.Run()` using the manifest |
-| Git repo without manifest | Auto-detect content dirs → generate manifest → build |
-| `.agentpack` file or URL | Already a package — store and install |
+| Source                         | How the package is built                             |
+| ------------------------------ | ---------------------------------------------------- |
+| Git repo with `agentpack.yaml` | `build.Run()` using the manifest                     |
+| Git repo without manifest      | Auto-detect content dirs → generate manifest → build |
+| `.agentpack` file or URL       | Already a package — store and install                |
 
 ### Storage
 
@@ -142,14 +140,14 @@ Archives use the naming: `{name}@{sha}.agentpack` for git sources,
 
 The package format is generic. Target drivers translate at install time:
 
-| Target | What it installs | Where |
-|--------|-----------------|-------|
+| Target      | What it installs                | Where                                                     |
+| ----------- | ------------------------------- | --------------------------------------------------------- |
 | Claude Code | skills, commands, agents, hooks | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` |
-| Cursor | skills only | `.cursor/rules/` |
-| Universal | skills only | `.agents/skills/` |
+| Cursor      | skills only                     | `.cursor/rules/`                                          |
+| Universal   | skills only                     | `.agents/skills/`                                         |
 
-Target drivers read from the package and write to their platform-specific
-paths. Content types the target doesn't support are silently skipped.
+Target drivers read from the package and write to their platform-specific paths.
+Content types the target doesn't support are silently skipped.
 
 ### MCP configuration
 
@@ -159,10 +157,10 @@ Only `remote` and `ux` MCP types are allowed:
 mcp:
   - type: remote
     name: my-api
-    url: "https://mcp.example.com/v1"
+    url: 'https://mcp.example.com/v1'
   - type: ux
     name: my-server
-    package: "@mycompany/my-mcp-server"
+    package: '@mycompany/my-mcp-server'
 ```
 
 `type: binary` is rejected at build time — no executables in packages.

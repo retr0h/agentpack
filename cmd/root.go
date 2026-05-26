@@ -23,7 +23,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -35,6 +34,8 @@ import (
 	_ "github.com/retr0h/agentpack/pkg/target/cursor"     // register Cursor target
 	_ "github.com/retr0h/agentpack/pkg/target/universal"  // register Universal target
 )
+
+var outputFormat string
 
 var rootCmd = &cobra.Command{
 	Use:   "agentpack",
@@ -48,13 +49,15 @@ func Execute() {
 
 	rootCmd.SilenceUsage = true
 
+	rootCmd.PersistentFlags().
+		StringVarP(&outputFormat, "output", "o", "text", "output format (text, json)")
+
 	defaultHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(c *cobra.Command, args []string) {
 		if c == rootCmd {
 			out := c.OutOrStdout()
-			_, _ = fmt.Fprintln(out)
-			_, _ = fmt.Fprint(out, cli.Banner(out))
-			_, _ = fmt.Fprintln(out)
+			cli.Print(out, "")
+			cli.Print(out, cli.Banner(out))
 		}
 		defaultHelp(c, args)
 	})

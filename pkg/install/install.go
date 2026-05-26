@@ -22,7 +22,8 @@
 //
 // Usage:
 //
-//	result, err := install.Run(ctx, install.Options{
+//	i := install.New()
+//	result, err := i.Run(ctx, install.Options{
 //	    Source: "github.com/org/skills-repo",
 //	    Skills: []string{"review"},    // optional: only install named skills
 //	    OnStep: func(s install.Step) { fmt.Println(s.Name, s.Detail) },
@@ -45,10 +46,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/checksum"
+	"github.com/retr0h/agentpack/internal/fetcher"
 	"github.com/retr0h/agentpack/internal/metadata"
-	"github.com/retr0h/agentpack/pkg/archive"
-	"github.com/retr0h/agentpack/pkg/fetcher"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -60,10 +61,16 @@ var (
 	osCreateTemp = os.CreateTemp
 	osMkdirTemp  = os.MkdirTemp
 
-	// registrySave is a swappable wrapper around registry.Save so tests can
-	// prevent writes to the real ~/.config/agentpack/packages/ directory.
-	registrySave = registry.Save
+	// registrySave is a swappable wrapper around registry.New().Save so tests
+	// can prevent writes to the real ~/.config/agentpack/packages/ directory.
+	registrySave = registry.New().Save
 )
+
+// Installer orchestrates the agentpack install pipeline.
+type Installer struct{}
+
+// New returns a new Installer ready to run install pipelines.
+func New() *Installer { return &Installer{} }
 
 // Options configures an install run.
 type Options struct {
@@ -96,13 +103,13 @@ type Options struct {
 	Targets []target.Target
 }
 
-// Result holds the outcome of a successful install.
 // Step represents a completed pipeline phase for display.
 type Step struct {
 	Name   string
 	Detail string
 }
 
+// Result holds the outcome of a successful install.
 type Result struct {
 	Name    string
 	Version string
@@ -116,7 +123,7 @@ type Result struct {
 }
 
 // Run installs from any source: .agentpack archive, git repo, or local path.
-func Run(ctx context.Context, opts Options) (*Result, error) {
+func (i *Installer) Run(ctx context.Context, opts Options) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -169,7 +176,15 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 		version = ref
 	}
 
-	archivePath, err := autoPackageWithVersion(ctx, cloneDir, name, sha, version, opts.Skills, opts.Agents)
+	archivePath, err := autoPackageWithVersion(
+		ctx,
+		cloneDir,
+		name,
+		sha,
+		version,
+		opts.Skills,
+		opts.Agents,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("auto-package: %w", err)
 	}
@@ -315,7 +330,12 @@ func humanSize(bytes int64) string {
 	return fmt.Sprintf("%d KB", bytes/kb)
 }
 
-func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *metadata.Metadata) (*Result, error) {
+func installFromDir(
+	ctx context.Context,
+	opts Options,
+	sourceDir string,
+	meta *metadata.Metadata,
+) (*Result, error) {
 	targets := opts.Targets
 	if len(targets) == 0 {
 		targets = target.Detected()
@@ -400,7 +420,11 @@ func installFromDir(ctx context.Context, opts Options, sourceDir string, meta *m
 // every regular file it contains. The SHA256 is computed from the file content.
 // collectTargetFiles scans only the content dirs that exist in the source
 // (skills/, commands/, agents/) and records what was copied to the install dir.
-func collectTargetFiles(installDir string, tgt target.Target, srcDir string) ([]registry.InstalledFile, error) {
+func collectTargetFiles(
+	installDir string,
+	tgt target.Target,
+	_ string,
+) ([]registry.InstalledFile, error) {
 	// Map target names to their install prefix dirs.
 	prefixes := map[string][]string{
 		"claude-code": {".claude/skills", ".claude/commands", ".claude/agents"},

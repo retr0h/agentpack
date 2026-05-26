@@ -34,13 +34,7 @@ type registryLoader interface {
 	Load(name string) (*registry.PackageManifest, error)
 }
 
-type defaultRegistryLoader struct{}
-
-func (defaultRegistryLoader) Load(name string) (*registry.PackageManifest, error) {
-	return registry.Load(name)
-}
-
-var pkgRegistryLoader registryLoader = defaultRegistryLoader{}
+var pkgRegistryLoader registryLoader = registry.New()
 
 var showCmd = &cobra.Command{
 	Use:   "show <name>",
@@ -55,23 +49,39 @@ var showCmd = &cobra.Command{
 			return err
 		}
 
+		if outputFormat == "json" {
+			return jsonOutput(out, m)
+		}
+
 		installed := m.Installed
 		if idx := strings.IndexByte(installed, 'T'); idx > 0 {
 			installed = installed[:idx]
 		}
 
-		cli.Field(out, "Name", m.Name)
-		cli.Field(out, "Version", m.Version)
-		cli.Field(out, "Source", m.Source)
-		cli.Field(out, "SHA", cli.ShortSHA(m.SHA))
-		cli.Field(out, "Installed", installed)
+		version := m.Version
+		if len(version) >= 40 {
+			version = cli.ShortSHA(version)
+		}
+
+		source := m.Source
+		source = strings.TrimPrefix(source, "https://")
+		source = strings.TrimPrefix(source, "http://")
+		if idx := strings.IndexByte(source, '#'); idx >= 0 {
+			source = source[:idx]
+		}
+
+		cli.FieldAccent(out, "Name", m.Name)
+		cli.Field(out, "Version", version)
+		cli.FieldMuted(out, "Source", source)
+		cli.FieldMuted(out, "SHA", cli.ShortSHA(m.SHA))
+		cli.FieldInfo(out, "Installed", installed)
 
 		archiveBase := fmt.Sprintf("%s@%s", m.Name, cli.ShortSHA(m.SHA))
 		archivePath := fmt.Sprintf("~/.config/agentpack/archives/%s.agentpack", archiveBase)
 		cli.Field(out, "Archive", archivePath)
 
 		shaFilePath := fmt.Sprintf("~/.config/agentpack/archives/%s.sha256", archiveBase)
-		cli.FieldMuted(out, "SHA256", shaFilePath)
+		cli.Field(out, "SHA256", shaFilePath)
 
 		// Group files by target to show base dir once per target.
 		type targetGroup struct {
@@ -95,14 +105,16 @@ var showCmd = &cobra.Command{
 
 		for _, tgt := range order {
 			g := groups[tgt]
-			cli.Printf(out, "\n%s %s\n",
-				cli.Accent(out, tgt),
+			cli.Printf(
+				out, "\n%s %s\n",
+				cli.Tag(out, tgt),
 				cli.Mute(out, fmt.Sprintf("(%s, %d files)", g.dir, len(g.files))),
 			)
 
 			for _, f := range g.files {
-				cli.Printf(out, "  %s  %s\n",
-					cli.Mute(out, f.Path),
+				cli.Printf(
+					out, "  %s  %s\n",
+					f.Path,
 					cli.Mute(out, cli.ShortSHA(f.SHA256)),
 				)
 			}

@@ -40,7 +40,7 @@ Skunkworks workflow — commits land directly on `main`.
 7. **Never `//nolint:errcheck`.** Handle errors properly.
 8. **Context and VFS.** Functions that iterate or do I/O accept `context.Context`
    and `avfs.VFS`. Check `ctx.Err()` in loops. Pure functions skip both.
-9. **All output through `pkg/cli/`.** No raw `fmt.Fprintf` in `cmd/`.
+9. **All output through `internal/cli/`.** No raw `fmt.Fprintf` in `cmd/`.
 10. **No hand-rolled mocks.** Use `go.uber.org/mock/mockgen` for interface
     mocks. VFS error-injecting wrappers are decorators, not mocks.
 11. **Interfaces where consumed.** Every package that calls another package
@@ -62,6 +62,7 @@ pkg/archive/                  Tarball creation and extraction
 pkg/build/                    Build pipeline orchestration
 pkg/fetcher/                  Fetch drivers (file, http, git)
 pkg/fetcher/mocks/            Generated MockFetcher
+pkg/inspect/                  Archive inspection
 pkg/install/                  Install pipeline orchestration
 pkg/list/                     List installed plugins
 pkg/list/mocks/               Generated MockRegistry
@@ -98,8 +99,13 @@ No binary executables in archives — security policy. MCP remote/ux only.
 - `cmd/` — thin shim: parse flags, create context + VFS, call `pkg/`
 - `pkg/` — public library API, consumable without the CLI
 - `internal/` — implementation details, not importable outside the module
+- `docs/adr/` — Architecture Decision Records for significant design choices
 - Filesystem I/O via `avfs.VFS` (production: `osfs`, tests: `memfs`)
 - `context.Context` threads from CLI through cancellable operations
+
+Architecture decisions are recorded as ADRs in `docs/adr/`. Write a new
+ADR when changing archive format, adding a target, or altering the
+security model.
 
 Key deps: cobra, yaml.v3, lipgloss, avfs, go-git, mockgen, testify.
 
@@ -143,9 +149,9 @@ func TestFunctionName(t *testing.T) {
 ## Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/). Scopes match
-package names: `cli`, `archive`, `build`, `checksum`, `fetcher`, `install`,
-`list`, `lockfile`, `manifest`, `metadata`, `outdated`, `plugin`, `registry`,
-`remove`, `sync`, `target`, `update`, `verify`.
+package names: `cli`, `archive`, `build`, `checksum`, `fetcher`, `inspect`,
+`install`, `list`, `lockfile`, `manifest`, `metadata`, `outdated`, `plugin`,
+`registry`, `remove`, `sync`, `target`, `update`, `verify`.
 
 When the agent is Claude, end every commit with:
 
@@ -155,5 +161,5 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## Brand
 
-Claude Code orange `#cc7c5e` (R:204 G:124 B:94). The `claude` theme in
-`pkg/cli/` and `install.sh` ANSI escape must use the same color.
+Theme colors and palette details are in [Development](docs/development.md).
+CLI colors auto-detect dark/light terminal backgrounds.

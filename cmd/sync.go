@@ -34,13 +34,7 @@ type syncer interface {
 	Run(ctx context.Context, opts pkgsync.Options) ([]pkgsync.Result, error)
 }
 
-type defaultSyncer struct{}
-
-func (defaultSyncer) Run(ctx context.Context, opts pkgsync.Options) ([]pkgsync.Result, error) {
-	return pkgsync.Run(ctx, opts)
-}
-
-var pkgSyncer syncer = defaultSyncer{}
+var pkgSyncer syncer = pkgsync.New()
 
 var syncConfigFlag string
 
@@ -54,25 +48,52 @@ plugin into the Claude Code plugin directory.`,
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		cli.Printf(
-			out,
-			"%s\n\n",
-			cli.Mute(out, "agentpack: syncing"),
-		)
+		var onStep func(string)
+		if outputFormat != "json" {
+			cli.Printf(
+				out,
+				"%s\n\n",
+				cli.Mute(out, "agentpack: syncing"),
+			)
+			onStep = func(name string) {
+				cli.Printf(
+					out, "  %s %s\n",
+					cli.Mute(out, "syncing"),
+					cli.Accent(out, name),
+				)
+			}
+		}
 
 		results, err := pkgSyncer.Run(ctx, pkgsync.Options{
 			ConfigPath: syncConfigFlag,
 			Builder:    pkgsync.DefaultBuilder{},
 			Installer:  pkgsync.DefaultInstaller{},
-			OnStep: func(name string) {
-				cli.Printf(out, "  %s %s\n",
-					cli.Mute(out, "syncing"),
-					cli.Accent(out, name),
-				)
-			},
+			OnStep:     onStep,
 		})
 		if err != nil {
 			return err
+		}
+
+		if outputFormat == "json" {
+			type syncResultJSON struct {
+				Name    string `json:"name"`
+				Version string `json:"version"`
+				Status  string `json:"status"`
+				Err     string `json:"error,omitempty"`
+			}
+			jsonResults := make([]syncResultJSON, len(results))
+			for i, r := range results {
+				jr := syncResultJSON{
+					Name:    r.Name,
+					Version: r.Version,
+					Status:  r.Status,
+				}
+				if r.Err != nil {
+					jr.Err = r.Err.Error()
+				}
+				jsonResults[i] = jr
+			}
+			return jsonOutput(out, jsonResults)
 		}
 
 		cli.Print(out, "")
@@ -86,21 +107,21 @@ plugin into the Claude Code plugin directory.`,
 					out, "  %s %s  %s\n",
 					cli.OK(out, cli.Checkmark),
 					cli.Accent(out, r.Name),
-					cli.Mute(out, r.Version),
+					r.Version,
 				)
 			case "up to date":
 				cli.Printf(
 					out, "  %s %s  %s\n",
 					cli.OK(out, cli.Checkmark),
-					cli.Mute(out, r.Name),
-					cli.Mute(out, "up to date"),
+					r.Name,
+					cli.OK(out, "up to date"),
 				)
 			case "failed":
 				cli.Printf(
 					out, "  %s %s  %s\n",
 					cli.Err(out, "✗"),
 					cli.Accent(out, r.Name),
-					cli.Mute(out, r.Err.Error()),
+					cli.Err(out, r.Err.Error()),
 				)
 				failed++
 			}

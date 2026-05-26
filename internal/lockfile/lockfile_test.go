@@ -172,9 +172,14 @@ func TestLockfile_Add(t *testing.T) {
 		wantTarget []string // expected targets on the added/merged entry
 	}{
 		{
-			name:       "add new entry",
-			initial:    nil,
-			add:        lockfile.Install{Name: "new", Source: "src", Targets: []string{"claude-code"}, Enabled: true},
+			name:    "add new entry",
+			initial: nil,
+			add: lockfile.Install{
+				Name:    "new",
+				Source:  "src",
+				Targets: []string{"claude-code"},
+				Enabled: true,
+			},
 			wantLen:    1,
 			wantTarget: []string{"claude-code"},
 		},
@@ -183,7 +188,11 @@ func TestLockfile_Add(t *testing.T) {
 			initial: []lockfile.Install{
 				{Name: "existing", Source: "src", Targets: []string{"claude-code"}},
 			},
-			add:        lockfile.Install{Name: "existing", Source: "src2", Targets: []string{"cursor"}},
+			add: lockfile.Install{
+				Name:    "existing",
+				Source:  "src2",
+				Targets: []string{"cursor"},
+			},
 			wantLen:    1,
 			wantTarget: []string{"claude-code", "cursor"},
 		},
@@ -192,7 +201,11 @@ func TestLockfile_Add(t *testing.T) {
 			initial: []lockfile.Install{
 				{Name: "dup", Source: "src", Targets: []string{"claude-code"}},
 			},
-			add:        lockfile.Install{Name: "dup", Source: "src", Targets: []string{"claude-code"}},
+			add: lockfile.Install{
+				Name:    "dup",
+				Source:  "src",
+				Targets: []string{"claude-code"},
+			},
 			wantLen:    1,
 			wantTarget: []string{"claude-code"},
 		},

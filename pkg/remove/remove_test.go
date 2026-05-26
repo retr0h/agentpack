@@ -246,7 +246,7 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "registry remove failure returns wrapped error",
-			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
+			setupMocks: func(reg *removemocks.MockRegistry, _ string) *registry.PackageManifest {
 				m := &registry.PackageManifest{
 					Name:   "remove-fail-plugin",
 					Source: "github.com/org/repo",
@@ -278,8 +278,18 @@ func TestRun(t *testing.T) {
 					Name:   "mid-cancel-plugin",
 					Source: "github.com/org/repo",
 					Files: []registry.InstalledFile{
-						{Path: "first.md", SHA256: sha256Of(content), Target: "claude-code", Dir: pluginDir},
-						{Path: "second.md", SHA256: "deadbeef", Target: "claude-code", Dir: pluginDir},
+						{
+							Path:   "first.md",
+							SHA256: sha256Of(content),
+							Target: "claude-code",
+							Dir:    pluginDir,
+						},
+						{
+							Path:   "second.md",
+							SHA256: "deadbeef",
+							Target: "claude-code",
+							Dir:    pluginDir,
+						},
 					},
 				}
 
@@ -350,7 +360,12 @@ func TestRun(t *testing.T) {
 					Name:   "perm-remove-plugin",
 					Source: "github.com/org/repo",
 					Files: []registry.InstalledFile{
-						{Path: "protected.md", SHA256: sha256Of(content), Target: "claude-code", Dir: subDir},
+						{
+							Path:   "protected.md",
+							SHA256: sha256Of(content),
+							Target: "claude-code",
+							Dir:    subDir,
+						},
 					},
 				}
 
@@ -432,7 +447,8 @@ func TestRun(t *testing.T) {
 				tt.extraOpts(&opts)
 			}
 
-			result, err := remove.Run(ctx, opts)
+			r := remove.New()
+			result, err := r.Run(ctx, opts)
 
 			if tt.wantErr != "" {
 				require.Error(t, err)
@@ -479,7 +495,8 @@ func TestRunWithDefaultRegistry(t *testing.T) {
 			// Registry is nil — Run will use defaultRegistry{} which calls
 			// registry.Load("no-such-pkg"). That returns "not found in registry"
 			// which is wrapped as "load registry manifest: ...".
-			_, err := remove.Run(context.Background(), remove.Options{
+			r := remove.New()
+			_, err := r.Run(context.Background(), remove.Options{
 				Name:         "no-such-pkg",
 				LockfilePath: filepath.Join(tmp, "lock.yaml"),
 				Registry:     nil,
@@ -516,9 +533,10 @@ func TestRunDefaultRegistryRemove(t *testing.T) {
 				Source: "github.com/org/real",
 				Files:  []registry.InstalledFile{},
 			}
-			require.NoError(t, registry.Save(m))
+			require.NoError(t, registry.New().Save(m))
 
-			result, err := remove.Run(context.Background(), remove.Options{
+			r := remove.New()
+			result, err := r.Run(context.Background(), remove.Options{
 				Name:         "real-pkg",
 				LockfilePath: filepath.Join(tmp, "lock.yaml"),
 				Registry:     nil,

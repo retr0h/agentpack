@@ -9,7 +9,8 @@ import (
 )
 
 func main() {
-	entries, err := list.Run()
+	l := list.New()
+	entries, err := l.Run()
 	if err != nil {
 		log.Fatal(err)
 	}

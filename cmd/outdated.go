@@ -33,13 +33,7 @@ type outdatedChecker interface {
 	RunWithOptions(ctx context.Context, opts pkgoutdated.Options) ([]pkgoutdated.Entry, error)
 }
 
-type defaultOutdatedChecker struct{}
-
-func (defaultOutdatedChecker) RunWithOptions(ctx context.Context, opts pkgoutdated.Options) ([]pkgoutdated.Entry, error) {
-	return pkgoutdated.RunWithOptions(ctx, opts)
-}
-
-var pkgOutdatedChecker outdatedChecker = defaultOutdatedChecker{}
+var pkgOutdatedChecker outdatedChecker = pkgoutdated.New()
 
 var outdatedCmd = &cobra.Command{
 	Use:   "outdated [names...]",
@@ -49,19 +43,28 @@ var outdatedCmd = &cobra.Command{
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		cli.Printf(out, "%s\n\n", cli.Mute(out, "agentpack: checking for updates"))
-
-		entries, err := pkgOutdatedChecker.RunWithOptions(ctx, pkgoutdated.Options{
-			Names: args,
-			OnStep: func(name string) {
-				cli.Printf(out, "  %s %s\n",
+		var onStep func(string)
+		if outputFormat != "json" {
+			cli.Printf(out, "%s\n\n", cli.Mute(out, "agentpack: checking for updates"))
+			onStep = func(name string) {
+				cli.Printf(
+					out, "  %s %s\n",
 					cli.Mute(out, "checking"),
 					cli.Mute(out, name),
 				)
-			},
+			}
+		}
+
+		entries, err := pkgOutdatedChecker.RunWithOptions(ctx, pkgoutdated.Options{
+			Names:  args,
+			OnStep: onStep,
 		})
 		if err != nil {
 			return err
+		}
+
+		if outputFormat == "json" {
+			return jsonOutput(out, entries)
 		}
 
 		if len(entries) == 0 {
@@ -79,13 +82,13 @@ var outdatedCmd = &cobra.Command{
 					"  %s  %s → %s\n",
 					cli.Accent(out, e.Name),
 					cli.Mute(out, cli.ShortSHA(e.InstalledSHA)),
-					cli.Mute(out, cli.ShortSHA(e.RemoteSHA)),
+					cli.ShortSHA(e.RemoteSHA),
 				)
 			} else {
 				cli.Printf(
 					out,
 					"  %s  %s\n",
-					cli.Mute(out, e.Name),
+					e.Name,
 					cli.OK(out, "up to date"),
 				)
 			}

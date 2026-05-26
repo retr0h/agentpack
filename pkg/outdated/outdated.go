@@ -23,8 +23,9 @@
 //
 // Usage:
 //
-//	entries, err := outdated.Run(ctx, nil) // all installed plugins
-//	entries, err := outdated.RunWithOptions(ctx, outdated.Options{
+//	c := outdated.New()
+//	entries, err := c.Run(ctx, nil) // all installed plugins
+//	entries, err := c.RunWithOptions(ctx, outdated.Options{
 //	    Names: []string{"my-plugin"},
 //	    OnStep: func(name string) { fmt.Println("checking", name) },
 //	})
@@ -37,14 +38,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/retr0h/agentpack/pkg/fetcher"
+	"github.com/retr0h/agentpack/internal/fetcher"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
-// Registry lists all installed package manifests from the registry store.
-// Implement this interface to inject a test double in place of registry.List.
+// Registry lists and loads package manifests from the registry store.
+// Implement this interface to inject a test double in place of registry.List
+// and registry.Load.
 type Registry interface {
 	List() ([]*registry.PackageManifest, error)
+	Load(name string) (*registry.PackageManifest, error)
 }
 
 // RemoteChecker queries a remote git repository's refs without cloning.
@@ -87,28 +90,41 @@ type Options struct {
 	RemoteChecker RemoteChecker
 }
 
-// defaultRegistry wraps the package-level registry functions to satisfy Registry.
+// defaultRegistry wraps registry.New() to satisfy Registry.
 type defaultRegistry struct{}
 
 func (defaultRegistry) List() ([]*registry.PackageManifest, error) {
-	return registry.List()
+	return registry.New().List()
+}
+
+func (defaultRegistry) Load(name string) (*registry.PackageManifest, error) {
+	return registry.New().Load(name)
 }
 
 // defaultRemoteChecker wraps fetcher.LsRemote to satisfy RemoteChecker.
 type defaultRemoteChecker struct{}
 
-func (defaultRemoteChecker) LsRemote(ctx context.Context, source string) (map[string]string, error) {
+func (defaultRemoteChecker) LsRemote(
+	ctx context.Context,
+	source string,
+) (map[string]string, error) {
 	return fetcher.LsRemote(ctx, source)
 }
 
+// Checker checks installed plugins for newer versions.
+type Checker struct{}
+
+// New returns a new Checker.
+func New() *Checker { return &Checker{} }
+
 // Run checks all installed plugins (or the named ones from names) for
 // newer versions by calling LsRemote on their stored source URLs.
-func Run(ctx context.Context, names []string) ([]Entry, error) {
-	return RunWithOptions(ctx, Options{Names: names})
+func (c *Checker) Run(ctx context.Context, names []string) ([]Entry, error) {
+	return c.RunWithOptions(ctx, Options{Names: names})
 }
 
 // RunWithOptions is like Run but accepts an Options struct for richer control.
-func RunWithOptions(ctx context.Context, opts Options) ([]Entry, error) {
+func (c *Checker) RunWithOptions(ctx context.Context, opts Options) ([]Entry, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -134,7 +150,7 @@ func RunWithOptions(ctx context.Context, opts Options) ([]Entry, error) {
 		manifests = all
 	} else {
 		for _, n := range opts.Names {
-			m, err := registry.Load(n)
+			m, err := reg.Load(n)
 			if err != nil {
 				return nil, fmt.Errorf("load %s: %w", n, err)
 			}

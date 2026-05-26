@@ -97,7 +97,10 @@ func makeRepoWithContent(t *testing.T) string {
 	// Recognized content.
 	skillDir := filepath.Join(dir, "skills", "my-skill")
 	require.NoError(t, os.MkdirAll(skillDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# skill\n"), 0o644))
+	require.NoError(
+		t,
+		os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# skill\n"), 0o644),
+	)
 
 	cmdDir := filepath.Join(dir, "commands")
 	require.NoError(t, os.MkdirAll(cmdDir, 0o755))
@@ -107,7 +110,10 @@ func makeRepoWithContent(t *testing.T) string {
 	for _, noise := range []string{".github", ".git", "tools", "scripts"} {
 		noiseDir := filepath.Join(dir, noise)
 		require.NoError(t, os.MkdirAll(noiseDir, 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(noiseDir, "file.txt"), []byte("noise\n"), 0o644))
+		require.NoError(
+			t,
+			os.WriteFile(filepath.Join(noiseDir, "file.txt"), []byte("noise\n"), 0o644),
+		)
 	}
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("readme\n"), 0o644))
@@ -212,7 +218,10 @@ func TestAutoPackage(t *testing.T) {
 				dir := t.TempDir()
 				skillsDir := filepath.Join(dir, "skills")
 				require.NoError(t, os.MkdirAll(skillsDir, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(skillsDir, "flat.md"), []byte("# flat\n"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(skillsDir, "flat.md"), []byte("# flat\n"), 0o644),
+				)
 				return dir
 			},
 			sha: "flat1234",
@@ -295,7 +304,14 @@ func TestAutoPackage(t *testing.T) {
 
 			defer cancel()
 
-			archivePath, err := install.AutoPackage(ctx, dir, "test-pkg", tt.sha, tt.skillFilter, tt.agentFilter)
+			archivePath, err := install.AutoPackage(
+				ctx,
+				dir,
+				"test-pkg",
+				tt.sha,
+				tt.skillFilter,
+				tt.agentFilter,
+			)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -359,7 +375,10 @@ func TestFilteredSubdirs(t *testing.T) {
 				dir := t.TempDir()
 				skillsDir := filepath.Join(dir, "skills")
 				require.NoError(t, os.MkdirAll(skillsDir, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(skillsDir, "flat.md"), []byte("x"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(skillsDir, "flat.md"), []byte("x"), 0o644),
+				)
 				return dir
 			},
 			filter:    []string{"anything"},
@@ -448,7 +467,10 @@ func TestStoreArchive(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, "agentpack data", string(data))
 				base := filepath.Base(dstPath)
-				assert.True(t, strings.HasPrefix(base, "my-plugin@") && strings.HasSuffix(base, ".agentpack"))
+				assert.True(
+					t,
+					strings.HasPrefix(base, "my-plugin@") && strings.HasSuffix(base, ".agentpack"),
+				)
 			},
 		},
 		{
@@ -513,7 +535,10 @@ func TestArchivesDir(t *testing.T) {
 				info, err := os.Stat(dir)
 				require.NoError(t, err)
 				assert.True(t, info.IsDir())
-				assert.True(t, strings.HasSuffix(dir, filepath.Join(".config", "agentpack", "archives")))
+				assert.True(
+					t,
+					strings.HasSuffix(dir, filepath.Join(".config", "agentpack", "archives")),
+				)
 			},
 		},
 		{
@@ -529,7 +554,9 @@ func TestArchivesDir(t *testing.T) {
 			var restore func()
 
 			if tt.homeDir != "" {
-				restore = install.SetArchivesDirHome(func() (string, error) { return tt.homeDir, nil })
+				restore = install.SetArchivesDirHome(
+					func() (string, error) { return tt.homeDir, nil },
+				)
 			} else {
 				restore = install.SetArchivesDirHome(func() (string, error) {
 					return "", errors.New("simulated home dir failure")

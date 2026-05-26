@@ -78,9 +78,21 @@ func TestRunWithRegistry(t *testing.T) {
 			name: "multiple packages are sorted alphabetically",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "zebra", Source: "github.com/org/zebra", Files: []registry.InstalledFile{}},
-					{Name: "alpha", Source: "github.com/org/alpha", Files: []registry.InstalledFile{}},
-					{Name: "middle", Source: "github.com/org/middle", Files: []registry.InstalledFile{}},
+					{
+						Name:   "zebra",
+						Source: "github.com/org/zebra",
+						Files:  []registry.InstalledFile{},
+					},
+					{
+						Name:   "alpha",
+						Source: "github.com/org/alpha",
+						Files:  []registry.InstalledFile{},
+					},
+					{
+						Name:   "middle",
+						Source: "github.com/org/middle",
+						Files:  []registry.InstalledFile{},
+					},
 				}, nil)
 			},
 			wantCount: 3,
@@ -115,7 +127,11 @@ func TestRunWithRegistry(t *testing.T) {
 			name: "installed timestamp with T is trimmed to date",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "ts-pkg", Installed: "2026-01-15T12:00:00Z", Files: []registry.InstalledFile{}},
+					{
+						Name:      "ts-pkg",
+						Installed: "2026-01-15T12:00:00Z",
+						Files:     []registry.InstalledFile{},
+					},
 				}, nil)
 			},
 			wantCount: 1,
@@ -164,7 +180,8 @@ func TestRunWithRegistry(t *testing.T) {
 			reg := listmocks.NewMockRegistry(ctrl)
 			tt.setupMocks(reg)
 
-			entries, err := list.RunWithRegistry(reg)
+			l := list.New()
+			entries, err := l.RunWithRegistry(reg)
 
 			if tt.wantErr != "" {
 				require.Error(t, err)
@@ -231,7 +248,8 @@ func TestRunWithRegistryFormatDate(t *testing.T) {
 				{Name: "fmt-pkg", Installed: tt.installed, Files: []registry.InstalledFile{}},
 			}, nil)
 
-			entries, err := list.RunWithRegistry(reg)
+			l := list.New()
+			entries, err := l.RunWithRegistry(reg)
 			require.NoError(t, err)
 			require.Len(t, entries, 1)
 			assert.Equal(t, tt.wantInstalled, entries[0].Installed)
@@ -240,7 +258,7 @@ func TestRunWithRegistryFormatDate(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// TestRun covers the Run() wrapper which uses the default registry.
+// TestRun covers the Run() method which uses the default registry.
 // This test mutates the registry package-level osUserHomeDir global and
 // therefore must NOT run in parallel.
 // --------------------------------------------------------------------------
@@ -282,7 +300,8 @@ func TestRun(t *testing.T) {
 
 			tt.setup(t, pkgDir)
 
-			entries, err := list.Run()
+			l := list.New()
+			entries, err := l.Run()
 
 			if tt.wantErr != "" {
 				require.Error(t, err)

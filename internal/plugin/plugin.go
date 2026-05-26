@@ -25,7 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/retr0h/agentpack/pkg/manifest"
+	"github.com/retr0h/agentpack/internal/manifest"
 )
 
 // Marketplace is the Claude Code marketplace descriptor written to

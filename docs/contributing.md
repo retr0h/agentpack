@@ -21,6 +21,8 @@ Thanks for your interest in contributing.
 ### Documentation
 
 - Update docs alongside code changes when public behavior changes.
+- Write an ADR in `docs/adr/` for significant design decisions (archive format,
+  new targets, security model changes).
 
 ## Submitting a PR
 

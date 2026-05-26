@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	result, err := install.Run(context.Background(), install.Options{
+	result, err := install.New().Run(context.Background(), install.Options{
 		Source: "github.com/mukul975/Anthropic-Cybersecurity-Skills",
 		Skills: []string{"acquiring-disk-image-with-dd-and-dcfldd"},
 		OnStep: func(s install.Step) {

@@ -35,16 +35,10 @@ import (
 )
 
 type verifier interface {
-	Run(ctx context.Context, archivePath string) (*verify.Result, error)
+	Run(ctx context.Context, opts verify.Options) (*verify.Result, error)
 }
 
-type defaultVerifier struct{}
-
-func (defaultVerifier) Run(ctx context.Context, archivePath string) (*verify.Result, error) {
-	return verify.Run(ctx, archivePath)
-}
-
-var pkgVerifier verifier = defaultVerifier{}
+var pkgVerifier verifier = verify.New()
 
 var verifySHA256 string
 
@@ -92,12 +86,17 @@ publishes the SHA256 alongside the archive (like goreleaser checksums.txt).`,
 		}
 
 		// Internal checksum verification (corruption detection).
-		result, err := pkgVerifier.Run(ctx, archivePath)
+		result, err := pkgVerifier.Run(ctx, verify.Options{ArchivePath: archivePath})
 		if err != nil {
 			return err
 		}
 
-		cli.Printf(out, "%s %s\n\n",
+		if outputFormat == "json" {
+			return jsonOutput(out, result)
+		}
+
+		cli.Printf(
+			out, "%s %s\n\n",
 			cli.Mute(out, "agentpack: verifying"),
 			cli.Accent(out, result.ArchiveName),
 		)
@@ -109,13 +108,22 @@ publishes the SHA256 alongside the archive (like goreleaser checksums.txt).`,
 			if f.OK {
 				passed++
 			} else {
-				cli.Printf(out, "  %-60s %s  %s\n", f.Path, cli.Err(out, "FAIL"), f.Err)
+				cli.Printf(out, "  %s %s  %s\n", cli.Err(out, "✗"), f.Path, cli.Err(out, f.Err))
 				failed++
 			}
 		}
 
 		total := passed + failed
-		cli.StepLine(out, fmt.Sprintf("internal checksums %d/%d OK", passed, total), "")
+		if failed == 0 {
+			cli.Printf(
+				out,
+				"  %s %s\n",
+				cli.OK(out, cli.Checkmark),
+				fmt.Sprintf("internal checksums %d/%d OK", passed, total),
+			)
+		} else {
+			cli.Printf(out, "  %s %s\n", cli.Err(out, "✗"), fmt.Sprintf("internal checksums %d/%d OK", passed, total))
+		}
 
 		if failed > 0 {
 			return fmt.Errorf("%d file(s) failed verification", failed)
@@ -126,6 +134,7 @@ publishes the SHA256 alongside the archive (like goreleaser checksums.txt).`,
 }
 
 func init() {
-	verifyCmd.Flags().StringVar(&verifySHA256, "sha256", "", "verify archive against external SHA256 hash")
+	verifyCmd.Flags().
+		StringVar(&verifySHA256, "sha256", "", "verify archive against external SHA256 hash")
 	rootCmd.AddCommand(verifyCmd)
 }

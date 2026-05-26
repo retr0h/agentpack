@@ -29,8 +29,14 @@ var version = "dev"
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version",
-	Run: func(cmd *cobra.Command, _ []string) {
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		if outputFormat == "json" {
+			return jsonOutput(cmd.OutOrStdout(), struct {
+				Version string `json:"version"`
+			}{Version: version})
+		}
 		cmd.Println(version)
+		return nil
 	},
 }
 

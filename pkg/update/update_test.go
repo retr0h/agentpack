@@ -252,7 +252,7 @@ func TestRun(t *testing.T) {
 				cancel()
 			}
 
-			result, err := update.Run(ctx, opts)
+			result, err := update.New().Run(ctx, opts)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -632,7 +632,7 @@ func TestRunGitBranch(t *testing.T) {
 
 			opts := tt.opts(loader, installer)
 
-			result, err := update.Run(context.Background(), opts)
+			result, err := update.New().Run(context.Background(), opts)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

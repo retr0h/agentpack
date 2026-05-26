@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 // Checkmark is the Unicode check character used in step output.
@@ -41,6 +42,7 @@ type Theme struct {
 	OK        lipgloss.Style
 	Err       lipgloss.Style
 	Info      lipgloss.Style
+	Tag       lipgloss.Style
 	BannerTop lipgloss.Style
 	BannerBot lipgloss.Style
 }
@@ -51,20 +53,43 @@ func fg(c string) lipgloss.Style {
 
 var faint = lipgloss.NewStyle().Faint(true)
 
-// ThemeClaude uses the Claude Code brand palette — the warm terracotta
-// orange (#a855f7) sampled from code.claude.com as the primary accent.
-var ThemeClaude = Theme{
-	Name:      "claude",
+// ThemeDark uses magenta (#c678dd) as the primary accent with
+// supporting roles from the same palette. Designed for dark backgrounds.
+var ThemeDark = Theme{
+	Name:      "dark",
 	Mute:      faint,
-	Accent:    fg("#a855f7"), // Claude Code orange (R:204 G:124 B:94)
+	Accent:    fg("#c678dd"),
 	OK:        fg("#50fa7b"),
 	Err:       fg("#ff6ec7"),
-	Info:      fg("#00d4ff"), // cyan, for dates/versions
+	Info:      fg("#00d4ff"),
+	Tag:       fg("#ffb86c"),
 	BannerTop: faint,
-	BannerBot: fg("#a855f7"), // Claude Code orange
+	BannerBot: fg("#c678dd"),
 }
 
-var active = &ThemeClaude
+// ThemeLight uses the same hues but darker/more saturated for contrast
+// against light terminal backgrounds.
+var ThemeLight = Theme{
+	Name:      "light",
+	Mute:      fg("#888888"),
+	Accent:    fg("#9b59b6"),
+	OK:        fg("#27ae60"),
+	Err:       fg("#e74c3c"),
+	Info:      fg("#2980b9"),
+	Tag:       fg("#d35400"),
+	BannerTop: fg("#888888"),
+	BannerBot: fg("#9b59b6"),
+}
+
+var active = detectTheme()
+
+func detectTheme() *Theme {
+	if !termenv.HasDarkBackground() {
+		return &ThemeLight
+	}
+
+	return &ThemeDark
+}
 
 func rendererFor(w io.Writer) *lipgloss.Renderer {
 	if f, ok := w.(*os.File); ok {
@@ -109,6 +134,9 @@ func Err(w io.Writer, s string) string { return render(w, active.Err, s) }
 
 // Info returns s in the info color (cyan, for dates and versions).
 func Info(w io.Writer, s string) string { return render(w, active.Info, s) }
+
+// Tag returns s in the tag color (warm orange, for categories).
+func Tag(w io.Writer, s string) string { return render(w, active.Tag, s) }
 
 // Pad right-pads s with spaces to width w.
 // If s is already w or more characters, s is returned unchanged.
@@ -182,7 +210,8 @@ func TreeRow(w io.Writer, isLast bool, name string, nameWidth int, detail string
 	if isLast {
 		prefix = "  └─"
 	}
-	Printf(w, "%s %s  %s\n",
+	Printf(
+		w, "%s %s  %s\n",
 		Mute(w, prefix),
 		Accent(w, Pad(name, nameWidth)),
 		Mute(w, detail),
@@ -191,7 +220,17 @@ func TreeRow(w io.Writer, isLast bool, name string, nameWidth int, detail string
 
 // Field writes a label/value pair: "Label: value\n".
 func Field(w io.Writer, label, value string) {
+	Printf(w, "%s %s\n", Mute(w, label+":"), value)
+}
+
+// FieldAccent writes a label/value pair with the value in accent color.
+func FieldAccent(w io.Writer, label, value string) {
 	Printf(w, "%s %s\n", Mute(w, label+":"), Accent(w, value))
+}
+
+// FieldInfo writes a label/value pair with the value in info color.
+func FieldInfo(w io.Writer, label, value string) {
+	Printf(w, "%s %s\n", Mute(w, label+":"), Info(w, value))
 }
 
 // FieldMuted writes a label/value pair where both label and value are muted.
@@ -201,16 +240,12 @@ func FieldMuted(w io.Writer, label, value string) {
 
 // TableColumn holds the display data for a single column in a Table.
 type TableColumn struct {
-	// Header is the column header text.
 	Header string
-	// Values are the per-row cell values.
 	Values []string
-	// Accent marks the column to render values in accent color instead of plain.
 	Accent bool
-	// Info marks the column to render values in info color.
-	Info bool
-	// Muted marks the column to render values in muted color (default for non-Accent/Info).
-	Muted bool
+	Info   bool
+	Muted  bool
+	Tag    bool
 }
 
 // Table renders an aligned table with muted headers and themed rows.
@@ -252,27 +287,22 @@ func Table(w io.Writer, cols []TableColumn) {
 			if r < len(col.Values) {
 				val = col.Values[r]
 			}
+			cell := val
+			if i < len(cols)-1 {
+				cell = Pad(val, widths[i]+pad)
+			}
 			var rendered string
 			switch {
 			case col.Accent:
-				rendered = Accent(w, val)
+				rendered = Accent(w, cell)
 			case col.Info:
-				rendered = Info(w, val)
+				rendered = Info(w, cell)
+			case col.Tag:
+				rendered = Tag(w, cell)
+			case col.Muted:
+				rendered = Mute(w, cell)
 			default:
-				rendered = Mute(w, val)
-			}
-			if i < len(cols)-1 {
-				// Padding must be applied before colour wrapping for alignment.
-				// We pad the raw value then re-render.
-				raw := Pad(val, widths[i]+pad)
-				switch {
-				case col.Accent:
-					rendered = Accent(w, raw)
-				case col.Info:
-					rendered = Info(w, raw)
-				default:
-					rendered = Mute(w, raw)
-				}
+				rendered = cell
 			}
 			line.WriteString(rendered)
 		}

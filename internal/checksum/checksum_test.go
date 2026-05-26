@@ -212,7 +212,11 @@ func TestComputeFile(t *testing.T) {
 			setupVFS: func(t *testing.T) (avfs.VFS, string) {
 				t.Helper()
 				vfs := memfs.New()
-				err := vfs.WriteFile("/bin.bin", []byte{0x00, 0xFF, 0x1A, 0x2B, 0x3C, 0xDE, 0xAD, 0xBE, 0xEF}, fs.FileMode(0o600))
+				err := vfs.WriteFile(
+					"/bin.bin",
+					[]byte{0x00, 0xFF, 0x1A, 0x2B, 0x3C, 0xDE, 0xAD, 0xBE, 0xEF},
+					fs.FileMode(0o600),
+				)
 				require.NoError(t, err)
 				return vfs, "/bin.bin"
 			},

@@ -53,9 +53,13 @@ func New() *ClaudeCode {
 	}
 }
 
-func (c *ClaudeCode) Name() string        { return "claude-code" }
+// Name returns the target identifier.
+func (c *ClaudeCode) Name() string { return "claude-code" }
+
+// DisplayName returns the human-readable target name.
 func (c *ClaudeCode) DisplayName() string { return "Claude Code" }
 
+// Detect returns true if the Claude Code config directory exists.
 func (c *ClaudeCode) Detect() bool {
 	home, err := c.userHomeFunc()
 	if err != nil {
