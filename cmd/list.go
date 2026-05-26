@@ -21,75 +21,156 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/pkg/list"
+	"github.com/retr0h/agentpack/pkg/outdated"
 )
 
 type lister interface {
 	Run() ([]list.Entry, error)
 }
 
-var pkgLister lister = list.New()
+type outdatedChecker interface {
+	RunWithOptions(ctx context.Context, opts outdated.Options) ([]outdated.Entry, error)
+}
+
+var (
+	pkgLister          lister          = list.New()
+	pkgOutdatedChecker outdatedChecker = outdated.New()
+)
+
+var listOutdatedFlag bool
 
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List installed agentpack plugins",
-	Args:  cobra.NoArgs,
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "List installed agentpack plugins",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		out := cmd.OutOrStdout()
-
-		entries, err := pkgLister.Run()
-		if err != nil {
-			return err
+		if listOutdatedFlag {
+			return listOutdated(cmd)
 		}
 
-		if outputFormat == "json" {
-			return jsonOutput(out, entries)
-		}
+		return listInstalled(cmd)
+	},
+}
 
-		if len(entries) == 0 {
-			cli.Print(out, "no plugins installed")
+func listInstalled(cmd *cobra.Command) error {
+	out := cmd.OutOrStdout()
 
-			return nil
-		}
+	entries, err := pkgLister.Run()
+	if err != nil {
+		return err
+	}
 
-		names := make([]string, len(entries))
-		versions := make([]string, len(entries))
-		shas := make([]string, len(entries))
-		targets := make([]string, len(entries))
-		installed := make([]string, len(entries))
-		sources := make([]string, len(entries))
+	if outputFormat == "json" {
+		return jsonOutput(out, entries)
+	}
 
-		for i, e := range entries {
-			names[i] = e.Name
-			versions[i] = e.Version
-			shas[i] = e.SHA
-			targets[i] = e.Targets
-			installed[i] = e.Installed
-			sources[i] = e.Source
-		}
-
-		cli.Table(out, []cli.TableColumn{
-			{Header: "NAME", Values: names, Accent: true},
-			{Header: "VERSION", Values: versions},
-			{Header: "SHA", Values: shas, Muted: true},
-			{Header: "TARGETS", Values: targets, Tag: true},
-			{Header: "INSTALLED", Values: installed, Info: true},
-			{Header: "SOURCE", Values: sources, Muted: true},
-		})
-
-		cli.Printf(
-			out, "\n%d %s installed\n",
-			len(entries),
-			cli.Plural(len(entries), "plugin", "plugins"),
-		)
+	if len(entries) == 0 {
+		cli.Print(out, "no plugins installed")
 
 		return nil
-	},
+	}
+
+	names := make([]string, len(entries))
+	versions := make([]string, len(entries))
+	shas := make([]string, len(entries))
+	targets := make([]string, len(entries))
+	installed := make([]string, len(entries))
+	sources := make([]string, len(entries))
+
+	for i, e := range entries {
+		names[i] = e.Name
+		versions[i] = e.Version
+		shas[i] = e.SHA
+		targets[i] = e.Targets
+		installed[i] = e.Installed
+		sources[i] = e.Source
+	}
+
+	cli.Table(out, []cli.TableColumn{
+		{Header: "NAME", Values: names, Accent: true},
+		{Header: "VERSION", Values: versions},
+		{Header: "SHA", Values: shas, Muted: true},
+		{Header: "TARGETS", Values: targets, Tag: true},
+		{Header: "INSTALLED", Values: installed, Info: true},
+		{Header: "SOURCE", Values: sources, Muted: true},
+	})
+
+	cli.Printf(
+		out, "\n%d %s installed\n",
+		len(entries),
+		cli.Plural(len(entries), "plugin", "plugins"),
+	)
+
+	return nil
+}
+
+func listOutdated(cmd *cobra.Command) error {
+	ctx := cmd.Context()
+	out := cmd.OutOrStdout()
+
+	var onStep func(string)
+	if outputFormat != "json" {
+		cli.Printf(out, "%s\n\n", cli.Mute(out, "agentpack: checking for updates"))
+		onStep = func(name string) {
+			cli.Printf(
+				out, "  %s %s\n",
+				cli.Mute(out, "checking"),
+				cli.Mute(out, name),
+			)
+		}
+	}
+
+	entries, err := pkgOutdatedChecker.RunWithOptions(ctx, outdated.Options{
+		OnStep: onStep,
+	})
+	if err != nil {
+		return err
+	}
+
+	if outputFormat == "json" {
+		return jsonOutput(out, entries)
+	}
+
+	if len(entries) == 0 {
+		cli.Print(out, "all plugins up to date")
+
+		return nil
+	}
+
+	cli.Print(out, "")
+
+	for _, e := range entries {
+		if e.Outdated {
+			cli.Printf(
+				out,
+				"  %s  %s → %s\n",
+				cli.Accent(out, e.Name),
+				cli.Mute(out, cli.ShortSHA(e.InstalledSHA)),
+				cli.ShortSHA(e.RemoteSHA),
+			)
+		} else {
+			cli.Printf(
+				out,
+				"  %s  %s\n",
+				e.Name,
+				cli.OK(out, "up to date"),
+			)
+		}
+	}
+
+	return nil
 }
 
 func init() {
 	rootCmd.AddCommand(listCmd)
+
+	listCmd.Flags().
+		BoolVar(&listOutdatedFlag, "outdated", false, "check installed plugins for available updates")
 }

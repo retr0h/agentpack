@@ -41,11 +41,11 @@ var (
 	installAgents []string
 )
 
-var installCmd = &cobra.Command{
-	Use:   "install <source>",
-	Short: "Install a .agentpack archive",
-	Long: `Install a .agentpack archive into all detected AI coding agents.
-Source may be a local file path or an HTTP/HTTPS URL.`,
+var addCmd = &cobra.Command{
+	Use:   "add <source>",
+	Short: "Add a plugin from a git repo, archive, or URL",
+	Long: `Add a plugin into all detected AI coding agents.
+Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -56,7 +56,7 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 
 		var onStep func(install.Step)
 		if outputFormat != "json" {
-			cli.Header(out, "installing", displayName)
+			cli.Header(out, "adding", displayName)
 			onStep = func(s install.Step) {
 				cli.StepLine(out, s.Name, s.Detail)
 			}
@@ -124,10 +124,10 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 }
 
 func init() {
-	rootCmd.AddCommand(installCmd)
+	rootCmd.AddCommand(addCmd)
 
-	installCmd.Flags().
-		StringArrayVar(&installSkills, "skill", nil, "install only specific skill(s) by name (may be repeated)")
-	installCmd.Flags().
-		StringArrayVar(&installAgents, "agent", nil, "install only specific agent(s) by name (may be repeated)")
+	addCmd.Flags().
+		StringArrayVar(&installSkills, "skill", nil, "add only specific skill(s) by name (may be repeated)")
+	addCmd.Flags().
+		StringArrayVar(&installAgents, "agent", nil, "add only specific agent(s) by name (may be repeated)")
 }

@@ -1,42 +1,42 @@
 # Usage
 
-## Installing packages
+## Adding packages
 
 ### From a git repo
 
 ```bash
-agentpack install github.com/org/skills-repo
-agentpack install https://github.com/org/skills-repo
-agentpack install git@gitlab.com:org/private-repo
+agentpack add github.com/org/skills-repo
+agentpack add https://github.com/org/skills-repo
+agentpack add git@gitlab.com:org/private-repo
 ```
 
 ### Pinning a version
 
 ```bash
-agentpack install github.com/org/repo#v1.0.0          # tag
-agentpack install github.com/org/repo#main             # branch
-agentpack install github.com/org/repo#abc1234          # commit SHA
+agentpack add github.com/org/repo#v1.0.0          # tag
+agentpack add github.com/org/repo#main             # branch
+agentpack add github.com/org/repo#abc1234          # commit SHA
 ```
 
 ### Filtering specific skills or agents
 
 ```bash
-agentpack install github.com/org/repo --skill review
-agentpack install github.com/org/repo --skill review --skill deploy
-agentpack install github.com/org/repo --agent security-reviewer
+agentpack add github.com/org/repo --skill review
+agentpack add github.com/org/repo --skill review --skill deploy
+agentpack add github.com/org/repo --agent security-reviewer
 ```
 
 ### From a local archive
 
 ```bash
-agentpack install plugin.agentpack
-agentpack install ~/Downloads/my-plugin-1.0.0.agentpack
+agentpack add plugin.agentpack
+agentpack add ~/Downloads/my-plugin-1.0.0.agentpack
 ```
 
 ### From a URL
 
 ```bash
-agentpack install https://example.com/plugin.agentpack
+agentpack add https://example.com/plugin.agentpack
 ```
 
 ### Private repos
@@ -54,11 +54,11 @@ SSH URLs (`git@github.com:org/repo`) use your SSH keys automatically.
 ## Managing packages
 
 ```bash
-agentpack list                              # show installed packages
-agentpack show my-plugin                    # show package details and files
-agentpack update my-plugin                  # update to latest
-agentpack outdated                          # check all packages for updates
-agentpack remove my-plugin                  # uninstall
+agentpack list                              # list installed packages
+agentpack list --outdated                   # check for available updates
+agentpack info my-plugin                    # show package details and files
+agentpack info plugin.agentpack             # peek inside an archive
+agentpack del my-plugin                     # delete a plugin
 ```
 
 ## Building packages

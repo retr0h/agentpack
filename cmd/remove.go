@@ -35,10 +35,10 @@ type remover interface {
 
 var pkgRemover remover = pkgremove.New()
 
-var removeCmd = &cobra.Command{
-	Use:   "remove <name>",
-	Short: "Remove an installed agentpack plugin",
-	Long: `Remove an installed agentpack plugin. Only the exact files recorded in
+var delCmd = &cobra.Command{
+	Use:   "del <name>",
+	Short: "Delete an installed agentpack plugin",
+	Long: `Delete an installed agentpack plugin. Only the exact files recorded in
 the plugin registry are deleted. User-modified files are skipped. The .git
 directory is never touched.`,
 	Args: cobra.ExactArgs(1),
@@ -50,7 +50,7 @@ directory is never touched.`,
 
 		var onStep func(pkgremove.Step)
 		if outputFormat != "json" {
-			cli.Header(out, "removing", name)
+			cli.Header(out, "deleting", name)
 			onStep = func(s pkgremove.Step) {
 				if s.Skipped {
 					cli.Printf(out, "  %s %s\n", cli.Mute(out, "skipped"), cli.Mute(out, s.Path))
@@ -77,7 +77,7 @@ directory is never touched.`,
 			"\n  %s %s %s\n",
 			cli.OK(out, cli.Checkmark),
 			cli.Accent(out, result.Name),
-			cli.Mute(out, "removed"),
+			cli.Mute(out, "deleted"),
 		)
 
 		return nil
@@ -85,5 +85,5 @@ directory is never touched.`,
 }
 
 func init() {
-	rootCmd.AddCommand(removeCmd)
+	rootCmd.AddCommand(delCmd)
 }

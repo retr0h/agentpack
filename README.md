@@ -32,17 +32,17 @@ go build -o agentpack .
 ## 🚀 Quick Start
 
 ```bash
-agentpack install github.com/org/skills-repo          # install from git
-agentpack install github.com/org/repo#v1.0.0          # pin to a tag
-agentpack install github.com/org/repo --skill review  # one skill only
-agentpack list                                        # show installed
-agentpack show my-plugin                              # package details
-agentpack inspect plugin.agentpack                    # peek inside an archive
-agentpack verify plugin.agentpack                     # verify checksums
-agentpack update my-plugin                            # update to latest
-agentpack outdated                                    # check for updates
-agentpack remove my-plugin                            # uninstall
-agentpack sync                                        # sync from agentpack.yaml
+agentpack add github.com/org/skills-repo          # add from git
+agentpack add github.com/org/repo#v1.0.0          # pin to a tag
+agentpack add github.com/org/repo --skill review  # one skill only
+agentpack ls                                      # list installed
+agentpack ls --outdated                           # check for updates
+agentpack info my-plugin                          # package details
+agentpack info plugin.agentpack                   # peek inside an archive
+agentpack verify plugin.agentpack                 # verify checksums
+agentpack del my-plugin                           # delete a plugin
+agentpack sync                                    # sync from config
+agentpack build                                   # build .agentpack archives
 ```
 
 See [Usage][] for full details.
@@ -51,14 +51,14 @@ See [Usage][] for full details.
 
 | Feature | Description |
 |---------|-------------|
-| Install from git | Any GitHub/GitLab/Bitbucket repo, with `--skill` / `--agent` filters |
-| Install from archive | `.agentpack` files via local path, URL, or offline transfer |
-| Build packages | `agentpack build` from `agentpack.yaml` manifest |
-| Inspect | Peek inside `.agentpack` archives — metadata, files, checksums |
+| Add from git | Any GitHub/GitLab/Bitbucket repo, with `--skill` / `--agent` filters |
+| Add from archive | `.agentpack` files via local path, URL, or offline transfer |
+| Build | `agentpack build` from `agentpack.yaml` manifest |
+| Info | Show details of installed packages or peek inside archives |
 | Verify | SHA256 checksum verification — internal + external (`--sha256`) |
-| List / Show | See what's installed, source, SHA, every file tracked |
-| Update / Outdated | Check for and apply updates from git sources |
-| Remove | Safe uninstall — only deletes files agentpack installed |
+| List | See what's installed; `--outdated` checks for updates |
+| Del | Safe uninstall — only deletes files agentpack added |
+| Sync | Declarative installs from `agentpack-packages.yaml` |
 | Multi-agent | Claude Code, Cursor, Copilot, Gemini CLI, Codex, OpenCode, Windsurf |
 | officialskills.sh | Native support for the agentskills.io skill format |
 | Offline | `.agentpack` archives work without git, npm, or any toolchain |
