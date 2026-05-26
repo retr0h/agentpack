@@ -31,15 +31,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-// AutoPackage exposes autoPackage for testing.
-func AutoPackage(
-	ctx context.Context,
-	cloneDir, name, sha string,
-	skillFilter, agentFilter []string,
-) (string, error) {
-	return autoPackage(ctx, cloneDir, name, sha, skillFilter, agentFilter)
-}
-
 // StoreArchive exposes storeArchive for testing.
 func StoreArchive(srcPath, name, sha string) (string, error) {
 	return storeArchive(srcPath, name, sha)
@@ -136,11 +127,6 @@ func MkdirTempFailAfterN(n int) func(string, string) (string, error) {
 // CopyToTemp exposes copyToTemp for testing.
 func CopyToTemp(ctx context.Context, src string) (string, error) {
 	return copyToTemp(ctx, src)
-}
-
-// CollectInstalledFiles exposes collectInstalledFiles for testing.
-func CollectInstalledFiles(dir, targetName string) ([]registry.InstalledFile, error) {
-	return collectInstalledFiles(dir, targetName)
 }
 
 // SetRegistrySave replaces the registrySave function for testing. It returns

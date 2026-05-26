@@ -42,20 +42,20 @@ just clean          # remove binary
 
 ```
 cmd/                          Cobra CLI shim
+internal/archive/             Tarball creation and extraction (internal)
 internal/checksum/            SHA256 hashing (internal)
 internal/cli/                 Themed output helpers (internal)
+internal/fetcher/             Fetch drivers (file, http, git) (internal)
+internal/fetcher/mocks/       Generated MockFetcher (internal)
 internal/lockfile/            Lockfile I/O (internal)
+internal/manifest/            agentpack.yaml parsing and validation (internal)
 internal/metadata/            Git metadata capture (internal)
 internal/plugin/              Plugin descriptor generation (internal)
-pkg/archive/                  Tarball creation and extraction
 pkg/build/                    Build pipeline orchestration
-pkg/fetcher/                  Fetch drivers (file, http, git)
-pkg/fetcher/mocks/            Generated MockFetcher
 pkg/inspect/                  Archive inspection
 pkg/install/                  Install pipeline orchestration
 pkg/list/                     List installed plugins
 pkg/list/mocks/               Generated MockRegistry
-pkg/manifest/                 agentpack.yaml parsing and validation
 pkg/outdated/                 Outdated detection
 pkg/outdated/mocks/           Generated MockRegistry, MockRemoteChecker
 pkg/registry/                 Installed package tracking

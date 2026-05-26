@@ -12,8 +12,9 @@
 The native package manager for [agentskills.io](https://agentskills.io).
 
 Install, manage, and distribute AI agent skills across Claude Code,
-Cursor, Copilot, Gemini CLI, Codex, OpenCode, and Windsurf. Works with
-any [officialskills.sh](https://officialskills.sh) repo out of the box.
+Cursor, Copilot, Gemini CLI, Windsurf, and any agent supporting the
+`.agents/` convention. Works with any
+[officialskills.sh](https://officialskills.sh) repo out of the box.
 
 ## 📦 Install
 
@@ -59,7 +60,7 @@ See [Usage][] for full details.
 | List | See what's installed; `--outdated` checks for updates |
 | Del | Safe uninstall — only deletes files agentpack added |
 | Sync | Declarative installs from `agentpack-packages.yaml` |
-| Multi-agent | Claude Code, Cursor, Copilot, Gemini CLI, Codex, OpenCode, Windsurf |
+| Multi-agent | Claude Code, Cursor, Copilot, Gemini CLI, Windsurf + universal `.agents/` target |
 | officialskills.sh | Native support for the agentskills.io skill format |
 | Offline | `.agentpack` archives work without git, npm, or any toolchain |
 | Netrc | Private repo support via `~/.netrc` credentials |

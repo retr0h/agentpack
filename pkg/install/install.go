@@ -314,7 +314,7 @@ func nameFromSource(source string) string {
 	return s
 }
 
-// installFromDir is the shared install path for both archive and git sources.
+// emitStep calls opts.OnStep when the callback is set.
 func emitStep(opts Options, s Step) {
 	if opts.OnStep != nil {
 		opts.OnStep(s)
@@ -472,46 +472,6 @@ func collectTargetFiles(
 	}
 
 	return allFiles, nil
-}
-
-func collectInstalledFiles(dir, targetName string) ([]registry.InstalledFile, error) {
-	var files []registry.InstalledFile
-
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-
-		if d.IsDir() {
-			return nil
-		}
-
-		rel, relErr := filepath.Rel(dir, path)
-		if relErr != nil {
-			return fmt.Errorf("rel path: %w", relErr)
-		}
-
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return fmt.Errorf("read %s: %w", path, readErr)
-		}
-
-		h := sha256.Sum256(data)
-
-		files = append(files, registry.InstalledFile{
-			Path:   rel,
-			SHA256: hex.EncodeToString(h[:]),
-			Target: targetName,
-			Dir:    dir,
-		})
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return files, nil
 }
 
 // copyToTemp makes a fresh copy of src into a new temp directory and returns

@@ -72,32 +72,6 @@ func archivesDir() (string, error) {
 	return archivesDirFunc()
 }
 
-// autoPackage walks the recognized content dirs inside cloneDir and produces a
-// .agentpack archive. It applies skill and agent filters when non-empty. The
-// archive is written to a temp file whose path is returned. The caller owns the
-// file and should clean it up after use.
-//
-// Archive layout:
-//
-//	skills/{name}/…   (or subset when skillFilter is set)
-//	commands/…
-//	agents/{name}/…   (or subset when agentFilter is set)
-//	hooks/…
-//	mcp/…
-//	settings/…
-//	.agentpack/metadata.json
-//	.agentpack/checksums.txt
-func autoPackage(
-	ctx context.Context,
-	cloneDir string,
-	name string,
-	sha string,
-	skillFilter []string,
-	agentFilter []string,
-) (string, error) {
-	return autoPackageWithVersion(ctx, cloneDir, name, sha, "latest", skillFilter, agentFilter)
-}
-
 func autoPackageWithVersion(
 	ctx context.Context,
 	cloneDir string,

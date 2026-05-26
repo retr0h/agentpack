@@ -31,8 +31,11 @@ import (
 
 	"github.com/retr0h/agentpack/internal/cli"
 	_ "github.com/retr0h/agentpack/pkg/target/claudecode" // register Claude Code target
+	_ "github.com/retr0h/agentpack/pkg/target/copilot"    // register GitHub Copilot target
 	_ "github.com/retr0h/agentpack/pkg/target/cursor"     // register Cursor target
+	_ "github.com/retr0h/agentpack/pkg/target/gemini"     // register Gemini CLI target
 	_ "github.com/retr0h/agentpack/pkg/target/universal"  // register Universal target
+	_ "github.com/retr0h/agentpack/pkg/target/windsurf"   // register Windsurf target
 )
 
 var outputFormat string

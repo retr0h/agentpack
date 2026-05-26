@@ -23,6 +23,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/spf13/cobra"
 
@@ -93,6 +94,10 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 				targetRow{displayName: dn, targetName: tn, count: result.FileCounts[dn]},
 			)
 		}
+
+		sort.Slice(rows, func(i, j int) bool {
+			return rows[i].displayName < rows[j].displayName
+		})
 
 		for i, row := range rows {
 			prefix := "  ├─"
