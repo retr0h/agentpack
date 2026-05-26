@@ -207,13 +207,14 @@ func listTargets(cmd *cobra.Command) error {
 	}
 
 	for _, t := range all {
+		padded := cli.Pad(t.DisplayName(), 18)
 		mark := cli.Mute(out, "○")
-		name := cli.Mute(out, t.DisplayName())
+		name := cli.Mute(out, padded)
 		if detectedSet[t.Name()] {
 			mark = cli.OK(out, "●")
-			name = t.DisplayName()
+			name = padded
 		}
-		cli.Printf(out, "  %s %s  %s\n", mark, cli.Pad(name, 16), cli.Mute(out, t.Name()))
+		cli.Printf(out, "  %s %s %s\n", mark, name, cli.Mute(out, t.Name()))
 	}
 
 	return nil

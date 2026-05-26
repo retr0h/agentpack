@@ -284,9 +284,9 @@ func init() {
 	rootCmd.AddCommand(addCmd)
 
 	addCmd.Flags().
-		StringArrayVar(&installSkills, "skill", nil, "add only specific skill(s) by name (may be repeated)")
+		StringArrayVar(&installSkills, "skill", nil, "include only named skill subdirs from the source (may be repeated)")
 	addCmd.Flags().
-		StringArrayVar(&installAgents, "agent", nil, "add only specific agent(s) by name (may be repeated)")
+		StringArrayVar(&installAgents, "agent", nil, "include only named agent subdirs from the source (may be repeated)")
 	addCmd.Flags().
 		BoolVar(&installTrust, "trust", false, "skip executable content prompt (for CI)")
 }
