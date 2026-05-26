@@ -30,9 +30,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	_ "github.com/retr0h/agentpack/pkg/target/agents"     // register data-driven agent targets
+	_ "github.com/retr0h/agentpack/pkg/target/agents"     // register data-driven agents (includes universal)
 	_ "github.com/retr0h/agentpack/pkg/target/claudecode" // register Claude Code target
-	_ "github.com/retr0h/agentpack/pkg/target/universal"  // register Universal target
 	_ "github.com/retr0h/agentpack/pkg/target/windsurf"   // register Windsurf target
 )
 

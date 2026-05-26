@@ -39,23 +39,63 @@ type AgentDef struct {
 	DetectHome   string // check ~/X exists
 	DetectConfig string // check ~/.config/X exists
 	EnvOverride  string // env var for home override
+	AlwaysDetect bool   // true for the universal fallback
 }
 
 var registry = []AgentDef{
-	{Name: "cursor", Display: "Cursor", DetectHome: ".cursor"},
-	{Name: "copilot", Display: "GitHub Copilot", DetectHome: ".copilot"},
-	{Name: "gemini", Display: "Gemini CLI", DetectHome: ".gemini"},
-	{Name: "codex", Display: "Codex", DetectHome: ".codex", EnvOverride: "CODEX_HOME"},
-	{Name: "opencode", Display: "OpenCode", DetectConfig: "opencode"},
-	{Name: "cline", Display: "Cline", DetectHome: ".cline"},
-	{Name: "goose", Display: "Goose", DetectConfig: "goose"},
-	{Name: "roo", Display: "Roo Code", DetectHome: ".roo"},
+	{Name: "adal", Display: "AdaL", DetectHome: ".adal"},
+	{Name: "aider-desk", Display: "AiderDesk", DetectHome: ".aider-desk"},
 	{Name: "amp", Display: "Amp", DetectConfig: "amp"},
+	{Name: "antigravity", Display: "Antigravity", DetectHome: ".gemini/antigravity"},
+	{Name: "augment", Display: "Augment", DetectHome: ".augment"},
+	{Name: "bob", Display: "IBM Bob", DetectHome: ".bob"},
+	{Name: "cline", Display: "Cline", DetectHome: ".cline"},
+	{Name: "codearts-agent", Display: "CodeArts Agent", DetectHome: ".codeartsdoer"},
+	{Name: "codebuddy", Display: "CodeBuddy", DetectHome: ".codebuddy"},
+	{Name: "codemaker", Display: "Codemaker", DetectHome: ".codemaker"},
+	{Name: "codestudio", Display: "Code Studio", DetectHome: ".codestudio"},
+	{Name: "codex", Display: "Codex", DetectHome: ".codex", EnvOverride: "CODEX_HOME"},
+	{Name: "command-code", Display: "Command Code", DetectHome: ".commandcode"},
 	{Name: "continue", Display: "Continue", DetectHome: ".continue"},
-	{Name: "kiro", Display: "Kiro", DetectHome: ".kiro"},
+	{Name: "copilot", Display: "GitHub Copilot", DetectHome: ".copilot"},
+	{Name: "cortex", Display: "Cortex Code", DetectHome: ".snowflake/cortex"},
+	{Name: "crush", Display: "Crush", DetectConfig: "crush"},
+	{Name: "cursor", Display: "Cursor", DetectHome: ".cursor"},
+	{Name: "deepagents", Display: "Deep Agents", DetectHome: ".deepagents"},
 	{Name: "devin", Display: "Devin", DetectConfig: "devin"},
-	{Name: "warp", Display: "Warp", DetectHome: ".warp"},
+	{Name: "dexto", Display: "Dexto", DetectHome: ".dexto"},
+	{Name: "droid", Display: "Droid", DetectHome: ".factory"},
+	{Name: "firebender", Display: "Firebender", DetectHome: ".firebender"},
+	{Name: "forgecode", Display: "ForgeCode", DetectHome: ".forge"},
+	{Name: "gemini", Display: "Gemini CLI", DetectHome: ".gemini"},
+	{Name: "goose", Display: "Goose", DetectConfig: "goose"},
+	{Name: "hermes-agent", Display: "Hermes Agent", DetectHome: ".hermes"},
+	{Name: "iflow-cli", Display: "iFlow CLI", DetectHome: ".iflow"},
+	{Name: "junie", Display: "Junie", DetectHome: ".junie"},
+	{Name: "kilo", Display: "Kilo Code", DetectHome: ".kilocode"},
+	{Name: "kimi-cli", Display: "Kimi Code CLI", DetectHome: ".kimi"},
+	{Name: "kiro", Display: "Kiro", DetectHome: ".kiro"},
+	{Name: "kode", Display: "Kode", DetectHome: ".kode"},
+	{Name: "mcpjam", Display: "MCPJam", DetectHome: ".mcpjam"},
+	{Name: "mistral-vibe", Display: "Mistral Vibe", DetectHome: ".vibe", EnvOverride: "VIBE_HOME"},
+	{Name: "mux", Display: "Mux", DetectHome: ".mux"},
+	{Name: "neovate", Display: "Neovate", DetectHome: ".neovate"},
+	{Name: "openclaw", Display: "OpenClaw", DetectHome: ".openclaw"},
+	{Name: "opencode", Display: "OpenCode", DetectConfig: "opencode"},
+	{Name: "openhands", Display: "OpenHands", DetectHome: ".openhands"},
+	{Name: "pi", Display: "Pi", DetectHome: ".pi/agent"},
+	{Name: "pochi", Display: "Pochi", DetectHome: ".pochi"},
+	{Name: "qoder", Display: "Qoder", DetectHome: ".qoder"},
+	{Name: "qwen-code", Display: "Qwen Code", DetectHome: ".qwen"},
+	{Name: "replit", Display: "Replit", DetectHome: ".replit"},
+	{Name: "roo", Display: "Roo Code", DetectHome: ".roo"},
+	{Name: "rovodev", Display: "Rovo Dev", DetectHome: ".rovodev"},
+	{Name: "tabnine-cli", Display: "Tabnine CLI", DetectHome: ".tabnine"},
 	{Name: "trae", Display: "Trae", DetectHome: ".trae"},
+	{Name: "trae-cn", Display: "Trae CN", DetectHome: ".trae-cn"},
+	{Name: "warp", Display: "Warp", DetectHome: ".warp"},
+	{Name: "zencoder", Display: "Zencoder", DetectHome: ".zencoder"},
+	{Name: "universal", Display: "Universal", AlwaysDetect: true},
 }
 
 func init() {
@@ -84,6 +124,10 @@ func (a *agent) DisplayName() string { return a.def.Display }
 
 // Detect returns true when the agent's home or config directory exists.
 func (a *agent) Detect() bool {
+	if a.def.AlwaysDetect {
+		return true
+	}
+
 	home, err := a.userHomeFunc()
 	if err != nil {
 		return false

@@ -20,8 +20,8 @@
 
 <p align="center">
 Install, manage, and distribute AI agent skills across Claude Code,
-Cursor, Copilot, Gemini CLI, Windsurf, and any agent supporting the
-<code>.agents/</code> convention.
+Cursor, Copilot, Codex, Gemini CLI, Windsurf, Goose, Roo, Amp, Cline,
+and every agent supporting the <code>.agents/</code> convention.
 </p>
 
 ## 📦 Install
@@ -60,7 +60,7 @@ See [Usage][] for full details.
 
 | Feature | Description |
 |---------|-------------|
-| Add from git | Any GitHub/GitLab/Bitbucket repo, with `--skill` / `--agent` filters |
+| Add from git | Any GitHub/GitLab/Bitbucket repo, with `--skill` and `--target` filters |
 | Add from archive | `.agentpack` files via local path, URL, or offline transfer |
 | Build | `agentpack build` from `agentpack.yaml` manifest |
 | Info | Show details of installed packages or peek inside archives |
@@ -68,7 +68,7 @@ See [Usage][] for full details.
 | List | See what's installed; `--outdated` checks for updates |
 | Del | Safe uninstall — only deletes files agentpack added |
 | Install | Install from `agentpack-packages.yaml` with lockfile reproducibility |
-| Multi-agent | Claude Code, Cursor, Copilot, Gemini CLI, Windsurf + universal `.agents/` target |
+| Multi-agent | 50+ agents — Claude Code, Cursor, Copilot, Codex, Gemini CLI, Windsurf, and more |
 | Offline | `.agentpack` archives work without git, npm, or any toolchain |
 | Netrc | Private repo support via `~/.netrc` credentials |
 

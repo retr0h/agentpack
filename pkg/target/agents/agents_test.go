@@ -37,10 +37,9 @@ import (
 func TestAgents_AllRegistered(t *testing.T) {
 	t.Parallel()
 
-	wantNames := []string{
-		"cursor", "copilot", "gemini", "codex", "opencode",
-		"cline", "goose", "roo", "amp", "continue",
-		"kiro", "devin", "warp", "trae",
+	wantNames := make([]string, len(agents.Registry))
+	for i, def := range agents.Registry {
+		wantNames[i] = def.Name
 	}
 
 	tests := make([]struct {
