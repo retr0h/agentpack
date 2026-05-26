@@ -34,6 +34,54 @@ import (
 	"github.com/retr0h/agentpack/pkg/target/agents"
 )
 
+func TestDefs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		checkName string
+	}{
+		{
+			name:      "Defs returns non-empty slice",
+			checkName: "",
+		},
+		{
+			name:      "Defs contains cursor",
+			checkName: "cursor",
+		},
+		{
+			name:      "Defs contains universal",
+			checkName: "universal",
+		},
+		{
+			name:      "Defs contains gemini-cli",
+			checkName: "gemini-cli",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			defs := agents.Defs()
+			assert.NotEmpty(t, defs)
+
+			if tt.checkName == "" {
+				return
+			}
+
+			found := false
+			for _, d := range defs {
+				if d.Name == tt.checkName {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "expected agent %q in Defs()", tt.checkName)
+		})
+	}
+}
+
 func TestAgents_AllRegistered(t *testing.T) {
 	t.Parallel()
 
@@ -77,8 +125,13 @@ func TestAgent_NameAndDisplayName(t *testing.T) {
 		wantDisplay string
 	}{
 		{
-			name:        "cursor",
-			def:         agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			name: "cursor",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			wantName:    "cursor",
 			wantDisplay: "Cursor",
 		},
@@ -121,15 +174,21 @@ func TestAgent_Detect(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		def          agents.AgentDef
-		homeFunc     func(t *testing.T) func() (string, error)
-		getenvFunc   func(t *testing.T) func(string) string
-		wantDetected bool
+		name          string
+		def           agents.AgentDef
+		homeFunc      func(t *testing.T) func() (string, error)
+		getenvFunc    func(t *testing.T) func(string) string
+		configDirFunc func(t *testing.T) func() (string, error)
+		wantDetected  bool
 	}{
 		{
 			name: "detects via DetectHome when dir exists",
-			def:  agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
 				home := t.TempDir()
@@ -140,7 +199,12 @@ func TestAgent_Detect(t *testing.T) {
 		},
 		{
 			name: "not detected via DetectHome when dir absent",
-			def:  agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
 				home := t.TempDir()
@@ -150,7 +214,12 @@ func TestAgent_Detect(t *testing.T) {
 		},
 		{
 			name: "home error returns false",
-			def:  agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
 				return func() (string, error) { return "", errors.New("no home") }
@@ -206,6 +275,78 @@ func TestAgent_Detect(t *testing.T) {
 			},
 			wantDetected: false,
 		},
+		{
+			name: "AlwaysDetect true returns true without any dir check",
+			def: agents.AgentDef{
+				Name:            "universal",
+				Display:         "Universal",
+				AlwaysDetect:    true,
+				GlobalSkillsDir: ".config/agents/skills",
+			},
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				return func() (string, error) { return t.TempDir(), nil }
+			},
+			wantDetected: true,
+		},
+		{
+			name: "DetectConfig with dir present returns true",
+			def: agents.AgentDef{
+				Name:            "opencode",
+				Display:         "OpenCode",
+				DetectConfig:    "opencode",
+				GlobalSkillsDir: ".config/opencode/skills",
+			},
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				return func() (string, error) { return t.TempDir(), nil }
+			},
+			configDirFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				configDir := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(configDir, "opencode"), 0o755))
+				return func() (string, error) { return configDir, nil }
+			},
+			wantDetected: true,
+		},
+		{
+			name: "DetectConfig with dir absent returns false",
+			def: agents.AgentDef{
+				Name:            "opencode",
+				Display:         "OpenCode",
+				DetectConfig:    "opencode",
+				GlobalSkillsDir: ".config/opencode/skills",
+			},
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				return func() (string, error) { return t.TempDir(), nil }
+			},
+			configDirFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				// Empty config dir — "opencode" subdir does not exist.
+				configDir := t.TempDir()
+				return func() (string, error) { return configDir, nil }
+			},
+			wantDetected: false,
+		},
+		{
+			name: "DetectConfig with configDirFunc error returns false",
+			def: agents.AgentDef{
+				Name:            "opencode",
+				Display:         "OpenCode",
+				DetectConfig:    "opencode",
+				GlobalSkillsDir: ".config/opencode/skills",
+			},
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				return func() (string, error) { return t.TempDir(), nil }
+			},
+			configDirFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				return func() (string, error) { return "", errors.New("no config dir") }
+			},
+			wantDetected: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -217,6 +358,13 @@ func TestAgent_Detect(t *testing.T) {
 			if tt.getenvFunc != nil {
 				getenv := tt.getenvFunc(t)
 				a := agents.NewAgentWithGetenv(tt.def, homeFunc, getenv)
+				assert.Equal(t, tt.wantDetected, a.Detect())
+				return
+			}
+
+			if tt.configDirFunc != nil {
+				configDir := tt.configDirFunc(t)
+				a := agents.NewAgentWithConfigDir(tt.def, homeFunc, configDir)
 				assert.Equal(t, tt.wantDetected, a.Detect())
 				return
 			}
@@ -243,7 +391,12 @@ func TestAgent_Install(t *testing.T) {
 	}{
 		{
 			name: "local: copies skills into .agents/skills/{name}/",
-			def:  agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			setupSrc: func(t *testing.T) string {
 				t.Helper()
 				src := t.TempDir()
@@ -292,8 +445,13 @@ func TestAgent_Install(t *testing.T) {
 			},
 		},
 		{
-			name:   "global: copies skills into GlobalSkillsDir/{name}/ under home",
-			def:    agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			name: "global: copies skills into GlobalSkillsDir/{name}/ under home",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			global: true,
 			setupSrc: func(t *testing.T) string {
 				t.Helper()
@@ -320,8 +478,13 @@ func TestAgent_Install(t *testing.T) {
 			},
 		},
 		{
-			name:   "global: home dir error propagates",
-			def:    agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			name: "global: home dir error propagates",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			global: true,
 			setupSrc: func(t *testing.T) string {
 				t.Helper()
@@ -335,15 +498,25 @@ func TestAgent_Install(t *testing.T) {
 		},
 		{
 			name: "local: no skills dir is a no-op",
-			def:  agents.AgentDef{Name: "gemini", Display: "Gemini CLI", DetectHome: ".gemini", GlobalSkillsDir: ".gemini/skills"},
+			def: agents.AgentDef{
+				Name:            "gemini",
+				Display:         "Gemini CLI",
+				DetectHome:      ".gemini",
+				GlobalSkillsDir: ".gemini/skills",
+			},
 			setupSrc: func(t *testing.T) string {
 				t.Helper()
 				return t.TempDir()
 			},
 		},
 		{
-			name:      "cancelled context returns error",
-			def:       agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			name: "cancelled context returns error",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			cancelCtx: true,
 			setupSrc: func(t *testing.T) string {
 				t.Helper()
@@ -353,7 +526,12 @@ func TestAgent_Install(t *testing.T) {
 		},
 		{
 			name: "local: cwdFunc error propagates",
-			def:  agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			setupSrc: func(t *testing.T) string {
 				t.Helper()
 				return t.TempDir()
@@ -362,12 +540,59 @@ func TestAgent_Install(t *testing.T) {
 		},
 		{
 			name: "local: mkdirAll failure propagates error",
-			def:  agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			setupSrc: func(t *testing.T) string {
 				t.Helper()
 				return t.TempDir()
 			},
 			wantErr: "mkdir agents skills dir",
+		},
+		{
+			name: "copyFile: unreadable source file returns error",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				src := t.TempDir()
+				skillsDir := filepath.Join(src, "skills")
+				require.NoError(t, os.MkdirAll(skillsDir, 0o755))
+				secretFile := filepath.Join(skillsDir, "secret.md")
+				require.NoError(t, os.WriteFile(secretFile, []byte("secret"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(secretFile, 0o644) })
+				return src
+			},
+			wantErr: "copy skills: read",
+		},
+		{
+			name: "copyFile: read-only destination dir causes write error",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				src := t.TempDir()
+				skillsDir := filepath.Join(src, "skills")
+				require.NoError(t, os.MkdirAll(skillsDir, 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(skillsDir, "skill.md"),
+					[]byte("# Skill"),
+					0o644,
+				))
+				return src
+			},
+			wantErr: "copy skills: write",
 		},
 	}
 
@@ -392,6 +617,15 @@ func TestAgent_Install(t *testing.T) {
 				require.NoError(t, os.Chmod(roDir, 0o555))
 				t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })
 				cwdFunc = func() (string, error) { return roDir, nil }
+			}
+			if tt.wantErr == "copy skills: write" {
+				// Pre-create the destDir so MkdirAll succeeds, then make it read-only
+				// so copyFile's WriteFile call fails.
+				roDestDir := filepath.Join(destBase, ".agents", "skills", "my-plugin")
+				require.NoError(t, os.MkdirAll(roDestDir, 0o755))
+				require.NoError(t, os.Chmod(roDestDir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(roDestDir, 0o755) })
+				cwdFunc = func() (string, error) { return destBase, nil }
 			}
 
 			a := agents.NewAgentWithFuncs(tt.def, homeFunc, cwdFunc)
@@ -439,8 +673,13 @@ func TestAgent_List(t *testing.T) {
 		wantLen int
 	}{
 		{
-			name:    "returns empty",
-			def:     agents.AgentDef{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
+			name: "returns empty",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
 			wantLen: 0,
 		},
 	}

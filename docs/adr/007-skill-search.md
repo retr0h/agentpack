@@ -13,21 +13,21 @@ Proposed
 
 ## Considered Alternatives
 
-- **No search (add by URL only)** — requires users to know the exact
-  repo URL, no discoverability, limits adoption
-- **Local search only** — search installed skills, not useful for
-  finding new ones
-- **Embed a full registry** — ship a skills database with the binary,
-  goes stale, increases binary size
-- **Search skills.sh API** — query the agentskills.io registry at
-  runtime, always fresh, no local state
+- **No search (add by URL only)** — requires users to know the exact repo URL,
+  no discoverability, limits adoption
+- **Local search only** — search installed skills, not useful for finding new
+  ones
+- **Embed a full registry** — ship a skills database with the binary, goes
+  stale, increases binary size
+- **Search skills.sh API** — query the agentskills.io registry at runtime,
+  always fresh, no local state
 
 ## Context
 
 Currently users must know the exact git URL to add a skill:
-`agentpack add github.com/org/repo`. There is no way to browse or
-search for available skills. The agentskills.io ecosystem maintains a
-registry at skills.sh that can be queried.
+`agentpack add github.com/org/repo`. There is no way to browse or search for
+available skills. The agentskills.io ecosystem maintains a registry at skills.sh
+that can be queried.
 
 ## Decision
 
@@ -42,8 +42,8 @@ agentpack search --json           # machine-readable output
 
 ### Registry source
 
-Query the agentskills.io registry API. The registry URL is
-configurable but defaults to `https://skills.sh/api/search`.
+Query the agentskills.io registry API. The registry URL is configurable but
+defaults to `https://skills.sh/api/search`.
 
 ### Output format
 
@@ -55,8 +55,8 @@ configurable but defaults to `https://skills.sh/api/search`.
 3 skills found
 ```
 
-Each result shows: skill name, source repo, description. Accent color
-for names, muted for repos and descriptions.
+Each result shows: skill name, source repo, description. Accent color for names,
+muted for repos and descriptions.
 
 ### Integration with `add`
 
@@ -91,5 +91,4 @@ Search requires network access. When offline, return a clear error:
 - Ecosystem adoption improves with discoverability
 - Network dependency for search (all other commands work offline)
 - Registry API becomes a dependency — needs fallback for downtime
-- Aligns with APK (`apk search`) and skills (`npx skills find`)
-  conventions
+- Aligns with APK (`apk search`) and skills (`npx skills find`) conventions

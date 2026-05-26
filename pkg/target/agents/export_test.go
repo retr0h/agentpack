@@ -45,5 +45,18 @@ func NewAgentWithGetenv(
 	return a
 }
 
+// NewAgentWithConfigDir returns an agent with an injectable userConfigDirFunc so
+// tests can exercise DetectConfig paths without t.Setenv (which is incompatible
+// with t.Parallel).
+func NewAgentWithConfigDir(
+	def AgentDef,
+	homeFunc func() (string, error),
+	configDirFunc func() (string, error),
+) *agent {
+	a := newAgent(def, homeFunc, os.Getwd)
+	a.userConfigDirFunc = configDirFunc
+	return a
+}
+
 // Registry exposes the package-level registry slice for inspection in tests.
 var Registry = registry

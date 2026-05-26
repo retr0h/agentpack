@@ -118,10 +118,15 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 	return entries, nil
 }
 
+// osUserHomeDir is a swappable wrapper around os.UserHomeDir so tests can
+// redirect the home directory without t.Setenv (which is incompatible with
+// t.Parallel).
+var osUserHomeDir = os.UserHomeDir
+
 // RunGlobal scans each agent's GlobalSkillsDir under the user's home directory
 // and returns one entry per discovered skill subdirectory.
 func (l *Lister) RunGlobal() ([]GlobalEntry, error) {
-	home, err := os.UserHomeDir()
+	home, err := osUserHomeDir()
 	if err != nil {
 		return nil, err
 	}

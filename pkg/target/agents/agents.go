@@ -46,59 +46,237 @@ type AgentDef struct {
 
 var registry = []AgentDef{
 	{Name: "adal", Display: "AdaL", DetectHome: ".adal", GlobalSkillsDir: ".adal/skills"},
-	{Name: "aider-desk", Display: "AiderDesk", DetectHome: ".aider-desk", GlobalSkillsDir: ".aider-desk/skills"},
+	{
+		Name:            "aider-desk",
+		Display:         "AiderDesk",
+		DetectHome:      ".aider-desk",
+		GlobalSkillsDir: ".aider-desk/skills",
+	},
 	{Name: "amp", Display: "Amp", DetectConfig: "amp", GlobalSkillsDir: ".config/agents/skills"},
-	{Name: "antigravity", Display: "Antigravity", DetectHome: ".gemini/antigravity", GlobalSkillsDir: ".gemini/antigravity/skills"},
-	{Name: "augment", Display: "Augment", DetectHome: ".augment", GlobalSkillsDir: ".augment/skills"},
+	{
+		Name:            "antigravity",
+		Display:         "Antigravity",
+		DetectHome:      ".gemini/antigravity",
+		GlobalSkillsDir: ".gemini/antigravity/skills",
+	},
+	{
+		Name:            "augment",
+		Display:         "Augment",
+		DetectHome:      ".augment",
+		GlobalSkillsDir: ".augment/skills",
+	},
 	{Name: "bob", Display: "IBM Bob", DetectHome: ".bob", GlobalSkillsDir: ".bob/skills"},
 	{Name: "cline", Display: "Cline", DetectHome: ".cline", GlobalSkillsDir: ".agents/skills"},
-	{Name: "codearts-agent", Display: "CodeArts Agent", DetectHome: ".codeartsdoer", GlobalSkillsDir: ".codeartsdoer/skills"},
-	{Name: "codebuddy", Display: "CodeBuddy", DetectHome: ".codebuddy", GlobalSkillsDir: ".codebuddy/skills"},
-	{Name: "codemaker", Display: "Codemaker", DetectHome: ".codemaker", GlobalSkillsDir: ".codemaker/skills"},
-	{Name: "codestudio", Display: "Code Studio", DetectHome: ".codestudio", GlobalSkillsDir: ".codestudio/skills"},
-	{Name: "codex", Display: "Codex", DetectHome: ".codex", EnvOverride: "CODEX_HOME", GlobalSkillsDir: ".codex/skills"},
-	{Name: "command-code", Display: "Command Code", DetectHome: ".commandcode", GlobalSkillsDir: ".commandcode/skills"},
-	{Name: "continue", Display: "Continue", DetectHome: ".continue", GlobalSkillsDir: ".continue/skills"},
-	{Name: "copilot", Display: "GitHub Copilot", DetectHome: ".copilot", GlobalSkillsDir: ".copilot/skills"},
-	{Name: "cortex", Display: "Cortex Code", DetectHome: ".snowflake/cortex", GlobalSkillsDir: ".snowflake/cortex/skills"},
-	{Name: "crush", Display: "Crush", DetectConfig: "crush", GlobalSkillsDir: ".config/crush/skills"},
+	{
+		Name:            "codearts-agent",
+		Display:         "CodeArts Agent",
+		DetectHome:      ".codeartsdoer",
+		GlobalSkillsDir: ".codeartsdoer/skills",
+	},
+	{
+		Name:            "codebuddy",
+		Display:         "CodeBuddy",
+		DetectHome:      ".codebuddy",
+		GlobalSkillsDir: ".codebuddy/skills",
+	},
+	{
+		Name:            "codemaker",
+		Display:         "Codemaker",
+		DetectHome:      ".codemaker",
+		GlobalSkillsDir: ".codemaker/skills",
+	},
+	{
+		Name:            "codestudio",
+		Display:         "Code Studio",
+		DetectHome:      ".codestudio",
+		GlobalSkillsDir: ".codestudio/skills",
+	},
+	{
+		Name:            "codex",
+		Display:         "Codex",
+		DetectHome:      ".codex",
+		EnvOverride:     "CODEX_HOME",
+		GlobalSkillsDir: ".codex/skills",
+	},
+	{
+		Name:            "command-code",
+		Display:         "Command Code",
+		DetectHome:      ".commandcode",
+		GlobalSkillsDir: ".commandcode/skills",
+	},
+	{
+		Name:            "continue",
+		Display:         "Continue",
+		DetectHome:      ".continue",
+		GlobalSkillsDir: ".continue/skills",
+	},
+	{
+		Name:            "copilot",
+		Display:         "GitHub Copilot",
+		DetectHome:      ".copilot",
+		GlobalSkillsDir: ".copilot/skills",
+	},
+	{
+		Name:            "cortex",
+		Display:         "Cortex Code",
+		DetectHome:      ".snowflake/cortex",
+		GlobalSkillsDir: ".snowflake/cortex/skills",
+	},
+	{
+		Name:            "crush",
+		Display:         "Crush",
+		DetectConfig:    "crush",
+		GlobalSkillsDir: ".config/crush/skills",
+	},
 	{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
-	{Name: "deepagents", Display: "Deep Agents", DetectHome: ".deepagents", GlobalSkillsDir: ".deepagents/agent/skills"},
-	{Name: "devin", Display: "Devin", DetectConfig: "devin", GlobalSkillsDir: ".config/devin/skills"},
+	{
+		Name:            "deepagents",
+		Display:         "Deep Agents",
+		DetectHome:      ".deepagents",
+		GlobalSkillsDir: ".deepagents/agent/skills",
+	},
+	{
+		Name:            "devin",
+		Display:         "Devin",
+		DetectConfig:    "devin",
+		GlobalSkillsDir: ".config/devin/skills",
+	},
 	{Name: "dexto", Display: "Dexto", DetectHome: ".dexto", GlobalSkillsDir: ".dexto/skills"},
 	{Name: "droid", Display: "Droid", DetectHome: ".factory", GlobalSkillsDir: ".factory/skills"},
-	{Name: "firebender", Display: "Firebender", DetectHome: ".firebender", GlobalSkillsDir: ".firebender/skills"},
-	{Name: "forgecode", Display: "ForgeCode", DetectHome: ".forge", GlobalSkillsDir: ".forge/skills"},
-	{Name: "gemini-cli", Display: "Gemini CLI", DetectHome: ".gemini", GlobalSkillsDir: ".gemini/skills"},
-	{Name: "goose", Display: "Goose", DetectConfig: "goose", GlobalSkillsDir: ".config/goose/skills"},
-	{Name: "hermes-agent", Display: "Hermes Agent", DetectHome: ".hermes", GlobalSkillsDir: ".hermes/skills"},
-	{Name: "iflow-cli", Display: "iFlow CLI", DetectHome: ".iflow", GlobalSkillsDir: ".iflow/skills"},
+	{
+		Name:            "firebender",
+		Display:         "Firebender",
+		DetectHome:      ".firebender",
+		GlobalSkillsDir: ".firebender/skills",
+	},
+	{
+		Name:            "forgecode",
+		Display:         "ForgeCode",
+		DetectHome:      ".forge",
+		GlobalSkillsDir: ".forge/skills",
+	},
+	{
+		Name:            "gemini-cli",
+		Display:         "Gemini CLI",
+		DetectHome:      ".gemini",
+		GlobalSkillsDir: ".gemini/skills",
+	},
+	{
+		Name:            "goose",
+		Display:         "Goose",
+		DetectConfig:    "goose",
+		GlobalSkillsDir: ".config/goose/skills",
+	},
+	{
+		Name:            "hermes-agent",
+		Display:         "Hermes Agent",
+		DetectHome:      ".hermes",
+		GlobalSkillsDir: ".hermes/skills",
+	},
+	{
+		Name:            "iflow-cli",
+		Display:         "iFlow CLI",
+		DetectHome:      ".iflow",
+		GlobalSkillsDir: ".iflow/skills",
+	},
 	{Name: "junie", Display: "Junie", DetectHome: ".junie", GlobalSkillsDir: ".junie/skills"},
-	{Name: "kilo", Display: "Kilo Code", DetectHome: ".kilocode", GlobalSkillsDir: ".kilocode/skills"},
-	{Name: "kimi-cli", Display: "Kimi Code CLI", DetectHome: ".kimi", GlobalSkillsDir: ".config/agents/skills"},
+	{
+		Name:            "kilo",
+		Display:         "Kilo Code",
+		DetectHome:      ".kilocode",
+		GlobalSkillsDir: ".kilocode/skills",
+	},
+	{
+		Name:            "kimi-cli",
+		Display:         "Kimi Code CLI",
+		DetectHome:      ".kimi",
+		GlobalSkillsDir: ".config/agents/skills",
+	},
 	{Name: "kiro-cli", Display: "Kiro CLI", DetectHome: ".kiro", GlobalSkillsDir: ".kiro/skills"},
 	{Name: "kode", Display: "Kode", DetectHome: ".kode", GlobalSkillsDir: ".kode/skills"},
 	{Name: "mcpjam", Display: "MCPJam", DetectHome: ".mcpjam", GlobalSkillsDir: ".mcpjam/skills"},
-	{Name: "mistral-vibe", Display: "Mistral Vibe", DetectHome: ".vibe", EnvOverride: "VIBE_HOME", GlobalSkillsDir: ".vibe/skills"},
+	{
+		Name:            "mistral-vibe",
+		Display:         "Mistral Vibe",
+		DetectHome:      ".vibe",
+		EnvOverride:     "VIBE_HOME",
+		GlobalSkillsDir: ".vibe/skills",
+	},
 	{Name: "mux", Display: "Mux", DetectHome: ".mux", GlobalSkillsDir: ".mux/skills"},
-	{Name: "neovate", Display: "Neovate", DetectHome: ".neovate", GlobalSkillsDir: ".neovate/skills"},
-	{Name: "openclaw", Display: "OpenClaw", DetectHome: ".openclaw", GlobalSkillsDir: ".openclaw/skills"},
-	{Name: "opencode", Display: "OpenCode", DetectConfig: "opencode", GlobalSkillsDir: ".config/opencode/skills"},
-	{Name: "openhands", Display: "OpenHands", DetectHome: ".openhands", GlobalSkillsDir: ".openhands/skills"},
+	{
+		Name:            "neovate",
+		Display:         "Neovate",
+		DetectHome:      ".neovate",
+		GlobalSkillsDir: ".neovate/skills",
+	},
+	{
+		Name:            "openclaw",
+		Display:         "OpenClaw",
+		DetectHome:      ".openclaw",
+		GlobalSkillsDir: ".openclaw/skills",
+	},
+	{
+		Name:            "opencode",
+		Display:         "OpenCode",
+		DetectConfig:    "opencode",
+		GlobalSkillsDir: ".config/opencode/skills",
+	},
+	{
+		Name:            "openhands",
+		Display:         "OpenHands",
+		DetectHome:      ".openhands",
+		GlobalSkillsDir: ".openhands/skills",
+	},
 	{Name: "pi", Display: "Pi", DetectHome: ".pi/agent", GlobalSkillsDir: ".pi/agent/skills"},
 	{Name: "pochi", Display: "Pochi", DetectHome: ".pochi", GlobalSkillsDir: ".pochi/skills"},
 	{Name: "qoder", Display: "Qoder", DetectHome: ".qoder", GlobalSkillsDir: ".qoder/skills"},
 	{Name: "qwen-code", Display: "Qwen Code", DetectHome: ".qwen", GlobalSkillsDir: ".qwen/skills"},
-	{Name: "replit", Display: "Replit", DetectHome: ".replit", GlobalSkillsDir: ".config/agents/skills"},
+	{
+		Name:            "replit",
+		Display:         "Replit",
+		DetectHome:      ".replit",
+		GlobalSkillsDir: ".config/agents/skills",
+	},
 	{Name: "roo", Display: "Roo Code", DetectHome: ".roo", GlobalSkillsDir: ".roo/skills"},
-	{Name: "rovodev", Display: "Rovo Dev", DetectHome: ".rovodev", GlobalSkillsDir: ".rovodev/skills"},
-	{Name: "tabnine-cli", Display: "Tabnine CLI", DetectHome: ".tabnine", GlobalSkillsDir: ".tabnine/agent/skills"},
+	{
+		Name:            "rovodev",
+		Display:         "Rovo Dev",
+		DetectHome:      ".rovodev",
+		GlobalSkillsDir: ".rovodev/skills",
+	},
+	{
+		Name:            "tabnine-cli",
+		Display:         "Tabnine CLI",
+		DetectHome:      ".tabnine",
+		GlobalSkillsDir: ".tabnine/agent/skills",
+	},
 	{Name: "trae", Display: "Trae", DetectHome: ".trae", GlobalSkillsDir: ".trae/skills"},
-	{Name: "trae-cn", Display: "Trae CN", DetectHome: ".trae-cn", GlobalSkillsDir: ".trae-cn/skills"},
+	{
+		Name:            "trae-cn",
+		Display:         "Trae CN",
+		DetectHome:      ".trae-cn",
+		GlobalSkillsDir: ".trae-cn/skills",
+	},
 	{Name: "warp", Display: "Warp", DetectHome: ".warp", GlobalSkillsDir: ".warp/skills"},
-	{Name: "windsurf", Display: "Windsurf", DetectHome: ".codeium/windsurf", GlobalSkillsDir: ".codeium/windsurf/skills", LocalSkillsDir: ".windsurf/skills"},
-	{Name: "zencoder", Display: "Zencoder", DetectHome: ".zencoder", GlobalSkillsDir: ".zencoder/skills"},
-	{Name: "universal", Display: "Universal", AlwaysDetect: true, GlobalSkillsDir: ".config/agents/skills"},
+	{
+		Name:            "windsurf",
+		Display:         "Windsurf",
+		DetectHome:      ".codeium/windsurf",
+		GlobalSkillsDir: ".codeium/windsurf/skills",
+		LocalSkillsDir:  ".windsurf/skills",
+	},
+	{
+		Name:            "zencoder",
+		Display:         "Zencoder",
+		DetectHome:      ".zencoder",
+		GlobalSkillsDir: ".zencoder/skills",
+	},
+	{
+		Name:            "universal",
+		Display:         "Universal",
+		AlwaysDetect:    true,
+		GlobalSkillsDir: ".config/agents/skills",
+	},
 }
 
 func init() {
@@ -114,10 +292,11 @@ func Defs() []AgentDef {
 
 // agent is a data-driven target that installs to .agents/skills/{name}/.
 type agent struct {
-	def          AgentDef
-	userHomeFunc func() (string, error)
-	cwdFunc      func() (string, error)
-	getenvFunc   func(string) string
+	def               AgentDef
+	userHomeFunc      func() (string, error)
+	userConfigDirFunc func() (string, error)
+	cwdFunc           func() (string, error)
+	getenvFunc        func(string) string
 }
 
 func newAgent(
@@ -125,7 +304,13 @@ func newAgent(
 	homeFunc func() (string, error),
 	cwdFunc func() (string, error),
 ) *agent {
-	return &agent{def: def, userHomeFunc: homeFunc, cwdFunc: cwdFunc, getenvFunc: os.Getenv}
+	return &agent{
+		def:               def,
+		userHomeFunc:      homeFunc,
+		userConfigDirFunc: os.UserConfigDir,
+		cwdFunc:           cwdFunc,
+		getenvFunc:        os.Getenv,
+	}
 }
 
 // Name returns the agent identifier.
@@ -158,7 +343,7 @@ func (a *agent) Detect() bool {
 	}
 
 	if a.def.DetectConfig != "" {
-		configDir, err := os.UserConfigDir()
+		configDir, err := a.userConfigDirFunc()
 		if err != nil {
 			return false
 		}

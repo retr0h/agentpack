@@ -36,6 +36,131 @@ import (
 )
 
 // --------------------------------------------------------------------------
+// TestRunGlobal
+//
+// These tests mutate the package-level osUserHomeDir variable via
+// SetOsUserHomeDir and therefore must NOT run in parallel with each other.
+// --------------------------------------------------------------------------
+
+func TestRunGlobal(t *testing.T) {
+	tests := []struct {
+		name        string
+		setup       func(t *testing.T, home string)
+		wantErr     string
+		checkResult func(t *testing.T, entries []list.GlobalEntry)
+	}{
+		{
+			name: "returns skill entries for agents whose GlobalSkillsDir contains subdirectories",
+			setup: func(t *testing.T, home string) {
+				t.Helper()
+				// cursor agent: GlobalSkillsDir = ".cursor/skills"
+				cursorSkillDir := filepath.Join(home, ".cursor", "skills", "my-skill")
+				require.NoError(t, os.MkdirAll(cursorSkillDir, 0o755))
+				// gemini-cli agent: GlobalSkillsDir = ".gemini/skills"
+				geminiSkillDir := filepath.Join(home, ".gemini", "skills", "another-skill")
+				require.NoError(t, os.MkdirAll(geminiSkillDir, 0o755))
+			},
+			checkResult: func(t *testing.T, entries []list.GlobalEntry) {
+				t.Helper()
+				// Collect (agent, skill) pairs for easy assertion.
+				type key struct{ agent, skill string }
+				got := make(map[key]bool, len(entries))
+				for _, e := range entries {
+					got[key{e.Agent, e.Skill}] = true
+				}
+				assert.True(t, got[key{"cursor", "my-skill"}], "expected cursor/my-skill entry")
+				assert.True(
+					t,
+					got[key{"gemini-cli", "another-skill"}],
+					"expected gemini-cli/another-skill entry",
+				)
+			},
+		},
+		{
+			name: "files inside a GlobalSkillsDir are not returned, only directories",
+			setup: func(t *testing.T, home string) {
+				t.Helper()
+				skillsDir := filepath.Join(home, ".cursor", "skills")
+				require.NoError(t, os.MkdirAll(skillsDir, 0o755))
+				// Write a plain file that should be ignored.
+				require.NoError(t, os.WriteFile(
+					filepath.Join(skillsDir, "README.md"),
+					[]byte("# readme"),
+					0o644,
+				))
+				// And one real skill directory.
+				require.NoError(t, os.MkdirAll(filepath.Join(skillsDir, "real-skill"), 0o755))
+			},
+			checkResult: func(t *testing.T, entries []list.GlobalEntry) {
+				t.Helper()
+				for _, e := range entries {
+					if e.Agent == "cursor" {
+						assert.Equal(
+							t,
+							"real-skill",
+							e.Skill,
+							"only directories should be returned as skills",
+						)
+					}
+				}
+				// Ensure the plain file was not included.
+				for _, e := range entries {
+					assert.NotEqual(t, "README.md", e.Skill)
+				}
+			},
+		},
+		{
+			name: "returns empty slice when no GlobalSkillsDir directories exist",
+			setup: func(t *testing.T, _ string) {
+				t.Helper()
+				// home is an empty temp dir — no agent dirs created.
+			},
+			checkResult: func(t *testing.T, entries []list.GlobalEntry) {
+				t.Helper()
+				assert.Empty(t, entries)
+			},
+		},
+		{
+			name: "home dir error is propagated",
+			setup: func(t *testing.T, _ string) {
+				t.Helper()
+			},
+			wantErr: "no home dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantErr != "" {
+				restore := list.SetOsUserHomeDir(func() (string, error) {
+					return "", errors.New("no home dir")
+				})
+				defer restore()
+
+				l := list.New()
+				_, err := l.RunGlobal()
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			home := t.TempDir()
+			tt.setup(t, home)
+
+			restore := list.SetOsUserHomeDir(func() (string, error) { return home, nil })
+			defer restore()
+
+			l := list.New()
+			entries, err := l.RunGlobal()
+			require.NoError(t, err)
+
+			if tt.checkResult != nil {
+				tt.checkResult(t, entries)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
 // TestRunWithRegistry
 // --------------------------------------------------------------------------
 
