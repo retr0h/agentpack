@@ -16,6 +16,7 @@
   <a href="https://conventionalcommits.org"><img alt="conventional commits" src="https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=for-the-badge"></a>
   <a href="https://just.systems"><img alt="built with just" src="https://img.shields.io/badge/Built_with-Just-black?style=for-the-badge&logo=just&logoColor=white"></a>
   <img alt="github commit activity" src="https://img.shields.io/github/commit-activity/m/retr0h/agentpack?style=for-the-badge">
+  <a href="https://agentskills.io"><img alt="agentskills.io" src="https://img.shields.io/badge/standard-agentskills.io-ff6600?style=for-the-badge"></a>
 </p>
 
 <p align="center">
