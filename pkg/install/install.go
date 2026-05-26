@@ -103,6 +103,10 @@ type Options struct {
 	// used.
 	Targets []target.Target
 
+	// Global installs into each agent's global skills directory (under home)
+	// instead of the project-local directory.
+	Global bool
+
 	// ContentCheck is called after reading metadata but before installing to
 	// targets. It receives the content classification and may return an error
 	// to abort the install. When nil the install proceeds unconditionally.
@@ -366,6 +370,7 @@ func installFromDir(
 		Version: meta.Version,
 		Meta:    meta,
 		Dir:     dir,
+		Global:  opts.Global,
 	}
 
 	dirs := make(map[string]string)

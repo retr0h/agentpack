@@ -15,43 +15,43 @@ Accepted
 
 ## Considered Alternatives
 
-- **Keep per-agent Go packages** — doesn't scale, each new agent needs
-  a new package with boilerplate
-- **Copy vercel-labs/skills agent list verbatim** — brittle, their list
-  changes frequently
+- **Keep per-agent Go packages** — doesn't scale, each new agent needs a new
+  package with boilerplate
+- **Copy vercel-labs/skills agent list verbatim** — brittle, their list changes
+  frequently
 - **Only support universal target** — loses detection for specific agents
 
 ## Context
 
-The vercel-labs/skills project (agentskills.io) maintains a registry of
-50+ AI coding agents with their detection paths and skill directories.
-Most agents read skills from `.agents/skills/` — the universal
-convention. Only a few have unique directories:
+The vercel-labs/skills project (agentskills.io) maintains a registry of 50+ AI
+coding agents with their detection paths and skill directories. Most agents read
+skills from `.agents/skills/` — the universal convention. Only a few have unique
+directories:
 
-| Agent | Install dir | Detection |
-|---|---|---|
-| Claude Code | `.claude/skills/` (+ commands, agents, hooks, mcp, settings) | `~/.claude/` |
-| Windsurf | `.windsurf/skills/` | `~/.codeium/windsurf` |
-| Everything else | `.agents/skills/` | Agent-specific home dir |
+| Agent           | Install dir                                                  | Detection               |
+| --------------- | ------------------------------------------------------------ | ----------------------- |
+| Claude Code     | `.claude/skills/` (+ commands, agents, hooks, mcp, settings) | `~/.claude/`            |
+| Windsurf        | `.windsurf/skills/`                                          | `~/.codeium/windsurf`   |
+| Everything else | `.agents/skills/`                                            | Agent-specific home dir |
 
-Our current implementation has 6 separate Go packages with hardcoded
-paths, several of which are wrong (Copilot detects on `.github/` in
-cwd, Windsurf detects on `~/.windsurf/`).
+Our current implementation has 6 separate Go packages with hardcoded paths,
+several of which are wrong (Copilot detects on `.github/` in cwd, Windsurf
+detects on `~/.windsurf/`).
 
 ## Decision
 
 ### Two tiers of targets
 
-**Tier 1: Dedicated drivers** — agents with unique install paths or
-special behavior (config merging, multiple content types):
+**Tier 1: Dedicated drivers** — agents with unique install paths or special
+behavior (config merging, multiple content types):
 
 - `claudecode` — `.claude/{skills,commands,agents}/` + config merging
 - `windsurf` — `.windsurf/skills/`
 
 These remain as separate Go packages under `pkg/target/`.
 
-**Tier 2: Data-driven agents** — agents that read from `.agents/skills/`
-with agent-specific detection. Defined as data, not code:
+**Tier 2: Data-driven agents** — agents that read from `.agents/skills/` with
+agent-specific detection. Defined as data, not code:
 
 ```go
 var agents = []AgentDef{
@@ -70,12 +70,13 @@ var agents = []AgentDef{
 ```
 
 Each data-driven agent:
+
 - Detects via `~/{DetectHome}` or `~/.config/{DetectConfig}`
 - Installs skills to `.agents/skills/{name}/`
 - Shares the universal install implementation
 
-**Tier 3: Universal fallback** — always active, installs to
-`.agents/skills/`. Catches any agent not explicitly listed.
+**Tier 3: Universal fallback** — always active, installs to `.agents/skills/`.
+Catches any agent not explicitly listed.
 
 ### Remove per-agent packages for tier 2
 
@@ -86,6 +87,7 @@ data-driven agents from the list.
 ### Fix detection paths
 
 Align with vercel-labs/skills:
+
 - Copilot: `~/.copilot` (not `.github/` in cwd)
 - Windsurf: `~/.codeium/windsurf` (not `~/.windsurf/`)
 - Cursor: `~/.cursor` (correct, keep)
@@ -94,8 +96,8 @@ Align with vercel-labs/skills:
 ### Global skills support
 
 Each agent has a global skills directory (e.g. `~/.cursor/skills/`,
-`~/.gemini/skills/`). Currently we only do project-local installs.
-Global install support is deferred to a future ADR.
+`~/.gemini/skills/`). Currently we only do project-local installs. Global
+install support is deferred to a future ADR.
 
 ## Consequences
 
@@ -109,7 +111,7 @@ Global install support is deferred to a future ADR.
 
 ## Influences
 
-- [vercel-labs/skills](https://github.com/vercel-labs/skills) — agent
-  registry, detection paths, install conventions
+- [vercel-labs/skills](https://github.com/vercel-labs/skills) — agent registry,
+  detection paths, install conventions
 - [agentskills.io](https://agentskills.io) — skill format standard
 - [agents.md](https://agents.md) — `.agents/` directory convention

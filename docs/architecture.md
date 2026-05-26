@@ -55,34 +55,35 @@ type Target interface {
 
 **Tier 1 — dedicated drivers** (unique install paths or special behavior):
 
-| Driver       | Agent       | Install directory                                         | Detect                        |
-| ------------ | ----------- | --------------------------------------------------------- | ----------------------------- |
-| `ClaudeCode` | Claude Code | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` | `~/.claude/` exists           |
-| `Windsurf`   | Windsurf    | `.windsurf/skills/{name}/`                                | `~/.codeium/windsurf` exists  |
+| Driver       | Agent       | Install directory                                         | Detect                       |
+| ------------ | ----------- | --------------------------------------------------------- | ---------------------------- |
+| `ClaudeCode` | Claude Code | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` | `~/.claude/` exists          |
+| `Windsurf`   | Windsurf    | `.windsurf/skills/{name}/`                                | `~/.codeium/windsurf` exists |
 
-**Tier 2 — data-driven agents** (`pkg/target/agents`; all install to `.agents/skills/{name}/`):
+**Tier 2 — data-driven agents** (`pkg/target/agents`; all install to
+`.agents/skills/{name}/`):
 
-| Agent          | Detect                              |
-| -------------- | ----------------------------------- |
-| Cursor         | `~/.cursor` exists                  |
-| GitHub Copilot | `~/.copilot` exists                 |
-| Gemini CLI     | `~/.gemini` exists                  |
-| Codex          | `CODEX_HOME` env or `~/.codex`      |
-| OpenCode       | `~/.config/opencode` exists         |
-| Cline          | `~/.cline` exists                   |
-| Goose          | `~/.config/goose` exists            |
-| Roo Code       | `~/.roo` exists                     |
-| Amp            | `~/.config/amp` exists              |
-| Continue       | `~/.continue` exists                |
-| Kiro           | `~/.kiro` exists                    |
-| Devin          | `~/.config/devin` exists            |
-| Warp           | `~/.warp` exists                    |
-| Trae           | `~/.trae` exists                    |
+| Agent          | Detect                         |
+| -------------- | ------------------------------ |
+| Cursor         | `~/.cursor` exists             |
+| GitHub Copilot | `~/.copilot` exists            |
+| Gemini CLI     | `~/.gemini` exists             |
+| Codex          | `CODEX_HOME` env or `~/.codex` |
+| OpenCode       | `~/.config/opencode` exists    |
+| Cline          | `~/.cline` exists              |
+| Goose          | `~/.config/goose` exists       |
+| Roo Code       | `~/.roo` exists                |
+| Amp            | `~/.config/amp` exists         |
+| Continue       | `~/.continue` exists           |
+| Kiro           | `~/.kiro` exists               |
+| Devin          | `~/.config/devin` exists       |
+| Warp           | `~/.warp` exists               |
+| Trae           | `~/.trae` exists               |
 
 **Tier 3 — universal fallback** (always active):
 
-| Driver      | Install directory    | Detect |
-| ----------- | -------------------- | ------ |
+| Driver      | Install directory        | Detect |
+| ----------- | ------------------------ | ------ |
 | `Universal` | `.agents/skills/{name}/` | always |
 
 Drivers self-register via `init()` + blank import in `cmd/root.go`.

@@ -40,6 +40,8 @@ type remover interface {
 
 var pkgRemover remover = pkgremove.New()
 
+var delGlobal bool
+
 var delCmd = &cobra.Command{
 	Use:   "del <name>",
 	Short: "Delete an installed agentpack plugin",
@@ -67,6 +69,7 @@ directory is never touched.`,
 
 		result, err := pkgRemover.Run(ctx, pkgremove.Options{
 			Name:   name,
+			Global: delGlobal,
 			OnStep: onStep,
 		})
 		if err != nil {
@@ -119,4 +122,7 @@ func removeManifests(name string) {
 
 func init() {
 	rootCmd.AddCommand(delCmd)
+
+	delCmd.Flags().
+		BoolVarP(&delGlobal, "global", "g", false, "remove a globally installed plugin")
 }

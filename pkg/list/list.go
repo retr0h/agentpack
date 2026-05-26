@@ -33,10 +33,13 @@ package list
 import (
 	"cmp"
 	"encoding/hex"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/retr0h/agentpack/pkg/registry"
+	"github.com/retr0h/agentpack/pkg/target/agents"
 )
 
 // Registry lists all installed package manifests from the registry store.
@@ -60,6 +63,13 @@ type Entry struct {
 	Source    string
 	Targets   string
 	Installed string
+}
+
+// GlobalEntry represents a single globally installed skill.
+type GlobalEntry struct {
+	Agent string
+	Skill string
+	Dir   string
 }
 
 // Lister reads installed packages from the registry.
@@ -104,6 +114,46 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 	slices.SortFunc(entries, func(a, b Entry) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
+
+	return entries, nil
+}
+
+// RunGlobal scans each agent's GlobalSkillsDir under the user's home directory
+// and returns one entry per discovered skill subdirectory.
+func (l *Lister) RunGlobal() ([]GlobalEntry, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	var entries []GlobalEntry
+
+	for _, def := range agents.Defs() {
+		if def.GlobalSkillsDir == "" {
+			continue
+		}
+
+		skillsDir := filepath.Join(home, def.GlobalSkillsDir)
+
+		dirEntries, readErr := os.ReadDir(skillsDir)
+		if os.IsNotExist(readErr) {
+			continue
+		}
+
+		if readErr != nil {
+			return nil, readErr
+		}
+
+		for _, de := range dirEntries {
+			if de.IsDir() {
+				entries = append(entries, GlobalEntry{
+					Agent: def.Name,
+					Skill: de.Name(),
+					Dir:   skillsDir,
+				})
+			}
+		}
+	}
 
 	return entries, nil
 }

@@ -33,6 +33,7 @@ import (
 
 type lister interface {
 	Run() ([]list.Entry, error)
+	RunGlobal() ([]list.GlobalEntry, error)
 }
 
 type outdatedChecker interface {
@@ -47,6 +48,7 @@ var (
 var (
 	listOutdatedFlag bool
 	listTargetsFlag  bool
+	listGlobalFlag   bool
 )
 
 var listCmd = &cobra.Command{
@@ -61,6 +63,10 @@ var listCmd = &cobra.Command{
 
 		if listOutdatedFlag {
 			return listOutdated(cmd)
+		}
+
+		if listGlobalFlag {
+			return listGlobal(cmd)
 		}
 
 		return listInstalled(cmd)
@@ -220,6 +226,43 @@ func listTargets(cmd *cobra.Command) error {
 	return nil
 }
 
+func listGlobal(cmd *cobra.Command) error {
+	out := cmd.OutOrStdout()
+
+	entries, err := pkgLister.RunGlobal()
+	if err != nil {
+		return err
+	}
+
+	if outputFormat == "json" {
+		return jsonOutput(out, entries)
+	}
+
+	if len(entries) == 0 {
+		cli.Print(out, "no global plugins installed")
+
+		return nil
+	}
+
+	agentVals := make([]string, len(entries))
+	skillVals := make([]string, len(entries))
+	dirVals := make([]string, len(entries))
+
+	for i, e := range entries {
+		agentVals[i] = e.Agent
+		skillVals[i] = e.Skill
+		dirVals[i] = e.Dir
+	}
+
+	cli.Table(out, []cli.TableColumn{
+		{Header: "AGENT", Values: agentVals, Tag: true},
+		{Header: "SKILL", Values: skillVals, Accent: true},
+		{Header: "DIR", Values: dirVals, Muted: true},
+	})
+
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(listCmd)
 
@@ -227,4 +270,6 @@ func init() {
 		BoolVar(&listOutdatedFlag, "outdated", false, "check installed plugins for available updates")
 	listCmd.Flags().
 		BoolVar(&listTargetsFlag, "targets", false, "show registered agent targets and detection status")
+	listCmd.Flags().
+		BoolVarP(&listGlobalFlag, "global", "g", false, "show globally installed skills")
 }

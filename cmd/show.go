@@ -44,6 +44,7 @@ type inspector interface {
 var (
 	pkgRegistryLoader registryLoader = registry.New()
 	pkgInspector      inspector      = inspect.New()
+	infoGlobal        bool
 )
 
 func isArchiveFile(arg string) bool {
@@ -97,6 +98,9 @@ func showInstalled(cmd *cobra.Command, name string) error {
 	cli.FieldMuted(out, "Source", source)
 	cli.FieldMuted(out, "SHA", cli.ShortSHA(m.SHA))
 	cli.FieldInfo(out, "Installed", installed)
+	if infoGlobal {
+		cli.Field(out, "Scope", "global")
+	}
 
 	archiveBase := fmt.Sprintf("%s@%s", m.Name, cli.ShortSHA(m.SHA))
 	archivePath := fmt.Sprintf("~/.config/agentpack/archives/%s.agentpack", archiveBase)
@@ -239,4 +243,7 @@ func humanSize(bytes int64) string {
 
 func init() {
 	rootCmd.AddCommand(infoCmd)
+
+	infoCmd.Flags().
+		BoolVarP(&infoGlobal, "global", "g", false, "show global install scope indicator")
 }

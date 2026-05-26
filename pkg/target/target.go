@@ -79,6 +79,10 @@ type InstallOpts struct {
 	// Dir is the root directory for installation (cwd or home).
 	Dir string
 
+	// Global installs into the agent's global skills directory under the user's
+	// home directory instead of the project-local directory.
+	Global bool
+
 	// Meta is the build metadata read from the extracted archive.
 	Meta *metadata.Metadata
 }

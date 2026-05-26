@@ -74,6 +74,11 @@ type Options struct {
 	// Name is the plugin identifier to remove.
 	Name string
 
+	// Global indicates the plugin was installed globally (into the agent's home
+	// directory). Reserved for future use — the registry manifest already
+	// stores the absolute install path.
+	Global bool
+
 	// OnStep is called in real-time as each file is removed or skipped.
 	// When nil, no progress is reported.
 	OnStep func(Step)

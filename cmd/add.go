@@ -51,6 +51,7 @@ var (
 	installSkills  []string
 	installTargets []string
 	installTrust   bool
+	installGlobal  bool
 )
 
 var addCmd = &cobra.Command{
@@ -83,6 +84,7 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 			Source:       source,
 			Skills:       installSkills,
 			Targets:      targets,
+			Global:       installGlobal,
 			OnStep:       onStep,
 			ContentCheck: buildContentCheck(cmd, installTrust),
 		})
@@ -324,4 +326,6 @@ func init() {
 		StringArrayVar(&installTargets, "target", nil, "install to specific target(s) only (see list --targets)")
 	addCmd.Flags().
 		BoolVar(&installTrust, "trust", false, "skip executable content prompt (for CI)")
+	addCmd.Flags().
+		BoolVarP(&installGlobal, "global", "g", false, "install into each agent's global skills directory")
 }
