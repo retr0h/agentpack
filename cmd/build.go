@@ -28,8 +28,8 @@ import (
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/spf13/cobra"
 
+	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/pkg/build"
-	"github.com/retr0h/agentpack/pkg/cli"
 )
 
 var buildCmd = &cobra.Command{

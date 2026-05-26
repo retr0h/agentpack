@@ -37,10 +37,10 @@ import (
 	"github.com/avfs/avfs/vfs/osfs"
 	"go.uber.org/mock/gomock"
 
+	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/archive"
 	"github.com/retr0h/agentpack/pkg/build"
 	"github.com/retr0h/agentpack/pkg/install"
-	"github.com/retr0h/agentpack/pkg/metadata"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/target"
 	"github.com/retr0h/agentpack/pkg/target/mocks"

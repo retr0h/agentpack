@@ -26,7 +26,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/retr0h/agentpack/pkg/metadata"
+	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 

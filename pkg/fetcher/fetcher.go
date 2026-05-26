@@ -20,6 +20,21 @@
 
 // Package fetcher provides a backend interface and drivers for retrieving
 // .agentpack archives from local paths or remote URLs.
+//
+// Usage:
+//
+//	f, err := fetcher.New("github.com/org/skills-repo")
+//	if err != nil { ... }
+//	err = f.Fetch(ctx, source, "/tmp/dest.agentpack")
+//
+//	// List remote refs without cloning.
+//	refs, err := fetcher.LsRemote(ctx, "github.com/org/skills-repo")
+//
+// New selects the appropriate driver based on the source URI:
+//   - github.com/, gitlab.com/, bitbucket.org/ (bare or https://) → GitFetcher
+//   - ends with .git → GitFetcher
+//   - https:// on a non-git host → HTTPFetcher
+//   - local path (absolute, relative, or ~/…) → FileFetcher
 package fetcher
 
 import (

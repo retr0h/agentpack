@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/retr0h/agentpack/pkg/lockfile"
+	"github.com/retr0h/agentpack/internal/lockfile"
 )
 
 // --------------------------------------------------------------------------

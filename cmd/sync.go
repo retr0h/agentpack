@@ -25,7 +25,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/retr0h/agentpack/pkg/cli"
+	"github.com/retr0h/agentpack/internal/cli"
 	pkgsync "github.com/retr0h/agentpack/pkg/sync"
 )
 

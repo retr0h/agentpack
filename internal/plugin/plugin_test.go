@@ -25,8 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/retr0h/agentpack/internal/plugin"
 	"github.com/retr0h/agentpack/pkg/manifest"
-	"github.com/retr0h/agentpack/pkg/plugin"
 )
 
 func TestGenerateMarketplace(t *testing.T) {

@@ -22,6 +22,24 @@
 // ~/.config/agentpack/packages/{name}.yaml. Each manifest records exactly
 // which files were installed and their SHA256 checksums so that remove can
 // safely undo an installation without walking directories.
+//
+// Usage:
+//
+//	// Save an installation manifest.
+//	err := registry.Save(&registry.PackageManifest{
+//	    Name:    "my-plugin",
+//	    Source:  "github.com/org/repo",
+//	    Files:   installedFiles,
+//	})
+//
+//	// Load a manifest by name.
+//	m, err := registry.Load("my-plugin")
+//
+//	// List all installed manifests.
+//	manifests, err := registry.List()
+//
+//	// Remove a manifest.
+//	err = registry.Remove("my-plugin")
 package registry
 
 import (

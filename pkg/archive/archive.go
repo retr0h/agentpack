@@ -19,6 +19,21 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package archive handles creation and extraction of .agentpack tarballs.
+//
+// Usage:
+//
+//	// Create an archive from file entries.
+//	err := archive.Create(ctx, vfs, "plugin-v1.0.0.agentpack", []archive.FileEntry{
+//	    {Src: "/path/to/skill.md", ArchivePath: "skills/review/SKILL.md"},
+//	    {Content: []byte("# intro"), ArchivePath: "skills/intro/SKILL.md"},
+//	})
+//
+//	// Extract an archive to a directory.
+//	err := archive.Extract(ctx, "plugin-v1.0.0.agentpack", "/tmp/unpacked")
+//
+// Archives are gzipped tarballs. FileEntry supports both on-disk sources (Src)
+// and in-memory content (Content). All paths within the archive must be
+// relative (no leading slash or "../" components).
 package archive
 
 import (

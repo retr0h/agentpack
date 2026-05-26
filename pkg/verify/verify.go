@@ -19,6 +19,19 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package verify orchestrates the agentpack archive verification pipeline.
+//
+// Usage:
+//
+//	result, err := verify.Run(ctx, "/path/to/plugin-v1.0.0.agentpack")
+//	if err != nil { ... }
+//	for _, f := range result.Files {
+//	    if !f.OK { fmt.Printf("FAIL %s: %s\n", f.Path, f.Err) }
+//	}
+//
+// Verify extracts the archive to a temp directory, reads
+// .agentpack/checksums.txt, and recomputes the SHA256 of every listed file.
+// A non-nil error is returned only for I/O failures that prevent verification
+// from running. Per-file failures are surfaced through Result.Files.
 package verify
 
 import (
@@ -28,8 +41,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/retr0h/agentpack/internal/checksum"
 	"github.com/retr0h/agentpack/pkg/archive"
-	"github.com/retr0h/agentpack/pkg/checksum"
 )
 
 // osMkdirTemp is swappable for testing.

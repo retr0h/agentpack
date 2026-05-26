@@ -20,6 +20,17 @@
 
 // Package outdated compares the installed SHA of each plugin against the
 // current HEAD of its remote source using LsRemote (no clone required).
+//
+// Usage:
+//
+//	entries, err := outdated.Run(ctx, nil) // all installed plugins
+//	entries, err := outdated.RunWithOptions(ctx, outdated.Options{
+//	    Names: []string{"my-plugin"},
+//	    OnStep: func(name string) { fmt.Println("checking", name) },
+//	})
+//
+// The Registry and RemoteChecker fields in Options accept nil, in which case
+// the production implementations are used.
 package outdated
 
 import (
@@ -29,6 +40,18 @@ import (
 	"github.com/retr0h/agentpack/pkg/fetcher"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
+
+// Registry lists all installed package manifests from the registry store.
+// Implement this interface to inject a test double in place of registry.List.
+type Registry interface {
+	List() ([]*registry.PackageManifest, error)
+}
+
+// RemoteChecker queries a remote git repository's refs without cloning.
+// Implement this interface to inject a test double in place of fetcher.LsRemote.
+type RemoteChecker interface {
+	LsRemote(ctx context.Context, source string) (map[string]string, error)
+}
 
 // Entry describes the outdated status of a single plugin.
 type Entry struct {
@@ -54,9 +77,31 @@ type Options struct {
 	// OnStep is called in real-time before each plugin's remote is queried.
 	// When nil, no progress is reported.
 	OnStep func(name string)
+
+	// Registry overrides the registry backend. When nil the default
+	// registry.List / registry.Load implementation is used.
+	Registry Registry
+
+	// RemoteChecker overrides the remote HEAD resolver. When nil the default
+	// fetcher.LsRemote implementation is used.
+	RemoteChecker RemoteChecker
 }
 
-// Run checks all installed plugins (or the named ones from opts.Names) for
+// defaultRegistry wraps the package-level registry functions to satisfy Registry.
+type defaultRegistry struct{}
+
+func (defaultRegistry) List() ([]*registry.PackageManifest, error) {
+	return registry.List()
+}
+
+// defaultRemoteChecker wraps fetcher.LsRemote to satisfy RemoteChecker.
+type defaultRemoteChecker struct{}
+
+func (defaultRemoteChecker) LsRemote(ctx context.Context, source string) (map[string]string, error) {
+	return fetcher.LsRemote(ctx, source)
+}
+
+// Run checks all installed plugins (or the named ones from names) for
 // newer versions by calling LsRemote on their stored source URLs.
 func Run(ctx context.Context, names []string) ([]Entry, error) {
 	return RunWithOptions(ctx, Options{Names: names})
@@ -68,10 +113,20 @@ func RunWithOptions(ctx context.Context, opts Options) ([]Entry, error) {
 		return nil, err
 	}
 
+	reg := opts.Registry
+	if reg == nil {
+		reg = defaultRegistry{}
+	}
+
+	checker := opts.RemoteChecker
+	if checker == nil {
+		checker = defaultRemoteChecker{}
+	}
+
 	var manifests []*registry.PackageManifest
 
 	if len(opts.Names) == 0 {
-		all, err := registry.List()
+		all, err := reg.List()
 		if err != nil {
 			return nil, fmt.Errorf("list registry: %w", err)
 		}
@@ -99,7 +154,7 @@ func RunWithOptions(ctx context.Context, opts Options) ([]Entry, error) {
 			opts.OnStep(m.Name)
 		}
 
-		remoteSHA, lsErr := resolveRemoteHead(ctx, m.Source)
+		remoteSHA, lsErr := resolveRemoteHead(ctx, checker, m.Source)
 		if lsErr != nil {
 			// Non-fatal: include entry with empty remote SHA.
 			entries = append(entries, Entry{
@@ -123,9 +178,9 @@ func RunWithOptions(ctx context.Context, opts Options) ([]Entry, error) {
 	return entries, nil
 }
 
-// resolveRemoteHead calls LsRemote and returns the SHA of HEAD.
-func resolveRemoteHead(ctx context.Context, source string) (string, error) {
-	refs, err := fetcher.LsRemote(ctx, source)
+// resolveRemoteHead calls checker.LsRemote and returns the SHA of HEAD.
+func resolveRemoteHead(ctx context.Context, checker RemoteChecker, source string) (string, error) {
+	refs, err := checker.LsRemote(ctx, source)
 	if err != nil {
 		return "", err
 	}

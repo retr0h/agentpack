@@ -41,24 +41,35 @@ just clean          # remove binary
 ## Layout
 
 ```
-cmd/                       Cobra CLI shim
-pkg/archive/               Tarball creation and extraction
-pkg/build/                 Build pipeline orchestration
-pkg/checksum/              Per-file SHA256 checksumming
-pkg/cli/                   Themed terminal output (banner, colors)
-pkg/fetcher/               Fetch drivers (file, http, git/gilt)
-pkg/fetcher/mocks/         Generated MockFetcher
-pkg/install/               Install pipeline orchestration
-pkg/list/                  List installed plugins
-pkg/manifest/              agentpack.yaml parsing and validation
-pkg/metadata/              Git metadata capture
-pkg/plugin/                Plugin descriptor generation
-pkg/sync/                  Declarative sync with injectable interfaces
-pkg/sync/mocks/            Generated MockBuilder, MockInstaller
-pkg/target/                Target interface + registry
-pkg/target/mocks/          Generated MockTarget
-pkg/target/claudecode/     Claude Code target implementation
-pkg/verify/                Archive verification
+cmd/                          Cobra CLI shim
+internal/checksum/            SHA256 hashing (internal)
+internal/cli/                 Themed output helpers (internal)
+internal/lockfile/            Lockfile I/O (internal)
+internal/metadata/            Git metadata capture (internal)
+internal/plugin/              Plugin descriptor generation (internal)
+pkg/archive/                  Tarball creation and extraction
+pkg/build/                    Build pipeline orchestration
+pkg/fetcher/                  Fetch drivers (file, http, git)
+pkg/fetcher/mocks/            Generated MockFetcher
+pkg/install/                  Install pipeline orchestration
+pkg/list/                     List installed plugins
+pkg/list/mocks/               Generated MockRegistry
+pkg/manifest/                 agentpack.yaml parsing and validation
+pkg/outdated/                 Outdated detection
+pkg/outdated/mocks/           Generated MockRegistry, MockRemoteChecker
+pkg/registry/                 Installed package tracking
+pkg/remove/                   Safe package removal
+pkg/remove/mocks/             Generated MockRegistry
+pkg/sync/                     Declarative sync with injectable interfaces
+pkg/sync/mocks/               Generated MockBuilder, MockInstaller
+pkg/target/                   Target interface + registry
+pkg/target/mocks/             Generated MockTarget
+pkg/target/claudecode/        Claude Code target implementation
+pkg/target/cursor/            Cursor target implementation
+pkg/target/universal/         Universal target implementation
+pkg/update/                   Update pipeline
+pkg/update/mocks/             Generated MockRegistryLoader, MockInstaller
+pkg/verify/                   Archive verification
 ```
 
 ## Testing conventions
@@ -98,4 +109,5 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - **Body**: wrap at 72 chars, blank line after subject
 - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
 - **Scopes**: `cli`, `archive`, `build`, `checksum`, `fetcher`, `install`,
-  `list`, `manifest`, `metadata`, `plugin`, `sync`, `target`, `verify`
+  `list`, `lockfile`, `manifest`, `metadata`, `outdated`, `plugin`, `registry`,
+  `remove`, `sync`, `target`, `update`, `verify`

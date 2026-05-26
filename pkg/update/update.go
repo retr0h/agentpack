@@ -19,6 +19,17 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package update re-installs an agentpack plugin from its stored source.
+//
+// Usage:
+//
+//	result, err := update.Run(ctx, update.Options{
+//	    Name: "my-plugin",
+//	})
+//
+// Update reads the installed package from the registry, checks whether the
+// remote HEAD SHA differs from the installed SHA, and re-installs only when
+// an update is available. The Installer and RegistryLoader fields accept nil,
+// in which case the production implementations are used.
 package update
 
 import (
@@ -31,10 +42,30 @@ import (
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
+// RegistryLoader loads a single package manifest from the registry.
+// Implement this interface to inject a test double in place of registry.Load.
+type RegistryLoader interface {
+	Load(name string) (*registry.PackageManifest, error)
+}
+
+// Installer runs an install pipeline for a single source.
+// Implement this interface to inject a test double in place of install.Run.
+type Installer interface {
+	Install(ctx context.Context, opts install.Options) (*install.Result, error)
+}
+
 // Options configures an update run.
 type Options struct {
 	Name   string
 	OnStep func(install.Step)
+
+	// RegistryLoader overrides the registry lookup. When nil the default
+	// registry.Load implementation is used.
+	RegistryLoader RegistryLoader
+
+	// Installer overrides the install pipeline. When nil the default
+	// install.Run implementation is used.
+	Installer Installer
 }
 
 // Result holds the outcome of an update.
@@ -54,6 +85,20 @@ func shortSHA(s string) string {
 	return s
 }
 
+// defaultRegistryLoader wraps registry.Load to satisfy RegistryLoader.
+type defaultRegistryLoader struct{}
+
+func (defaultRegistryLoader) Load(name string) (*registry.PackageManifest, error) {
+	return registry.Load(name)
+}
+
+// defaultInstaller wraps install.Run to satisfy Installer.
+type defaultInstaller struct{}
+
+func (defaultInstaller) Install(ctx context.Context, opts install.Options) (*install.Result, error) {
+	return install.Run(ctx, opts)
+}
+
 // Run checks if an update is available and re-installs only if the remote
 // SHA differs from the installed SHA.
 func Run(ctx context.Context, opts Options) (*Result, error) {
@@ -61,7 +106,17 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	m, err := registry.Load(opts.Name)
+	loader := opts.RegistryLoader
+	if loader == nil {
+		loader = defaultRegistryLoader{}
+	}
+
+	installer := opts.Installer
+	if installer == nil {
+		installer = defaultInstaller{}
+	}
+
+	m, err := loader.Load(opts.Name)
 	if err != nil {
 		return nil, fmt.Errorf("load registry manifest: %w", err)
 	}
@@ -93,7 +148,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 	}
 
-	installResult, err := install.Run(ctx, install.Options{
+	installResult, err := installer.Install(ctx, install.Options{
 		Source: m.Source,
 		OnStep: opts.OnStep,
 	})

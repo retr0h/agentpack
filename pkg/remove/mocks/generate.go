@@ -18,53 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package cmd
+// Package mocks provides mock implementations for testing.
+package mocks
 
-import (
-	"github.com/spf13/cobra"
-
-	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/pkg/install"
-	pkgupdate "github.com/retr0h/agentpack/pkg/update"
-)
-
-var updateCmd = &cobra.Command{
-	Use:   "update <name>",
-	Short: "Update an installed agentpack plugin",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		out := cmd.OutOrStdout()
-
-		cli.Header(out, "updating", args[0])
-
-		result, err := pkgupdate.Run(ctx, pkgupdate.Options{
-			Name: args[0],
-			OnStep: func(s install.Step) {
-				cli.StepLine(out, s.Name, s.Detail)
-			},
-		})
-		if err != nil {
-			return err
-		}
-
-		if result.Updated {
-			cli.Printf(out, "  %s %s → %s\n",
-				cli.OK(out, "updated"),
-				cli.Mute(out, result.OldSHA),
-				cli.Accent(out, result.NewSHA),
-			)
-		} else {
-			cli.Printf(out, "  %s %s\n",
-				cli.OK(out, cli.Checkmark),
-				cli.Mute(out, "already up to date"),
-			)
-		}
-
-		return nil
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(updateCmd)
-}
+//go:generate go tool go.uber.org/mock/mockgen -destination=registry.gen.go -package=mocks github.com/retr0h/agentpack/pkg/remove Registry

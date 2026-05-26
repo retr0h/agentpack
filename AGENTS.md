@@ -42,37 +42,56 @@ Skunkworks workflow — commits land directly on `main`.
 ## Architecture
 
 ```
-cmd/                    Cobra CLI shim
-pkg/archive/            Tarball creation and extraction
-pkg/build/              Build pipeline orchestration
-pkg/checksum/           Per-file SHA256 checksumming
-pkg/cli/                Themed terminal output (banner, colors)
-pkg/fetcher/            Fetch drivers (file, http, git/gilt)
-pkg/install/            Install pipeline orchestration
-pkg/list/               List installed plugins
-pkg/manifest/           agentpack.yaml parsing and validation
-pkg/metadata/           Git metadata capture
-pkg/plugin/             Plugin descriptor generation
-pkg/sync/               Declarative sync with injectable interfaces
-pkg/target/             Target interface + registry
-pkg/target/claudecode/  Claude Code target implementation
-pkg/verify/             Archive verification
+cmd/                          Cobra CLI shim
+internal/checksum/            SHA256 hashing (internal)
+internal/cli/                 Themed output helpers (internal)
+internal/lockfile/            Lockfile I/O (internal)
+internal/metadata/            Git metadata capture (internal)
+internal/plugin/              Plugin descriptor generation (internal)
+pkg/archive/                  Tarball creation and extraction
+pkg/build/                    Build pipeline orchestration
+pkg/fetcher/                  Fetch drivers (file, http, git)
+pkg/fetcher/mocks/            Generated MockFetcher
+pkg/install/                  Install pipeline orchestration
+pkg/list/                     List installed plugins
+pkg/list/mocks/               Generated MockRegistry
+pkg/manifest/                 agentpack.yaml parsing and validation
+pkg/outdated/                 Outdated detection
+pkg/outdated/mocks/           Generated MockRegistry, MockRemoteChecker
+pkg/registry/                 Installed package tracking
+pkg/remove/                   Safe package removal
+pkg/remove/mocks/             Generated MockRegistry
+pkg/sync/                     Declarative sync with injectable interfaces
+pkg/sync/mocks/               Generated MockBuilder, MockInstaller
+pkg/target/                   Target interface + registry
+pkg/target/mocks/             Generated MockTarget
+pkg/target/claudecode/        Claude Code target implementation
+pkg/target/cursor/            Cursor target implementation
+pkg/target/universal/         Universal target implementation
+pkg/update/                   Update pipeline
+pkg/update/mocks/             Generated MockRegistryLoader, MockInstaller
+pkg/verify/                   Archive verification
 ```
 
-Three driver interfaces: `Fetcher` (how to get content), `Target` (where
-to install), and sync's `Builder`/`Installer` (testable pipeline stages).
-Generated mocks live in `mocks/` subdirectories alongside their interfaces.
+Interfaces are defined WHERE CONSUMED (accept interfaces, return structs).
+Each consuming package owns its interface definitions and generated mocks in a
+`mocks/` subdirectory alongside it. Implementation-detail packages (cli,
+checksum, metadata, plugin, lockfile) live under `internal/` and are not
+importable outside this module.
+
+Three primary driver interfaces: `Fetcher` (how to get content), `Target`
+(where to install), and sync's `Builder`/`Installer` (testable pipeline
+stages).
 
 No binary executables in archives — security policy. MCP remote/ux only.
-Git fetcher delegates to [gilt](https://github.com/retr0h/gilt) for
-clone caching and version checkout.
 
 - `cmd/` — thin shim: parse flags, create context + VFS, call `pkg/`
 - `pkg/` — public library API, consumable without the CLI
+- `internal/` — implementation details, not importable outside the module
 - Filesystem I/O via `avfs.VFS` (production: `osfs`, tests: `memfs`)
 - `context.Context` threads from CLI through cancellable operations
 
-Key deps: cobra, yaml.v3, lipgloss, avfs, gilt, mockgen.
+Key deps: cobra, yaml.v3, lipgloss, avfs, go-git, mockgen.
 
 ## Testing
 
@@ -101,7 +120,8 @@ func TestFunctionName(t *testing.T) {
 
 [Conventional Commits](https://www.conventionalcommits.org/). Scopes match
 package names: `cli`, `archive`, `build`, `checksum`, `fetcher`, `install`,
-`list`, `manifest`, `metadata`, `plugin`, `sync`, `verify`.
+`list`, `lockfile`, `manifest`, `metadata`, `outdated`, `plugin`, `registry`,
+`remove`, `sync`, `target`, `update`, `verify`.
 
 When the agent is Claude, end every commit with:
 

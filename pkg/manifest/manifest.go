@@ -19,6 +19,17 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package manifest handles agentpack.yaml parsing and validation.
+//
+// Usage:
+//
+//	vfs := osfs.NewWithNoIdm()
+//	m, err := manifest.Load(ctx, vfs, "/path/to/repo")
+//	plugins := manifest.Normalize(m)
+//
+// A manifest file lists one or more plugin definitions. Each plugin declares
+// its name, version, and content entries for skills, commands, agents, hooks,
+// MCP servers, and settings fragments. Normalize expands the top-level plugin
+// shorthand into a slice of Plugin values with all entries resolved.
 package manifest
 
 import (

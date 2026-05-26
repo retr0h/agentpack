@@ -19,6 +19,14 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package list reads from the registry to show installed packages.
+//
+// Usage:
+//
+//	entries, err := list.Run()
+//
+// Run returns all installed plugins sorted by name. The Registry parameter
+// in the options struct accepts nil, in which case the production registry
+// implementation is used. Pass a custom Registry to inject a test double.
 package list
 
 import (
@@ -28,6 +36,19 @@ import (
 
 	"github.com/retr0h/agentpack/pkg/registry"
 )
+
+// Registry lists all installed package manifests from the registry store.
+// Implement this interface to inject a test double in place of registry.List.
+type Registry interface {
+	List() ([]*registry.PackageManifest, error)
+}
+
+// defaultRegistry wraps the package-level registry.List to satisfy Registry.
+type defaultRegistry struct{}
+
+func (defaultRegistry) List() ([]*registry.PackageManifest, error) {
+	return registry.List()
+}
 
 // Entry represents a single installed package.
 type Entry struct {
@@ -39,9 +60,20 @@ type Entry struct {
 	Installed string
 }
 
-// Run reads from the registry and returns all installed packages.
+// Run reads from the registry and returns all installed packages sorted by name.
+// It uses the production registry.List implementation.
 func Run() ([]Entry, error) {
-	manifests, err := registry.List()
+	return RunWithRegistry(nil)
+}
+
+// RunWithRegistry is like Run but allows injecting a custom Registry
+// implementation for testing.
+func RunWithRegistry(reg Registry) ([]Entry, error) {
+	if reg == nil {
+		reg = defaultRegistry{}
+	}
+
+	manifests, err := reg.List()
 	if err != nil {
 		return nil, err
 	}

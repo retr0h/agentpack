@@ -26,10 +26,10 @@ import (
 
 	"github.com/avfs/avfs"
 
+	"github.com/retr0h/agentpack/internal/checksum"
+	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/archive"
-	"github.com/retr0h/agentpack/pkg/checksum"
 	"github.com/retr0h/agentpack/pkg/manifest"
-	"github.com/retr0h/agentpack/pkg/metadata"
 )
 
 // FileEntry aliases archive.FileEntry for use in build_test.go without

@@ -19,6 +19,20 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package sync provides declarative plugin sync from agentpack-packages.yaml.
+//
+// Usage:
+//
+//	results, err := sync.Run(ctx, sync.Options{
+//	    ConfigPath: "agentpack-packages.yaml",
+//	    Builder:    sync.DefaultBuilder{},
+//	    Installer:  sync.DefaultInstaller{},
+//	    OnStep: func(name string) { fmt.Println("syncing", name) },
+//	})
+//
+// Sync reads a packages YAML file and installs or updates every declared
+// plugin. Git-sourced packages are cloned, built, and installed; URL or path
+// sources are installed directly. Builder and Installer are injectable
+// interfaces backed by DefaultBuilder and DefaultInstaller in production.
 package sync
 
 import (

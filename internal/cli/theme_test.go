@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retr0h/agentpack/pkg/cli"
+	"github.com/retr0h/agentpack/internal/cli"
 )
 
 func TestBanner(t *testing.T) {

@@ -35,9 +35,9 @@ import (
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
 
+	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/build"
 	"github.com/retr0h/agentpack/pkg/manifest"
-	"github.com/retr0h/agentpack/pkg/metadata"
 )
 
 // --------------------------------------------------------------------------

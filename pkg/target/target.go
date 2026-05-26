@@ -20,12 +20,29 @@
 
 // Package target defines the Target interface and shared types for
 // agent-specific install drivers.
+//
+// Usage:
+//
+//	// Retrieve all auto-detected targets for the current machine.
+//	targets := target.Detected()
+//
+//	// Install into a specific target.
+//	err := target.Install(ctx, target.InstallOpts{
+//	    Name:      "my-plugin",
+//	    Version:   "v1.0.0",
+//	    SourceDir: "/tmp/unpacked",
+//	    Dir:       os.Getwd(),
+//	})
+//
+// Target drivers are registered via init() using Register. The claudecode,
+// cursor, and universal packages register their drivers automatically when
+// imported with a blank import ("_") in cmd/root.go.
 package target
 
 import (
 	"context"
 
-	"github.com/retr0h/agentpack/pkg/metadata"
+	"github.com/retr0h/agentpack/internal/metadata"
 )
 
 // Target knows how to install and list agentpack plugins for a specific AI

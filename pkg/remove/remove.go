@@ -21,11 +21,20 @@
 // Package remove safely uninstalls an agentpack plugin by deleting only the
 // exact files that were recorded in its registry manifest.
 //
+// Usage:
+//
+//	result, err := remove.Run(ctx, remove.Options{
+//	    Name: "my-plugin",
+//	})
+//
 // SAFETY INVARIANT: Remove never walks directories and never deletes any path
 // that contains ".git". Every deletion is guarded by:
 //  1. The path comes from the registry manifest (explicit list).
 //  2. The path does NOT contain ".git".
 //  3. The file SHA256 matches the recorded checksum (skipped if modified).
+//
+// The Registry field in Options accepts nil, in which case the production
+// registry implementation is used.
 package remove
 
 import (
@@ -38,9 +47,17 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/retr0h/agentpack/pkg/lockfile"
+	"github.com/retr0h/agentpack/internal/lockfile"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
+
+// Registry loads and removes package manifests from the registry store.
+// Implement this interface to inject a test double in place of the default
+// registry.Load / registry.Remove functions.
+type Registry interface {
+	Load(name string) (*registry.PackageManifest, error)
+	Remove(name string) error
+}
 
 // Step represents a completed remove action for real-time display.
 type Step struct {
@@ -63,6 +80,10 @@ type Options struct {
 	// OnStep is called in real-time as each file is removed or skipped.
 	// When nil, no progress is reported.
 	OnStep func(Step)
+
+	// Registry overrides the registry backend. When nil the default
+	// registry.Load / registry.Remove implementation is used.
+	Registry Registry
 }
 
 // RemovedFile records a file that was successfully removed.
@@ -87,6 +108,17 @@ type Result struct {
 	Skipped []RemovedFile
 }
 
+// defaultRegistry wraps the package-level registry functions to satisfy Registry.
+type defaultRegistry struct{}
+
+func (defaultRegistry) Load(name string) (*registry.PackageManifest, error) {
+	return registry.Load(name)
+}
+
+func (defaultRegistry) Remove(name string) error {
+	return registry.Remove(name)
+}
+
 // emitStep calls opts.OnStep when the callback is set.
 func emitStep(opts Options, s Step) {
 	if opts.OnStep != nil {
@@ -101,8 +133,13 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 
+	reg := opts.Registry
+	if reg == nil {
+		reg = defaultRegistry{}
+	}
+
 	// Load the registry manifest for this package.
-	m, err := registry.Load(opts.Name)
+	m, err := reg.Load(opts.Name)
 	if err != nil {
 		return nil, fmt.Errorf("load registry manifest: %w", err)
 	}
@@ -143,7 +180,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	// Remove the registry manifest.
-	if err := registry.Remove(opts.Name); err != nil {
+	if err := reg.Remove(opts.Name); err != nil {
 		return nil, fmt.Errorf("remove registry entry: %w", err)
 	}
 

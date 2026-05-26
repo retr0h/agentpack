@@ -33,7 +33,7 @@ import (
 	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/memfs"
 
-	"github.com/retr0h/agentpack/pkg/checksum"
+	"github.com/retr0h/agentpack/internal/checksum"
 )
 
 // --------------------------------------------------------------------------

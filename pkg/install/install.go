@@ -19,6 +19,19 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package install orchestrates the agentpack install pipeline.
+//
+// Usage:
+//
+//	result, err := install.Run(ctx, install.Options{
+//	    Source: "github.com/org/skills-repo",
+//	    Skills: []string{"review"},    // optional: only install named skills
+//	    OnStep: func(s install.Step) { fmt.Println(s.Name, s.Detail) },
+//	})
+//
+// Install supports git repos, local .agentpack archives, and HTTP/HTTPS URLs.
+// Git sources are cloned, auto-packaged into a .agentpack archive, and
+// installed. The archive is verified against its internal checksums before any
+// files are written to disk.
 package install
 
 import (
@@ -32,10 +45,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/retr0h/agentpack/internal/checksum"
+	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/archive"
-	"github.com/retr0h/agentpack/pkg/checksum"
 	"github.com/retr0h/agentpack/pkg/fetcher"
-	"github.com/retr0h/agentpack/pkg/metadata"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/target"
 )

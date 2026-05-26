@@ -19,6 +19,19 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package build orchestrates the agentpack build pipeline.
+//
+// Usage:
+//
+//	vfs := osfs.NewWithNoIdm()
+//	results, err := build.Run(ctx, vfs, build.Options{
+//	    Dir:   "/path/to/repo",        // must be a git repo
+//	    Names: []string{"my-skill"},   // empty = all plugins
+//	})
+//
+// Build reads agentpack.yaml from Dir, resolves each plugin's file entries,
+// captures git metadata, computes SHA256 checksums, and writes a
+// {name}-{version}.agentpack archive to Dir. The working directory must be a
+// git repository so that commit SHA and branch are captured.
 package build
 
 import (
@@ -33,10 +46,10 @@ import (
 	"github.com/avfs/avfs"
 	"gopkg.in/yaml.v3"
 
+	"github.com/retr0h/agentpack/internal/checksum"
+	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/archive"
-	"github.com/retr0h/agentpack/pkg/checksum"
 	"github.com/retr0h/agentpack/pkg/manifest"
-	"github.com/retr0h/agentpack/pkg/metadata"
 )
 
 // Options configures a build run.

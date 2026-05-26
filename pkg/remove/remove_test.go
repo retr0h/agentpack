@@ -24,12 +24,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"go.uber.org/mock/gomock"
+
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/remove"
+	removemocks "github.com/retr0h/agentpack/pkg/remove/mocks"
 )
 
 // sha256Of returns the hex SHA256 of data.
@@ -45,21 +49,18 @@ func sha256Of(data []byte) string {
 func TestRun(t *testing.T) {
 	tests := []struct {
 		name       string
-		setup      func(t *testing.T, tmp string) remove.Options
 		cancelCtx  bool
+		setupMocks func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest
+		extraOpts  func(opts *remove.Options)
 		wantErr    string
 		wantRemLen int
 		wantSkpLen int
-		checkFiles func(t *testing.T, opts remove.Options)
+		checkFiles func(t *testing.T, pluginDir string)
 	}{
 		{
 			name: "removes files listed in manifest",
-			setup: func(t *testing.T, tmp string) remove.Options {
-				t.Helper()
-				t.Setenv("HOME", tmp)
-
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
 				content := []byte("# skill content\n")
-				pluginDir := t.TempDir()
 				filePath := filepath.Join(pluginDir, "skill.md")
 
 				if err := os.WriteFile(filePath, content, 0o644); err != nil {
@@ -79,46 +80,34 @@ func TestRun(t *testing.T) {
 					},
 				}
 
-				if err := registry.Save(m); err != nil {
-					t.Fatalf("setup Save: %v", err)
-				}
+				reg.EXPECT().Load("test-plugin").Return(m, nil)
+				reg.EXPECT().Remove("test-plugin").Return(nil)
 
-				return remove.Options{
-					Name:         "test-plugin",
-					LockfilePath: filepath.Join(tmp, "agentpack-lock.yaml"),
-				}
+				return m
 			},
 			wantRemLen: 1,
 			wantSkpLen: 0,
-			checkFiles: func(t *testing.T, opts remove.Options) {
+			checkFiles: func(t *testing.T, pluginDir string) {
 				t.Helper()
-				// The registry manifest should be gone.
-				_, err := registry.Load(opts.Name)
-				if err == nil {
-					t.Error("expected registry manifest to be removed")
+				if _, err := os.Stat(filepath.Join(pluginDir, "skill.md")); !os.IsNotExist(err) {
+					t.Error("expected skill.md to be removed")
 				}
 			},
 		},
 		{
 			name: "skips modified files",
-			setup: func(t *testing.T, tmp string) remove.Options {
-				t.Helper()
-				t.Setenv("HOME", tmp)
-
-				pluginDir := t.TempDir()
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
 				filePath := filepath.Join(pluginDir, "skill.md")
-
-				// Write original content.
 				original := []byte("# original\n")
+
 				if err := os.WriteFile(filePath, original, 0o644); err != nil {
 					t.Fatalf("setup WriteFile: %v", err)
 				}
 
-				// Record original SHA but then modify the file.
 				recordedSHA := sha256Of(original)
 
-				modified := []byte("# MODIFIED\n")
-				if err := os.WriteFile(filePath, modified, 0o644); err != nil {
+				// Modify file after recording SHA.
+				if err := os.WriteFile(filePath, []byte("# MODIFIED\n"), 0o644); err != nil {
 					t.Fatalf("setup modify: %v", err)
 				}
 
@@ -128,33 +117,24 @@ func TestRun(t *testing.T) {
 					Files: []registry.InstalledFile{
 						{
 							Path:   "skill.md",
-							SHA256: recordedSHA, // does NOT match current file
+							SHA256: recordedSHA,
 							Target: "claude-code",
 							Dir:    pluginDir,
 						},
 					},
 				}
 
-				if err := registry.Save(m); err != nil {
-					t.Fatalf("setup Save: %v", err)
-				}
+				reg.EXPECT().Load("modified-plugin").Return(m, nil)
+				reg.EXPECT().Remove("modified-plugin").Return(nil)
 
-				return remove.Options{
-					Name:         "modified-plugin",
-					LockfilePath: filepath.Join(tmp, "agentpack-lock.yaml"),
-				}
+				return m
 			},
 			wantRemLen: 0,
 			wantSkpLen: 1,
 		},
 		{
 			name: "skips .git paths",
-			setup: func(t *testing.T, tmp string) remove.Options {
-				t.Helper()
-				t.Setenv("HOME", tmp)
-
-				pluginDir := t.TempDir()
-
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
 				m := &registry.PackageManifest{
 					Name:   "git-plugin",
 					Source: "github.com/org/repo",
@@ -168,26 +148,18 @@ func TestRun(t *testing.T) {
 					},
 				}
 
-				if err := registry.Save(m); err != nil {
-					t.Fatalf("setup Save: %v", err)
-				}
+				reg.EXPECT().Load("git-plugin").Return(m, nil)
+				reg.EXPECT().Remove("git-plugin").Return(nil)
 
-				return remove.Options{
-					Name:         "git-plugin",
-					LockfilePath: filepath.Join(tmp, "agentpack-lock.yaml"),
-				}
+				return m
 			},
 			wantRemLen: 0,
 			wantSkpLen: 1,
 		},
 		{
 			name: "OnStep called for removed file",
-			setup: func(t *testing.T, tmp string) remove.Options {
-				t.Helper()
-				t.Setenv("HOME", tmp)
-
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
 				content := []byte("# skill content\n")
-				pluginDir := t.TempDir()
 				filePath := filepath.Join(pluginDir, "step.md")
 
 				if err := os.WriteFile(filePath, content, 0o644); err != nil {
@@ -207,39 +179,29 @@ func TestRun(t *testing.T) {
 					},
 				}
 
-				if err := registry.Save(m); err != nil {
-					t.Fatalf("setup Save: %v", err)
-				}
+				reg.EXPECT().Load("step-plugin").Return(m, nil)
+				reg.EXPECT().Remove("step-plugin").Return(nil)
 
-				var stepped []remove.Step
-				return remove.Options{
-					Name:         "step-plugin",
-					LockfilePath: filepath.Join(tmp, "agentpack-lock.yaml"),
-					OnStep: func(s remove.Step) {
-						stepped = append(stepped, s)
-					},
-				}
+				return m
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.OnStep = func(_ remove.Step) {}
 			},
 			wantRemLen: 1,
 			wantSkpLen: 0,
 		},
 		{
 			name: "OnStep called for skipped file",
-			setup: func(t *testing.T, tmp string) remove.Options {
-				t.Helper()
-				t.Setenv("HOME", tmp)
-
-				pluginDir := t.TempDir()
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
 				filePath := filepath.Join(pluginDir, "skip.md")
-
 				original := []byte("# original\n")
+
 				if err := os.WriteFile(filePath, original, 0o644); err != nil {
 					t.Fatalf("setup WriteFile: %v", err)
 				}
 
 				recordedSHA := sha256Of(original)
 
-				// Modify so checksum won't match.
 				if err := os.WriteFile(filePath, []byte("# MODIFIED\n"), 0o644); err != nil {
 					t.Fatalf("setup modify: %v", err)
 				}
@@ -257,52 +219,88 @@ func TestRun(t *testing.T) {
 					},
 				}
 
-				if err := registry.Save(m); err != nil {
-					t.Fatalf("setup Save: %v", err)
-				}
+				reg.EXPECT().Load("skip-step-plugin").Return(m, nil)
+				reg.EXPECT().Remove("skip-step-plugin").Return(nil)
 
-				var stepped []remove.Step
-				return remove.Options{
-					Name:         "skip-step-plugin",
-					LockfilePath: filepath.Join(tmp, "agentpack-lock.yaml"),
-					OnStep: func(s remove.Step) {
-						stepped = append(stepped, s)
-					},
-				}
+				return m
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.OnStep = func(_ remove.Step) {}
 			},
 			wantRemLen: 0,
 			wantSkpLen: 1,
 		},
 		{
-			name: "nonexistent package returns error",
-			setup: func(t *testing.T, tmp string) remove.Options {
-				t.Helper()
-				t.Setenv("HOME", tmp)
+			name: "registry load failure returns wrapped error",
+			setupMocks: func(reg *removemocks.MockRegistry, _ string) *registry.PackageManifest {
+				reg.EXPECT().
+					Load("no-such-plugin").
+					Return(nil, errors.New("package not found"))
 
-				return remove.Options{
-					Name:         "no-such-plugin",
-					LockfilePath: filepath.Join(tmp, "agentpack-lock.yaml"),
-				}
+				return nil
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.Name = "no-such-plugin"
 			},
 			wantErr: "load registry manifest",
 		},
 		{
-			name: "cancelled context returns error",
-			setup: func(t *testing.T, tmp string) remove.Options {
-				t.Helper()
-				t.Setenv("HOME", tmp)
-
-				return remove.Options{Name: "ctx-plugin"}
-			},
+			name:      "cancelled context returns error before load",
 			cancelCtx: true,
-			wantErr:   "context canceled",
+			setupMocks: func(_ *removemocks.MockRegistry, _ string) *registry.PackageManifest {
+				// no calls expected — context is already done
+				return nil
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.Name = "ctx-plugin"
+			},
+			wantErr: "context canceled",
+		},
+		{
+			name: "registry remove failure returns wrapped error",
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
+				m := &registry.PackageManifest{
+					Name:   "remove-fail-plugin",
+					Source: "github.com/org/repo",
+					Files:  []registry.InstalledFile{},
+				}
+
+				reg.EXPECT().Load("remove-fail-plugin").Return(m, nil)
+				reg.EXPECT().Remove("remove-fail-plugin").Return(errors.New("remove failed"))
+
+				return m
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.Name = "remove-fail-plugin"
+			},
+			wantErr: "remove registry entry",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			pluginDir := t.TempDir()
 			tmp := t.TempDir()
-			opts := tt.setup(t, tmp)
+
+			ctrl := gomock.NewController(t)
+			reg := removemocks.NewMockRegistry(ctrl)
+
+			m := tt.setupMocks(reg, pluginDir)
+
+			pluginName := "test-plugin"
+			if m != nil {
+				pluginName = m.Name
+			}
+
+			opts := remove.Options{
+				Name:         pluginName,
+				LockfilePath: filepath.Join(tmp, "agentpack-lock.yaml"),
+				Registry:     reg,
+			}
+
+			if tt.extraOpts != nil {
+				tt.extraOpts(&opts)
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -338,7 +336,7 @@ func TestRun(t *testing.T) {
 			}
 
 			if tt.checkFiles != nil {
-				tt.checkFiles(t, opts)
+				tt.checkFiles(t, pluginDir)
 			}
 		})
 	}

@@ -21,9 +21,13 @@
 package list_test
 
 import (
+	"errors"
 	"testing"
 
+	"go.uber.org/mock/gomock"
+
 	"github.com/retr0h/agentpack/pkg/list"
+	listmocks "github.com/retr0h/agentpack/pkg/list/mocks"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
@@ -32,52 +36,83 @@ import (
 // --------------------------------------------------------------------------
 
 func TestRun(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
-		name      string
-		setup     func(t *testing.T)
-		wantCount int
-		wantFound string
+		name       string
+		setupMocks func(reg *listmocks.MockRegistry)
+		wantCount  int
+		wantFound  string
+		wantErr    string
 	}{
 		{
-			name: "returns entries from registry",
-			setup: func(t *testing.T) {
-				t.Helper()
-
-				if err := registry.Save(&registry.PackageManifest{
-					Name:    "list-test-pkg",
-					Source:  "github.com/org/test",
-					Version: "v1.0.0",
-					SHA:     "abc1234567890",
-					Files: []registry.InstalledFile{
-						{Path: ".claude/skills/x/SKILL.md", Target: "claude-code"},
+			name: "returns entries from registry sorted by name",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{
+						Name:    "list-test-pkg",
+						Source:  "github.com/org/test",
+						Version: "v1.0.0",
+						SHA:     "abc1234567890",
+						Files: []registry.InstalledFile{
+							{Path: ".claude/skills/x/SKILL.md", Target: "claude-code"},
+						},
 					},
-				}); err != nil {
-					t.Fatalf("Save: %v", err)
-				}
+				}, nil)
 			},
 			wantCount: 1,
 			wantFound: "list-test-pkg",
 		},
 		{
-			name:      "returns empty list when registry is empty",
-			setup:     func(t *testing.T) { t.Helper() },
+			name: "returns empty list when registry has no manifests",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return(nil, nil)
+			},
 			wantCount: 0,
+		},
+		{
+			name: "multiple packages are sorted alphabetically",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{Name: "zebra", Source: "github.com/org/zebra", Files: []registry.InstalledFile{}},
+					{Name: "alpha", Source: "github.com/org/alpha", Files: []registry.InstalledFile{}},
+					{Name: "middle", Source: "github.com/org/middle", Files: []registry.InstalledFile{}},
+				}, nil)
+			},
+			wantCount: 3,
+			wantFound: "alpha",
+		},
+		{
+			name: "registry list error is propagated",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return(nil, errors.New("registry unavailable"))
+			},
+			wantErr: "registry unavailable",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Redirect registry I/O to a temp dir so we never touch the real
-			// ~/.config/agentpack/packages/ directory.
-			tmp := t.TempDir()
-			restore := registry.SetOsUserHomeDir(func() (string, error) {
-				return tmp, nil
-			})
-			defer restore()
+			t.Parallel()
 
-			tt.setup(t)
+			ctrl := gomock.NewController(t)
+			reg := listmocks.NewMockRegistry(ctrl)
+			tt.setupMocks(reg)
 
-			entries, err := list.Run()
+			entries, err := list.RunWithRegistry(reg)
+
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+
+				if !strContains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+
+				return
+			}
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -92,10 +127,6 @@ func TestRun(t *testing.T) {
 				for _, e := range entries {
 					if e.Name == tt.wantFound {
 						found = true
-
-						if e.Source != "github.com/org/test" {
-							t.Errorf("Source = %q, want %q", e.Source, "github.com/org/test")
-						}
 					}
 				}
 
@@ -103,6 +134,24 @@ func TestRun(t *testing.T) {
 					t.Errorf("%q not found in list entries", tt.wantFound)
 				}
 			}
+
+			// Verify sort order when multiple entries are returned.
+			for i := 1; i < len(entries); i++ {
+				if entries[i-1].Name > entries[i].Name {
+					t.Errorf("entries not sorted: %q > %q at index %d", entries[i-1].Name, entries[i].Name, i)
+				}
+			}
 		})
 	}
+}
+
+func strContains(s, sub string) bool {
+	return len(sub) == 0 || (len(s) >= len(sub) && func() bool {
+		for i := 0; i <= len(s)-len(sub); i++ {
+			if s[i:i+len(sub)] == sub {
+				return true
+			}
+		}
+		return false
+	}())
 }
