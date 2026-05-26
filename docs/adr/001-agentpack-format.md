@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (security model extended by [ADR-005](005-content-safety.md))
 
 ## Decision Drivers
 
