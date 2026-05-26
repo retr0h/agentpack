@@ -13,10 +13,10 @@ Accepted
 
 ## Considered Alternatives
 
-- **Copy-only (no merging)** — simple but MCP/hooks would be silently
-  ignored, plugins couldn't fully configure agents
-- **Separate config file per plugin** — avoids merge conflicts but
-  Claude Code reads one `settings.json`, not per-plugin files
+- **Copy-only (no merging)** — simple but MCP/hooks would be silently ignored,
+  plugins couldn't fully configure agents
+- **Separate config file per plugin** — avoids merge conflicts but Claude Code
+  reads one `settings.json`, not per-plugin files
 - **Full settings.json replacement** — destructive, loses user settings
 
 ## Context

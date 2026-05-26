@@ -13,12 +13,12 @@ Accepted
 
 ## Considered Alternatives
 
-- **Global lockfile only** — simpler but not project-local, can't be
-  checked into git, no reproducibility across machines
-- **No lockfile (always resolve fresh)** — simplest but no
-  reproducibility, different installs on different machines
-- **npm-style node_modules** — heavyweight, not appropriate for config
-  files and markdown skills
+- **Global lockfile only** — simpler but not project-local, can't be checked
+  into git, no reproducibility across machines
+- **No lockfile (always resolve fresh)** — simplest but no reproducibility,
+  different installs on different machines
+- **npm-style node_modules** — heavyweight, not appropriate for config files and
+  markdown skills
 
 ## Context
 

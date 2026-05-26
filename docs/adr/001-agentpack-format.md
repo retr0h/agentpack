@@ -14,14 +14,13 @@ Accepted
 
 ## Considered Alternatives
 
-- **npm packages** — requires Node.js runtime, heavyweight for markdown
-  files and JSON config
-- **Git submodules** — requires git, complex UX, no checksums, no
-  offline story
+- **npm packages** — requires Node.js runtime, heavyweight for markdown files
+  and JSON config
+- **Git submodules** — requires git, complex UX, no checksums, no offline story
 - **Raw file copy (no packaging)** — no verification, no metadata, no
   versioning, no offline transfer
-- **Container images (OCI)** — massive overkill for config files and
-  markdown skills
+- **Container images (OCI)** — massive overkill for config files and markdown
+  skills
 
 ## Context
 

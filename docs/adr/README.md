@@ -8,15 +8,15 @@ capture significant design decisions along with their context and consequences.
 ADRs follow [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records),
 an extension of Michael Nygard's original format:
 
-| Section                    | Purpose                                                                | Required |
-| -------------------------- | ---------------------------------------------------------------------- | -------- |
-| **Title**                  | Short noun phrase: ADR-NNN: Decision Title                             | yes      |
-| **Status**                 | Proposed, Accepted, Deprecated, or Superseded by ADR-NNN               | yes      |
-| **Decision Drivers**       | Constraints and requirements that shaped the decision                  | yes      |
-| **Considered Alternatives** | What else was evaluated and why it was rejected                       | yes      |
-| **Context**                | Forces at play, including technical, political, and project-local      | yes      |
-| **Decision**               | The change being made                                                  | yes      |
-| **Consequences**           | What happens after applying the decision — positive, negative, neutral | yes      |
+| Section                     | Purpose                                                                | Required |
+| --------------------------- | ---------------------------------------------------------------------- | -------- |
+| **Title**                   | Short noun phrase: ADR-NNN: Decision Title                             | yes      |
+| **Status**                  | Proposed, Accepted, Deprecated, or Superseded by ADR-NNN               | yes      |
+| **Decision Drivers**        | Constraints and requirements that shaped the decision                  | yes      |
+| **Considered Alternatives** | What else was evaluated and why it was rejected                        | yes      |
+| **Context**                 | Forces at play, including technical, political, and project-local      | yes      |
+| **Decision**                | The change being made                                                  | yes      |
+| **Consequences**            | What happens after applying the decision — positive, negative, neutral | yes      |
 
 Additional sections (e.g. **Influences**) are permitted when they add clarity.
 

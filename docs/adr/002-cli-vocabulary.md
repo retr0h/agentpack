@@ -14,10 +14,10 @@ Accepted (partially superseded by [ADR-003](003-dependency-management.md):
 
 ## Considered Alternatives
 
-- **apt/npm naming** (`install`, `remove`, `update`, `show`) — traditional
-  but implies system-wide operations and has `update` vs `upgrade` confusion
-- **Keeping `upgrade` as a command** — conflicts with declarative config
-  where upgrades should happen by editing the yaml and re-installing
+- **apt/npm naming** (`install`, `remove`, `update`, `show`) — traditional but
+  implies system-wide operations and has `update` vs `upgrade` confusion
+- **Keeping `upgrade` as a command** — conflicts with declarative config where
+  upgrades should happen by editing the yaml and re-installing
 - **`outdated` as a standalone command** — APK folds it into
   `list --upgradable`, reducing top-level commands
 
