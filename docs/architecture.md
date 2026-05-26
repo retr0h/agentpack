@@ -7,7 +7,7 @@ agentpack has three driver layers and two pipeline interfaces:
 ```
 agentpack.yaml → [build] → .agentpack archive → [fetcher] → [target] → installed
                                                      ↑
-                            agentpack-packages.yaml → [sync] → fetcher + builder + installer
+                            agentpack-packages.yaml → [install] → fetcher + builder + installer
 ```
 
 1. **Build** reads `agentpack.yaml`, resolves content, and produces a generic
@@ -15,8 +15,9 @@ agentpack.yaml → [build] → .agentpack archive → [fetcher] → [target] →
 2. **Fetcher** retrieves content from a source (local file, HTTP, git).
 3. **Target** installs content into the right locations for a specific AI coding
    agent (Claude Code, Cursor, Copilot, etc.).
-4. **Sync** orchestrates fetch → build → install from a declarative
-   `agentpack-packages.yaml`, using injectable interfaces.
+4. **Install** orchestrates fetch → build → install from a declarative
+   `agentpack-packages.yaml`, using locked SHAs for reproducibility
+   (see [ADR-003](adr/003-dependency-management.md)).
 
 ## Driver interfaces
 
@@ -68,10 +69,10 @@ Target paths sourced from the
 [agentskills.io](https://github.com/vercel-labs/skills) `agents.ts` registry.
 Drivers self-register via `init()` + blank import.
 
-### Sync pipeline interfaces
+### Install pipeline interfaces
 
-The sync package uses injectable interfaces so it can be tested with mockgen
-mocks without real git repos, builds, or installs:
+The install pipeline (pkg/sync) uses injectable interfaces so it can be
+tested with mockgen mocks without real git repos, builds, or installs:
 
 ```go
 type Builder interface {
@@ -124,10 +125,10 @@ agentpack add my-plugin-1.0.0.agentpack
   └─ 5. Install  (target.Install for each detected agent)
 ```
 
-## Sync flow
+## Install flow (from manifest)
 
 ```
-agentpack sync
+agentpack install
   │
   ├─ 1. Read agentpack-packages.yaml
   │

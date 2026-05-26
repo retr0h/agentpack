@@ -49,7 +49,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/retr0h/agentpack/internal/lockfile"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
@@ -74,10 +73,6 @@ type Step struct {
 type Options struct {
 	// Name is the plugin identifier to remove.
 	Name string
-
-	// LockfilePath is the path to the lockfile to update. When empty the
-	// global lockfile (~/.config/agentpack/global.yaml) is used.
-	LockfilePath string
 
 	// OnStep is called in real-time as each file is removed or skipped.
 	// When nil, no progress is reported.
@@ -183,28 +178,6 @@ func (r *Remover) Run(ctx context.Context, opts Options) (*Result, error) {
 	// Remove the registry manifest.
 	if err := reg.Remove(opts.Name); err != nil {
 		return nil, fmt.Errorf("remove registry entry: %w", err)
-	}
-
-	// Update the lockfile.
-	lockPath := opts.LockfilePath
-	if lockPath == "" {
-		home, homeErr := os.UserHomeDir()
-		if homeErr != nil {
-			return nil, fmt.Errorf("home dir: %w", homeErr)
-		}
-
-		lockPath = filepath.Join(home, ".config", "agentpack", "global.yaml")
-	}
-
-	lf, err := lockfile.Read(lockPath)
-	if err != nil {
-		return nil, fmt.Errorf("read lockfile: %w", err)
-	}
-
-	lf.Remove(opts.Name)
-
-	if err := lockfile.Write(lockPath, lf); err != nil {
-		return nil, fmt.Errorf("write lockfile: %w", err)
 	}
 
 	return result, nil

@@ -23,11 +23,17 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/retr0h/agentpack/internal/lock"
+	"github.com/retr0h/agentpack/internal/packages"
 	"github.com/retr0h/agentpack/pkg/install"
 )
 
@@ -71,6 +77,10 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 		})
 		if err != nil {
 			return err
+		}
+
+		if updateErr := updateManifests(source, result); updateErr != nil {
+			return updateErr
 		}
 
 		if outputFormat == "json" {
@@ -126,6 +136,100 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 
 		return nil
 	},
+}
+
+// gitHosts lists the domain fragments that indicate a git-hosted source.
+var gitHosts = []string{"github.com", "gitlab.com", "bitbucket.org"}
+
+// updateManifests writes the installed package into agentpack-packages.yaml
+// and agentpack.lock in the current working directory.
+func updateManifests(source string, result *install.Result) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get cwd: %w", err)
+	}
+
+	// Update agentpack-packages.yaml.
+	pkgPath := filepath.Join(cwd, "agentpack-packages.yaml")
+
+	cfg, err := packages.Load(pkgPath)
+	if err != nil {
+		return fmt.Errorf("load packages: %w", err)
+	}
+
+	pkg := buildPackage(result.Name, source)
+	cfg.Add(pkg)
+
+	if err := packages.Save(pkgPath, cfg); err != nil {
+		return fmt.Errorf("save packages: %w", err)
+	}
+
+	// Update agentpack.lock.
+	lockPath := filepath.Join(cwd, "agentpack.lock")
+
+	lf, err := lock.Load(lockPath)
+	if err != nil {
+		return fmt.Errorf("load lock: %w", err)
+	}
+
+	// Strip the #ref fragment for the source field in the lock.
+	lockSource := source
+	if idx := strings.LastIndex(lockSource, "#"); idx >= 0 {
+		lockSource = lockSource[:idx]
+	}
+
+	lp := lock.LockedPackage{
+		Name:     result.Name,
+		Source:   lockSource,
+		SHA:      result.SHA,
+		Resolved: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if pkg.Ref != "" {
+		lp.Ref = pkg.Ref
+	}
+
+	lf.Set(lp)
+
+	if err := lock.Save(lockPath, lf); err != nil {
+		return fmt.Errorf("save lock: %w", err)
+	}
+
+	return nil
+}
+
+// buildPackage constructs a packages.Package from the install source URL.
+// Git-hosted sources populate the Git (and optionally Ref) fields; everything
+// else populates the Source field.
+func buildPackage(name, source string) packages.Package {
+	pkg := packages.Package{Name: name}
+
+	isGit := false
+
+	for _, host := range gitHosts {
+		if strings.Contains(source, host) {
+			isGit = true
+
+			break
+		}
+	}
+
+	if isGit {
+		gitURL := source
+		ref := ""
+
+		if idx := strings.LastIndex(gitURL, "#"); idx >= 0 {
+			ref = gitURL[idx+1:]
+			gitURL = gitURL[:idx]
+		}
+
+		pkg.Git = gitURL
+		pkg.Ref = ref
+	} else {
+		pkg.Source = source
+	}
+
+	return pkg
 }
 
 func init() {

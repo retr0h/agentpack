@@ -62,6 +62,8 @@ func TestRun(t *testing.T) {
 		wantSkpLen int
 		checkFiles func(t *testing.T, pluginDir string)
 	}{
+		// NOTE: lockfile test cases removed — remove.Run no longer manages the
+		// lockfile. Lockfile updates are the caller's responsibility (cmd/del.go).
 		{
 			name: "removes files listed in manifest",
 			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
@@ -305,47 +307,6 @@ func TestRun(t *testing.T) {
 			wantErr: "context canceled",
 		},
 		{
-			name: "read lockfile error is propagated",
-			setupMocks: func(reg *removemocks.MockRegistry, _ string) *registry.PackageManifest {
-				m := &registry.PackageManifest{
-					Name:   "lockread-fail-plugin",
-					Source: "github.com/org/repo",
-					Files:  []registry.InstalledFile{},
-				}
-
-				reg.EXPECT().Load("lockread-fail-plugin").Return(m, nil)
-				reg.EXPECT().Remove("lockread-fail-plugin").Return(nil)
-
-				return m
-			},
-			extraOpts: func(opts *remove.Options) {
-				opts.Name = "lockread-fail-plugin"
-				// Point to an unreadable (existing) file to trigger lockfile.Read error.
-				// We'll override LockfilePath with a chmod-0 file in the test body.
-			},
-			wantErr: "read lockfile",
-		},
-		{
-			name: "write lockfile error is propagated",
-			setupMocks: func(reg *removemocks.MockRegistry, _ string) *registry.PackageManifest {
-				m := &registry.PackageManifest{
-					Name:   "lockwrite-fail-plugin",
-					Source: "github.com/org/repo",
-					Files:  []registry.InstalledFile{},
-				}
-
-				reg.EXPECT().Load("lockwrite-fail-plugin").Return(m, nil)
-				reg.EXPECT().Remove("lockwrite-fail-plugin").Return(nil)
-
-				return m
-			},
-			extraOpts: func(opts *remove.Options) {
-				opts.Name = "lockwrite-fail-plugin"
-				// LockfilePath will be overridden to a read-only dir path in test body.
-			},
-			wantErr: "write lockfile",
-		},
-		{
 			name: "os.Remove failure returns wrapped error",
 			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
 				// Create a file with correct checksum but make its parent dir
@@ -386,7 +347,6 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 
 			pluginDir := t.TempDir()
-			tmp := t.TempDir()
 
 			ctrl := gomock.NewController(t)
 			reg := removemocks.NewMockRegistry(ctrl)
@@ -399,9 +359,8 @@ func TestRun(t *testing.T) {
 			}
 
 			opts := remove.Options{
-				Name:         pluginName,
-				LockfilePath: filepath.Join(tmp, "agentpack-lock.yaml"),
-				Registry:     reg,
+				Name:     pluginName,
+				Registry: reg,
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -424,23 +383,6 @@ func TestRun(t *testing.T) {
 				subDir := filepath.Join(pluginDir, "subdir")
 				require.NoError(t, os.Chmod(subDir, 0o555))
 				t.Cleanup(func() { _ = os.Chmod(subDir, 0o755) })
-			}
-
-			// For "read lockfile error" test, create an unreadable lockfile.
-			if tt.name == "read lockfile error is propagated" {
-				lockFile := filepath.Join(tmp, "agentpack-lock.yaml")
-				require.NoError(t, os.WriteFile(lockFile, []byte("installs: []\n"), 0o644))
-				require.NoError(t, os.Chmod(lockFile, 0o000))
-				t.Cleanup(func() { _ = os.Chmod(lockFile, 0o644) })
-				opts.LockfilePath = lockFile
-			}
-
-			// For "write lockfile error" test, point lockfile into a read-only dir.
-			if tt.name == "write lockfile error is propagated" {
-				roDir := filepath.Join(tmp, "readonly")
-				require.NoError(t, os.Mkdir(roDir, 0o555))
-				t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })
-				opts.LockfilePath = filepath.Join(roDir, "lock.yaml")
 			}
 
 			if tt.extraOpts != nil {
@@ -497,9 +439,8 @@ func TestRunWithDefaultRegistry(t *testing.T) {
 			// which is wrapped as "load registry manifest: ...".
 			r := remove.New()
 			_, err := r.Run(context.Background(), remove.Options{
-				Name:         "no-such-pkg",
-				LockfilePath: filepath.Join(tmp, "lock.yaml"),
-				Registry:     nil,
+				Name:     "no-such-pkg",
+				Registry: nil,
 			})
 
 			require.Error(t, err)
@@ -537,9 +478,8 @@ func TestRunDefaultRegistryRemove(t *testing.T) {
 
 			r := remove.New()
 			result, err := r.Run(context.Background(), remove.Options{
-				Name:         "real-pkg",
-				LockfilePath: filepath.Join(tmp, "lock.yaml"),
-				Registry:     nil,
+				Name:     "real-pkg",
+				Registry: nil,
 			})
 
 			require.NoError(t, err)

@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted (partially superseded by [ADR-003](003-dependency-management.md):
+`sync` renamed to `install`)
 
 ## Context
 
@@ -48,6 +49,13 @@ re-running `sync`, not by a command that circumvents the declared spec.
 APK uses `apk list --upgradable`. Checking for updates is a filtered view of the
 installed list, not a separate operation. The `--outdated` flag on `list` keeps
 the command surface small and discoverable.
+
+## Consequences
+
+- Users from apt/npm backgrounds will need to learn new verbs
+- Fewer top-level commands (9 vs 12) reduces cognitive load
+- `add` as a verb signals project-local semantics over system-wide install
+- No `upgrade` command means users edit config + `install` to update
 
 ## Influences
 

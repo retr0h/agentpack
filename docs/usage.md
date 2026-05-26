@@ -145,7 +145,7 @@ Generates `.claude-plugin/marketplace.json` and `plugin.json` from
 `agentpack.yaml` so the repo works as a native Claude Code marketplace via
 `git clone`.
 
-## Declarative sync
+## Installing from a manifest
 
 Create `agentpack-packages.yaml` for reproducible installs:
 
@@ -165,11 +165,14 @@ packages:
     source: https://example.com/plugin.agentpack
 ```
 
-Then sync:
+Then install:
 
 ```bash
-agentpack sync
+agentpack install
 ```
+
+When `agentpack.lock` exists, locked SHAs are used for reproducibility.
+Running `agentpack add` also updates both the yaml and the lockfile.
 
 ## Verifying packages
 

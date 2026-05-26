@@ -42,7 +42,7 @@ agentpack info my-plugin                          # package details
 agentpack info plugin.agentpack                   # peek inside an archive
 agentpack verify plugin.agentpack                 # verify checksums
 agentpack del my-plugin                           # delete a plugin
-agentpack sync                                    # sync from config
+agentpack install                                 # install from agentpack-packages.yaml
 agentpack build                                   # build .agentpack archives
 ```
 
@@ -59,7 +59,7 @@ See [Usage][] for full details.
 | Verify | SHA256 checksum verification — internal + external (`--sha256`) |
 | List | See what's installed; `--outdated` checks for updates |
 | Del | Safe uninstall — only deletes files agentpack added |
-| Sync | Declarative installs from `agentpack-packages.yaml` |
+| Install | Install from `agentpack-packages.yaml` with lockfile reproducibility |
 | Multi-agent | Claude Code, Cursor, Copilot, Gemini CLI, Windsurf + universal `.agents/` target |
 | officialskills.sh | Native support for the agentskills.io skill format |
 | Offline | `.agentpack` archives work without git, npm, or any toolchain |

@@ -38,11 +38,11 @@ var pkgSyncer syncer = pkgsync.New()
 
 var syncConfigFlag string
 
-var syncCmd = &cobra.Command{
-	Use:   "sync",
-	Short: "Sync plugins from agentpack-packages.yaml",
-	Long: `Sync reads agentpack-packages.yaml and installs or updates every declared
-plugin into the Claude Code plugin directory.`,
+var installCmd = &cobra.Command{
+	Use:   "install",
+	Short: "Install plugins from agentpack-packages.yaml",
+	Long: `Install reads agentpack-packages.yaml and installs every declared
+plugin. When agentpack.lock exists, locked SHAs are used for reproducibility.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := cmd.Context()
@@ -53,12 +53,12 @@ plugin into the Claude Code plugin directory.`,
 			cli.Printf(
 				out,
 				"%s\n\n",
-				cli.Mute(out, "agentpack: syncing"),
+				cli.Mute(out, "agentpack: installing"),
 			)
 			onStep = func(name string) {
 				cli.Printf(
 					out, "  %s %s\n",
-					cli.Mute(out, "syncing"),
+					cli.Mute(out, "installing"),
 					cli.Accent(out, name),
 				)
 			}
@@ -128,13 +128,13 @@ plugin into the Claude Code plugin directory.`,
 		}
 
 		cli.Printf(
-			out, "\n%d %s synced\n",
+			out, "\n%d %s installed\n",
 			len(results),
 			cli.Plural(len(results), "plugin", "plugins"),
 		)
 
 		if failed > 0 {
-			return fmt.Errorf("%d package(s) failed to sync", failed)
+			return fmt.Errorf("%d package(s) failed to install", failed)
 		}
 
 		return nil
@@ -142,11 +142,11 @@ plugin into the Claude Code plugin directory.`,
 }
 
 func init() {
-	syncCmd.Flags().StringVarP(
+	installCmd.Flags().StringVarP(
 		&syncConfigFlag,
 		"config", "c",
 		"agentpack-packages.yaml",
 		"path to agentpack-packages.yaml",
 	)
-	rootCmd.AddCommand(syncCmd)
+	rootCmd.AddCommand(installCmd)
 }
