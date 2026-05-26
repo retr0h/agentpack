@@ -76,7 +76,11 @@ func Classify(files map[string][]byte) (*Classification, error) {
 
 		switch cat {
 		case Binary:
-			return nil, fmt.Errorf("binary file detected: %s (%s)", path, binaryDescription(content))
+			return nil, fmt.Errorf(
+				"binary file detected: %s (%s)",
+				path,
+				binaryDescription(content),
+			)
 		case Executable:
 			c.Executable = append(c.Executable, path)
 		default:

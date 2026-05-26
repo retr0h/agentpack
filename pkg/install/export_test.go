@@ -26,6 +26,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/target"
@@ -167,4 +168,32 @@ func CopyFileAtomic(src, dst string) error {
 // RegistrySource exposes registrySource for testing.
 func RegistrySource(opts Options) string {
 	return registrySource(opts)
+}
+
+// BuildContentMap exposes buildContentMap for testing.
+func BuildContentMap(files []archive.FileEntry) (map[string][]byte, error) {
+	return buildContentMap(files)
+}
+
+// WalkContentDir exposes walkContentDir for testing.
+func WalkContentDir(cloneDir, root string) ([]archive.FileEntry, error) {
+	return walkContentDir(cloneDir, root)
+}
+
+// AutoPackageWithVersion exposes autoPackageWithVersion for testing.
+func AutoPackageWithVersion(
+	ctx context.Context,
+	cloneDir string,
+	name string,
+	sha string,
+	version string,
+	skillFilter []string,
+	agentFilter []string,
+) (string, error) {
+	return autoPackageWithVersion(ctx, cloneDir, name, sha, version, skillFilter, agentFilter)
+}
+
+// ComputeChecksums exposes computeChecksums for testing.
+func ComputeChecksums(files []archive.FileEntry) ([]byte, error) {
+	return computeChecksums(files)
 }
