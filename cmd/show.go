@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/retr0h/agentpack/internal/safety"
 	"github.com/retr0h/agentpack/pkg/inspect"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
@@ -132,9 +133,13 @@ func showInstalled(cmd *cobra.Command, name string) error {
 		)
 
 		for _, f := range g.files {
+			path := f.Path
+			if safety.IsExecutable(path) {
+				path = cli.Err(out, path)
+			}
 			cli.Printf(
 				out, "  %s  %s\n",
-				f.Path,
+				path,
 				cli.Mute(out, cli.ShortSHA(f.SHA256)),
 			)
 		}
@@ -195,6 +200,9 @@ func showArchive(cmd *cobra.Command, path string) error {
 		}
 
 		padded := cli.Pad(f.Path, maxPath)
+		if safety.IsExecutable(f.Path) {
+			padded = cli.Err(out, padded)
+		}
 		size := humanSize(f.Size)
 		short := cli.ShortSHA(f.SHA256)
 

@@ -28,6 +28,7 @@ import (
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/pkg/list"
 	"github.com/retr0h/agentpack/pkg/outdated"
+	"github.com/retr0h/agentpack/pkg/target"
 )
 
 type lister interface {
@@ -43,7 +44,10 @@ var (
 	pkgOutdatedChecker outdatedChecker = outdated.New()
 )
 
-var listOutdatedFlag bool
+var (
+	listOutdatedFlag bool
+	listTargetsFlag  bool
+)
 
 var listCmd = &cobra.Command{
 	Use:     "list",
@@ -51,6 +55,10 @@ var listCmd = &cobra.Command{
 	Short:   "List installed agentpack plugins",
 	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		if listTargetsFlag {
+			return listTargets(cmd)
+		}
+
 		if listOutdatedFlag {
 			return listOutdated(cmd)
 		}
@@ -168,9 +176,54 @@ func listOutdated(cmd *cobra.Command) error {
 	return nil
 }
 
+func listTargets(cmd *cobra.Command) error {
+	out := cmd.OutOrStdout()
+
+	all := target.All()
+	detected := target.Detected()
+
+	detectedSet := make(map[string]bool, len(detected))
+	for _, t := range detected {
+		detectedSet[t.Name()] = true
+	}
+
+	if outputFormat == "json" {
+		type targetJSON struct {
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+			Detected    bool   `json:"detected"`
+		}
+
+		items := make([]targetJSON, len(all))
+		for i, t := range all {
+			items[i] = targetJSON{
+				Name:        t.Name(),
+				DisplayName: t.DisplayName(),
+				Detected:    detectedSet[t.Name()],
+			}
+		}
+
+		return jsonOutput(out, items)
+	}
+
+	for _, t := range all {
+		mark := cli.Mute(out, "○")
+		name := cli.Mute(out, t.DisplayName())
+		if detectedSet[t.Name()] {
+			mark = cli.OK(out, "●")
+			name = t.DisplayName()
+		}
+		cli.Printf(out, "  %s %s  %s\n", mark, cli.Pad(name, 16), cli.Mute(out, t.Name()))
+	}
+
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(listCmd)
 
 	listCmd.Flags().
 		BoolVar(&listOutdatedFlag, "outdated", false, "check installed plugins for available updates")
+	listCmd.Flags().
+		BoolVar(&listTargetsFlag, "targets", false, "show registered agent targets and detection status")
 }

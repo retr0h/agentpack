@@ -65,6 +65,14 @@ var executableExts = map[string]struct{}{
 	".lua": {},
 }
 
+// IsExecutable returns true if the file path has an executable extension.
+func IsExecutable(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	_, ok := executableExts[ext]
+
+	return ok
+}
+
 // Classify takes a map of archive-relative file paths to their content and
 // returns a Classification. Returns an error if any binary file is detected;
 // binary files are never allowed in archives.
