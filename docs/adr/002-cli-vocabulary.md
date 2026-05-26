@@ -5,6 +5,22 @@
 Accepted (partially superseded by [ADR-003](003-dependency-management.md):
 `sync` renamed to `install`)
 
+## Decision Drivers
+
+- Project-local semantics — adding to a project, not installing system software
+- Small command surface — fewer commands, more discoverable
+- Declarative-first — config is the upgrade mechanism, not a command
+- Familiarity for APK/Bun/Yarn users
+
+## Considered Alternatives
+
+- **apt/npm naming** (`install`, `remove`, `update`, `show`) — traditional
+  but implies system-wide operations and has `update` vs `upgrade` confusion
+- **Keeping `upgrade` as a command** — conflicts with declarative config
+  where upgrades should happen by editing the yaml and re-installing
+- **`outdated` as a standalone command** — APK folds it into
+  `list --upgradable`, reducing top-level commands
+
 ## Context
 
 agentpack needs a consistent, intuitive CLI vocabulary. Early versions used

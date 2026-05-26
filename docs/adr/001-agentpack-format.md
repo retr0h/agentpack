@@ -4,6 +4,25 @@
 
 Accepted
 
+## Decision Drivers
+
+- Must work offline — no network required after initial fetch
+- Must be verifiable — tamper and corruption detection
+- No binary executables — security policy
+- Format must be agent-agnostic — one archive, many targets
+- Non-technical users shouldn't need git, Go, or npm to install
+
+## Considered Alternatives
+
+- **npm packages** — requires Node.js runtime, heavyweight for markdown
+  files and JSON config
+- **Git submodules** — requires git, complex UX, no checksums, no
+  offline story
+- **Raw file copy (no packaging)** — no verification, no metadata, no
+  versioning, no offline transfer
+- **Container images (OCI)** — massive overkill for config files and
+  markdown skills
+
 ## Context
 
 AI coding agents (Claude Code, Cursor, Copilot, Gemini CLI, Codex, OpenCode,
