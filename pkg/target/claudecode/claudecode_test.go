@@ -205,6 +205,106 @@ func TestInstall(t *testing.T) {
 			},
 			wantErr: "install skills",
 		},
+		{
+			name: "merges mcp/*.json into .claude/settings.json",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "my-api.json"), map[string]any{
+					"name": "my-api",
+					"type": "remote",
+					"url":  "https://mcp.example.com/v1",
+				})
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				servers, ok := doc["mcpServers"].(map[string]any)
+				require.True(t, ok)
+				srv, ok := servers["my-api"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "remote", srv["type"])
+			},
+		},
+		{
+			name: "merges hooks/hooks.json into .claude/settings.json",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"PreToolUse": []any{
+						map[string]any{"matcher": "Bash"},
+					},
+				})
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				hooks, ok := doc["hooks"].(map[string]any)
+				require.True(t, ok)
+				entries, ok := hooks["PreToolUse"].([]any)
+				require.True(t, ok)
+				assert.Len(t, entries, 1)
+			},
+		},
+		{
+			name: "merges settings/*.json into .claude/settings.json",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "prefs.json"), map[string]any{
+					"theme": "dark",
+				})
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				assert.Equal(t, "dark", doc["theme"])
+			},
+		},
+		{
+			name: "returns error when mcp json has no name field",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "bad.json"), map[string]any{
+					"type": "remote",
+				})
+				return src, t.TempDir()
+			},
+			wantErr: `missing or invalid "name" field`,
+		},
+		{
+			name: "returns error on mcp name conflict",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				dst := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "dup.json"), map[string]any{
+					"name": "dup-srv",
+					"type": "stdio",
+				})
+				writeJSON(t, filepath.Join(dst, ".claude", "settings.json"), map[string]any{
+					"mcpServers": map[string]any{
+						"dup-srv": map[string]any{"type": "stdio"},
+					},
+				})
+				return src, dst
+			},
+			wantErr: "already exists",
+		},
 	}
 
 	for _, tt := range tests {

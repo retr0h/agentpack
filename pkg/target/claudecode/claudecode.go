@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -106,6 +107,125 @@ func (c *ClaudeCode) Install(ctx context.Context, opts target.InstallOpts) error
 
 		if err := copyTree(c.mkdirAllFunc, srcDir, dstDir); err != nil {
 			return fmt.Errorf("install %s: %w", content, err)
+		}
+	}
+
+	settingsPath := filepath.Join(root, ".claude", "settings.json")
+
+	if err := c.installMCP(ctx, opts.SourceDir, settingsPath); err != nil {
+		return err
+	}
+
+	if err := c.installHooks(ctx, opts.SourceDir, settingsPath, opts.Name); err != nil {
+		return err
+	}
+
+	return c.installSettings(ctx, opts.SourceDir, settingsPath)
+}
+
+// installMCP merges all mcp/*.json files from srcDir into settingsPath.
+func (c *ClaudeCode) installMCP(ctx context.Context, srcDir, settingsPath string) error {
+	mcpDir := filepath.Join(srcDir, "mcp")
+	if _, err := os.Stat(mcpDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(mcpDir)
+	if err != nil {
+		return fmt.Errorf("read mcp dir: %w", err)
+	}
+
+	for _, de := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(mcpDir, de.Name()))
+		if err != nil {
+			return fmt.Errorf("read mcp/%s: %w", de.Name(), err)
+		}
+
+		var raw map[string]any
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return fmt.Errorf("parse mcp/%s: %w", de.Name(), err)
+		}
+
+		name, ok := raw["name"].(string)
+		if !ok || name == "" {
+			return fmt.Errorf("mcp/%s: missing or invalid \"name\" field", de.Name())
+		}
+
+		delete(raw, "name")
+
+		if err := configmerge.MergeMCP(settingsPath, name, raw); err != nil {
+			return fmt.Errorf("merge mcp %q: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+// installHooks merges hooks/hooks.json from srcDir into settingsPath.
+func (c *ClaudeCode) installHooks(_ context.Context, srcDir, settingsPath, pluginName string) error {
+	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
+	if _, err := os.Stat(hooksFile); os.IsNotExist(err) {
+		return nil
+	}
+
+	data, err := os.ReadFile(hooksFile)
+	if err != nil {
+		return fmt.Errorf("read hooks/hooks.json: %w", err)
+	}
+
+	var hooks map[string]any
+	if err := json.Unmarshal(data, &hooks); err != nil {
+		return fmt.Errorf("parse hooks/hooks.json: %w", err)
+	}
+
+	if err := configmerge.MergeHooks(settingsPath, pluginName, hooks); err != nil {
+		return fmt.Errorf("merge hooks: %w", err)
+	}
+
+	return nil
+}
+
+// installSettings merges all settings/*.json files from srcDir into settingsPath.
+func (c *ClaudeCode) installSettings(ctx context.Context, srcDir, settingsPath string) error {
+	settingsDir := filepath.Join(srcDir, "settings")
+	if _, err := os.Stat(settingsDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(settingsDir)
+	if err != nil {
+		return fmt.Errorf("read settings dir: %w", err)
+	}
+
+	for _, de := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(settingsDir, de.Name()))
+		if err != nil {
+			return fmt.Errorf("read settings/%s: %w", de.Name(), err)
+		}
+
+		var fragment map[string]any
+		if err := json.Unmarshal(data, &fragment); err != nil {
+			return fmt.Errorf("parse settings/%s: %w", de.Name(), err)
+		}
+
+		if err := configmerge.MergeSettings(settingsPath, fragment); err != nil {
+			return fmt.Errorf("merge settings/%s: %w", de.Name(), err)
 		}
 	}
 

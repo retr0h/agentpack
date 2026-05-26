@@ -36,3 +36,4 @@ clarity.
 | [001](001-agentpack-format.md) | .agentpack Package Format | Accepted |
 | [002](002-cli-vocabulary.md) | CLI Command Vocabulary | Accepted (partially superseded by 003) |
 | [003](003-dependency-management.md) | Dependency Management Architecture | Proposed |
+| [004](004-config-merging.md) | Config Merging for MCP, Hooks, Settings | Proposed |
