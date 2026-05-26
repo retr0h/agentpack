@@ -59,6 +59,7 @@ func TestMergeMCP(t *testing.T) {
 		initial    any
 		serverName string
 		config     map[string]any
+		setupPath  func(t *testing.T) string
 		wantErr    string
 		check      func(t *testing.T, path string)
 	}{
@@ -90,15 +91,19 @@ func TestMergeMCP(t *testing.T) {
 			},
 		},
 		{
-			name:       "returns error when server name already exists",
-			initial:    map[string]any{"mcpServers": map[string]any{"my-api": map[string]any{"type": "remote"}}},
+			name: "returns error when server name already exists",
+			initial: map[string]any{
+				"mcpServers": map[string]any{"my-api": map[string]any{"type": "remote"}},
+			},
 			serverName: "my-api",
 			config:     map[string]any{"type": "stdio"},
 			wantErr:    `MCP server "my-api" already exists`,
 		},
 		{
-			name:       "preserves existing servers when adding new one",
-			initial:    map[string]any{"mcpServers": map[string]any{"old-srv": map[string]any{"type": "stdio"}}},
+			name: "preserves existing servers when adding new one",
+			initial: map[string]any{
+				"mcpServers": map[string]any{"old-srv": map[string]any{"type": "stdio"}},
+			},
 			serverName: "new-srv",
 			config:     map[string]any{"type": "remote", "url": "https://example.com"},
 			check: func(t *testing.T, path string) {
@@ -110,15 +115,71 @@ func TestMergeMCP(t *testing.T) {
 				assert.Contains(t, servers, "new-srv")
 			},
 		},
+		{
+			name:       "returns error when settings file is unreadable",
+			serverName: "my-api",
+			config:     map[string]any{"type": "stdio"},
+			setupPath: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "settings.json")
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			wantErr: "read",
+		},
+		{
+			name:       "returns error when settings file contains invalid JSON",
+			serverName: "my-api",
+			config:     map[string]any{"type": "stdio"},
+			setupPath: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "settings.json")
+				require.NoError(t, os.WriteFile(p, []byte(`{invalid`), 0o644))
+				return p
+			},
+			wantErr: "parse",
+		},
+		{
+			name:       "returns error when parent dir is not writable",
+			serverName: "my-api",
+			config:     map[string]any{"type": "stdio"},
+			setupPath: func(t *testing.T) string {
+				t.Helper()
+				roDir := t.TempDir()
+				require.NoError(t, os.Chmod(roDir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })
+				return filepath.Join(roDir, "sub", "settings.json")
+			},
+			wantErr: "mkdir",
+		},
+		{
+			name:       "returns error when settings file is not writable",
+			serverName: "my-api",
+			config:     map[string]any{"type": "stdio"},
+			setupPath: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "settings.json")
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o444))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			wantErr: "write",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			settingsPath := filepath.Join(t.TempDir(), "settings.json")
-			if tt.initial != nil {
-				writeJSON(t, settingsPath, tt.initial)
+			var settingsPath string
+			if tt.setupPath != nil {
+				settingsPath = tt.setupPath(t)
+			} else {
+				settingsPath = filepath.Join(t.TempDir(), "settings.json")
+				if tt.initial != nil {
+					writeJSON(t, settingsPath, tt.initial)
+				}
 			}
 
 			err := configmerge.MergeMCP(settingsPath, tt.serverName, tt.config)
@@ -144,6 +205,7 @@ func TestMergeHooks(t *testing.T) {
 		initial    any
 		pluginName string
 		hooks      map[string]any
+		setupPath  func(t *testing.T) string
 		wantErr    string
 		check      func(t *testing.T, path string)
 	}{
@@ -228,15 +290,62 @@ func TestMergeHooks(t *testing.T) {
 				assert.NoError(t, err)
 			},
 		},
+		{
+			name:       "returns error when settings file is unreadable",
+			pluginName: "my-plugin",
+			hooks:      map[string]any{"PreToolUse": []any{map[string]any{"matcher": "Bash"}}},
+			setupPath: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "settings.json")
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			wantErr: "read",
+		},
+		{
+			name:       "skips hook event whose value is not a slice",
+			pluginName: "my-plugin",
+			hooks:      map[string]any{"PreToolUse": "not-a-slice"},
+			check: func(t *testing.T, path string) {
+				t.Helper()
+				doc := readJSON(t, path)
+				hooks, ok := doc["hooks"].(map[string]any)
+				require.True(t, ok)
+				// The non-array event key must not appear.
+				assert.NotContains(t, hooks, "PreToolUse")
+			},
+		},
+		{
+			name:       "skips hook entry whose value is not a map",
+			pluginName: "my-plugin",
+			hooks: map[string]any{
+				"PreToolUse": []any{"not-a-map"},
+			},
+			check: func(t *testing.T, path string) {
+				t.Helper()
+				doc := readJSON(t, path)
+				hooks, ok := doc["hooks"].(map[string]any)
+				require.True(t, ok)
+				entries, ok := hooks["PreToolUse"].([]any)
+				require.True(t, ok)
+				assert.Empty(t, entries)
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			settingsPath := filepath.Join(t.TempDir(), "settings.json")
-			if tt.initial != nil {
-				writeJSON(t, settingsPath, tt.initial)
+			var settingsPath string
+			if tt.setupPath != nil {
+				settingsPath = tt.setupPath(t)
+			} else {
+				settingsPath = filepath.Join(t.TempDir(), "settings.json")
+				if tt.initial != nil {
+					writeJSON(t, settingsPath, tt.initial)
+				}
 			}
 
 			err := configmerge.MergeHooks(settingsPath, tt.pluginName, tt.hooks)
@@ -258,11 +367,12 @@ func TestMergeSettings(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		initial  any
-		fragment map[string]any
-		wantErr  string
-		check    func(t *testing.T, path string)
+		name      string
+		initial   any
+		fragment  map[string]any
+		setupPath func(t *testing.T) string
+		wantErr   string
+		check     func(t *testing.T, path string)
 	}{
 		{
 			name:     "merges fragment into empty settings",
@@ -294,15 +404,47 @@ func TestMergeSettings(t *testing.T) {
 				assert.Equal(t, "new", doc["overwrite"])
 			},
 		},
+		{
+			name:     "returns error when settings file is unreadable",
+			fragment: map[string]any{"key": "val"},
+			setupPath: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "settings.json")
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			wantErr: "read",
+		},
+		{
+			name:     "treats JSON null file as empty document",
+			fragment: map[string]any{"key": "val"},
+			setupPath: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "settings.json")
+				require.NoError(t, os.WriteFile(p, []byte(`null`), 0o644))
+				return p
+			},
+			check: func(t *testing.T, path string) {
+				t.Helper()
+				doc := readJSON(t, path)
+				assert.Equal(t, "val", doc["key"])
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			settingsPath := filepath.Join(t.TempDir(), "settings.json")
-			if tt.initial != nil {
-				writeJSON(t, settingsPath, tt.initial)
+			var settingsPath string
+			if tt.setupPath != nil {
+				settingsPath = tt.setupPath(t)
+			} else {
+				settingsPath = filepath.Join(t.TempDir(), "settings.json")
+				if tt.initial != nil {
+					writeJSON(t, settingsPath, tt.initial)
+				}
 			}
 
 			err := configmerge.MergeSettings(settingsPath, tt.fragment)
@@ -327,6 +469,7 @@ func TestRemoveMCP(t *testing.T) {
 		name       string
 		initial    any
 		serverName string
+		setupPath  func(t *testing.T) string
 		wantErr    string
 		check      func(t *testing.T, path string)
 	}{
@@ -373,15 +516,32 @@ func TestRemoveMCP(t *testing.T) {
 				assert.NotContains(t, doc, "mcpServers")
 			},
 		},
+		{
+			name:       "returns error when settings file is unreadable",
+			serverName: "my-api",
+			setupPath: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "settings.json")
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			wantErr: "read",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			settingsPath := filepath.Join(t.TempDir(), "settings.json")
-			if tt.initial != nil {
-				writeJSON(t, settingsPath, tt.initial)
+			var settingsPath string
+			if tt.setupPath != nil {
+				settingsPath = tt.setupPath(t)
+			} else {
+				settingsPath = filepath.Join(t.TempDir(), "settings.json")
+				if tt.initial != nil {
+					writeJSON(t, settingsPath, tt.initial)
+				}
 			}
 
 			err := configmerge.RemoveMCP(settingsPath, tt.serverName)
@@ -406,6 +566,7 @@ func TestRemoveHooks(t *testing.T) {
 		name       string
 		initial    any
 		pluginName string
+		setupPath  func(t *testing.T) string
 		wantErr    string
 		check      func(t *testing.T, path string)
 	}{
@@ -485,15 +646,71 @@ func TestRemoveHooks(t *testing.T) {
 				assert.Empty(t, post)
 			},
 		},
+		{
+			name:       "returns error when settings file is unreadable",
+			pluginName: "my-plugin",
+			setupPath: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "settings.json")
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			wantErr: "read",
+		},
+		{
+			name: "skips hook event whose value is not a slice",
+			initial: map[string]any{
+				"hooks": map[string]any{
+					"PreToolUse": "not-a-slice",
+				},
+			},
+			pluginName: "my-plugin",
+			check: func(t *testing.T, path string) {
+				t.Helper()
+				doc := readJSON(t, path)
+				hooks := doc["hooks"].(map[string]any)
+				assert.Equal(t, "not-a-slice", hooks["PreToolUse"])
+			},
+		},
+		{
+			name:       "preserves non-map entries in hooks slice",
+			pluginName: "my-plugin",
+			setupPath: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "settings.json")
+				// Write a hooks entry array containing a plain string, not a map.
+				raw := `{"hooks":{"PreToolUse":["plain-string"]}}`
+				require.NoError(t, os.WriteFile(p, []byte(raw), 0o644))
+				return p
+			},
+			check: func(t *testing.T, path string) {
+				t.Helper()
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				hooks := doc["hooks"].(map[string]any)
+				entries := hooks["PreToolUse"].([]any)
+				// The plain-string entry must be preserved unchanged.
+				require.Len(t, entries, 1)
+				assert.Equal(t, "plain-string", entries[0])
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			settingsPath := filepath.Join(t.TempDir(), "settings.json")
-			if tt.initial != nil {
-				writeJSON(t, settingsPath, tt.initial)
+			var settingsPath string
+			if tt.setupPath != nil {
+				settingsPath = tt.setupPath(t)
+			} else {
+				settingsPath = filepath.Join(t.TempDir(), "settings.json")
+				if tt.initial != nil {
+					writeJSON(t, settingsPath, tt.initial)
+				}
 			}
 
 			err := configmerge.RemoveHooks(settingsPath, tt.pluginName)

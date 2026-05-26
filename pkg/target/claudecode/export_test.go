@@ -20,7 +20,10 @@
 
 package claudecode
 
-import "os"
+import (
+	"context"
+	"os"
+)
 
 // SetUserHome replaces userHomeFunc for testing.
 func SetUserHome(cc *ClaudeCode, fn func() (string, error)) {
@@ -50,4 +53,23 @@ func ShortSHA(sha string) string {
 // FormatDate exposes formatDate for testing.
 func FormatDate(ts string) string {
 	return formatDate(ts)
+}
+
+// InstallMCP exposes installMCP for testing.
+func InstallMCP(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
+	return cc.installMCP(ctx, srcDir, settingsPath)
+}
+
+// InstallHooks exposes installHooks for testing.
+func InstallHooks(
+	ctx context.Context,
+	cc *ClaudeCode,
+	srcDir, settingsPath, pluginName string,
+) error {
+	return cc.installHooks(ctx, srcDir, settingsPath, pluginName)
+}
+
+// InstallSettings exposes installSettings for testing.
+func InstallSettings(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
+	return cc.installSettings(ctx, srcDir, settingsPath)
 }

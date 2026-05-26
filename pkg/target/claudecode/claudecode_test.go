@@ -596,6 +596,309 @@ func TestCopyTree(t *testing.T) {
 	}
 }
 
+func TestInstallMCP(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, settingsPath string)
+		ctx     func() context.Context
+		wantErr string
+	}{
+		{
+			name: "no-op when mcp dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), filepath.Join(t.TempDir(), "settings.json")
+			},
+		},
+		{
+			name: "context cancelled inside entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "srv.json"), map[string]any{
+					"name": "srv",
+					"type": "stdio",
+				})
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			wantErr: "context canceled",
+		},
+		{
+			name: "returns error when mcp dir is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				d := filepath.Join(src, "mcp")
+				require.NoError(t, os.MkdirAll(d, 0o755))
+				require.NoError(t, os.Chmod(d, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(d, 0o755) })
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+			wantErr: "read mcp dir",
+		},
+		{
+			name: "returns error when mcp json file is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "mcp", "srv.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{"name":"srv"}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+			wantErr: "read mcp/",
+		},
+		{
+			name: "returns error when mcp json contains invalid JSON",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "mcp", "srv.json"), `{invalid`)
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+			wantErr: "parse mcp/",
+		},
+		{
+			name: "skips directories and non-json entries in mcp dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				// Create a subdirectory and a non-.json file inside mcp/.
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "mcp", "subdir"), 0o755))
+				writeFile(t, filepath.Join(src, "mcp", "readme.txt"), "skip me")
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, settingsPath := tt.setup(t)
+			ctx := context.Background()
+			if tt.ctx != nil {
+				ctx = tt.ctx()
+			}
+			cc := claudecode.New()
+			err := claudecode.InstallMCP(ctx, cc, srcDir, settingsPath)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestInstallHooks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, settingsPath string)
+		wantErr string
+	}{
+		{
+			name: "no-op when hooks dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), filepath.Join(t.TempDir(), "settings.json")
+			},
+		},
+		{
+			name: "returns error when hooks.json is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "hooks", "hooks.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+			wantErr: "read hooks/hooks.json",
+		},
+		{
+			name: "returns error when hooks.json contains invalid JSON",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "hooks", "hooks.json"), `{invalid`)
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+			wantErr: "parse hooks/hooks.json",
+		},
+		{
+			name: "returns error when MergeHooks fails due to unreadable settings",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"PreToolUse": []any{map[string]any{"matcher": "Bash"}},
+				})
+				sp := filepath.Join(t.TempDir(), "settings.json")
+				require.NoError(t, os.WriteFile(sp, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(sp, 0o644) })
+				return src, sp
+			},
+			wantErr: "merge hooks",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, settingsPath := tt.setup(t)
+			cc := claudecode.New()
+			err := claudecode.InstallHooks(
+				context.Background(),
+				cc,
+				srcDir,
+				settingsPath,
+				"test-plugin",
+			)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestInstallSettings(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, settingsPath string)
+		ctx     func() context.Context
+		wantErr string
+	}{
+		{
+			name: "no-op when settings dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), filepath.Join(t.TempDir(), "settings.json")
+			},
+		},
+		{
+			name: "returns error when settings dir is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				d := filepath.Join(src, "settings")
+				require.NoError(t, os.MkdirAll(d, 0o755))
+				require.NoError(t, os.Chmod(d, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(d, 0o755) })
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+			wantErr: "read settings dir",
+		},
+		{
+			name: "returns error when a settings json file is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "settings", "prefs.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+			wantErr: "read settings/",
+		},
+		{
+			name: "returns error when a settings json file contains invalid JSON",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "settings", "prefs.json"), `{invalid`)
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+			wantErr: "parse settings/",
+		},
+		{
+			name: "context cancelled inside entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "prefs.json"), map[string]any{
+					"theme": "dark",
+				})
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			wantErr: "context canceled",
+		},
+		{
+			name: "skips directories and non-json entries in settings dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				// Create a subdirectory and a non-.json file inside settings/.
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "settings", "subdir"), 0o755))
+				writeFile(t, filepath.Join(src, "settings", "readme.txt"), "skip me")
+				return src, filepath.Join(t.TempDir(), "settings.json")
+			},
+		},
+		{
+			name: "returns error when MergeSettings fails due to unreadable settings file",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "prefs.json"), map[string]any{
+					"theme": "dark",
+				})
+				sp := filepath.Join(t.TempDir(), "settings.json")
+				require.NoError(t, os.WriteFile(sp, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(sp, 0o644) })
+				return src, sp
+			},
+			wantErr: "merge settings/",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, settingsPath := tt.setup(t)
+			ctx := context.Background()
+			if tt.ctx != nil {
+				ctx = tt.ctx()
+			}
+			cc := claudecode.New()
+			err := claudecode.InstallSettings(ctx, cc, srcDir, settingsPath)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestShortSHA(t *testing.T) {
 	t.Parallel()
 	tests := []struct{ name, sha, want string }{
