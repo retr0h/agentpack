@@ -68,6 +68,7 @@ See [Usage][] for full details.
 - ✈️ **Offline** — `.agentpack` archives work without git, npm, or any toolchain
 - 🔑 **Private repos** — `~/.netrc` and SSH key support
 - 📋 **JSON everywhere** — `-o json` on every command for scripting
+- 📚 **CLI + Go library** — use from the terminal or import `pkg/` in your own tools
 
 ## 📖 Documentation
 
