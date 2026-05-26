@@ -209,10 +209,10 @@ Project-local installs write to the current directory:
 
 ## Inspecting packages
 
-Peek inside an `.agentpack` archive before installing:
+Peek inside an `.agentpack` archive before adding:
 
 ```bash
-agentpack inspect plugin.agentpack
+agentpack info plugin.agentpack
 ```
 
 Shows package metadata, file listing with sizes, SHA checksums, and integrity

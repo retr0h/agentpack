@@ -115,7 +115,7 @@ Not all agents support all types:
 ## Install flow
 
 ```
-agentpack install my-plugin-1.0.0.agentpack
+agentpack add my-plugin-1.0.0.agentpack
   │
   ├─ 1. Fetch    (fetcher.New → file/http)
   ├─ 2. Extract  (archive.Extract, rejects symlinks/traversal)
