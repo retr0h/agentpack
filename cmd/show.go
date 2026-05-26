@@ -166,6 +166,17 @@ func showArchive(cmd *cobra.Command, path string) error {
 	cli.FieldInfo(out, "Built", built)
 	cli.FieldMuted(out, "SHA", cli.ShortSHA(result.SHA))
 
+	if result.Content != nil {
+		safeCount := len(result.Content.Safe)
+		execCount := len(result.Content.Executable)
+		contentSummary := fmt.Sprintf("%d safe, %d executable", safeCount, execCount)
+		cli.Field(out, "Content", contentSummary)
+
+		for _, f := range result.Content.Executable {
+			cli.Printf(out, "  %s %s\n", cli.Err(out, "!"), cli.Mute(out, f))
+		}
+	}
+
 	cli.Printf(out, "\n%s\n", cli.Mute(out, "Contents:"))
 
 	maxPath := 0

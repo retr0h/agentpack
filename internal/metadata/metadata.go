@@ -29,17 +29,20 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/retr0h/agentpack/internal/safety"
 )
 
 // Metadata holds build and source-control information for a plugin archive.
 type Metadata struct {
-	Name           string `json:"name"`
-	Version        string `json:"version"`
-	GitCommitSHA   string `json:"gitCommitSHA"`
-	GitBranch      string `json:"gitBranch"`
-	BuildTimestamp string `json:"buildTimestamp"`
-	BuilderVersion string `json:"builderVersion"`
-	Platform       string `json:"platform"`
+	Name           string                 `json:"name"`
+	Version        string                 `json:"version"`
+	GitCommitSHA   string                 `json:"gitCommitSHA"`
+	GitBranch      string                 `json:"gitBranch"`
+	BuildTimestamp string                 `json:"buildTimestamp"`
+	BuilderVersion string                 `json:"builderVersion"`
+	Platform       string                 `json:"platform"`
+	Content        *safety.Classification `json:"content,omitempty"`
 }
 
 // Capture collects git state and build information from dir and returns a

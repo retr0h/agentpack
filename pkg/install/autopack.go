@@ -36,6 +36,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/metadata"
+	"github.com/retr0h/agentpack/internal/safety"
 )
 
 // contentDirs are the recognized content directories per ADR-001. Only these
@@ -122,6 +123,17 @@ func autoPackageWithVersion(
 		}
 	}
 
+	// Classify content files for safety before embedding in metadata.
+	contentMap, err := buildContentMap(files)
+	if err != nil {
+		return "", fmt.Errorf("read files for classification: %w", err)
+	}
+
+	classification, err := safety.Classify(contentMap)
+	if err != nil {
+		return "", fmt.Errorf("safety classification: %w", err)
+	}
+
 	// Build metadata — use the SHA from the git clone.
 	meta := &metadata.Metadata{
 		Name:           name,
@@ -130,6 +142,7 @@ func autoPackageWithVersion(
 		BuildTimestamp: time.Now().UTC().Format(time.RFC3339),
 		BuilderVersion: "dev",
 		Platform:       runtime.GOOS + "-" + runtime.GOARCH,
+		Content:        classification,
 	}
 
 	metaJSON, err := json.MarshalIndent(meta, "", "  ")
@@ -324,6 +337,28 @@ func walkContentDir(cloneDir, root string) ([]archive.FileEntry, error) {
 	}
 
 	return entries, nil
+}
+
+// buildContentMap reads file content from disk (Src) or memory (Content) and
+// returns a path→content map suitable for safety.Classify. Only content files
+// (those without a .agentpack/ prefix) are included.
+func buildContentMap(files []archive.FileEntry) (map[string][]byte, error) {
+	m := make(map[string][]byte, len(files))
+
+	for _, f := range files {
+		if f.Src != "" {
+			data, err := os.ReadFile(f.Src)
+			if err != nil {
+				return nil, fmt.Errorf("read %s: %w", f.Src, err)
+			}
+
+			m[f.ArchivePath] = data
+		} else {
+			m[f.ArchivePath] = f.Content
+		}
+	}
+
+	return m, nil
 }
 
 // computeChecksums produces the .agentpack/checksums.txt content (sha256sum

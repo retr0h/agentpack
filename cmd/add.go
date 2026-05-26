@@ -21,6 +21,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -29,11 +30,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/lock"
 	"github.com/retr0h/agentpack/internal/packages"
+	"github.com/retr0h/agentpack/internal/safety"
 	"github.com/retr0h/agentpack/pkg/install"
 )
 
@@ -46,6 +49,7 @@ var pkgInstaller installer = install.New()
 var (
 	installSkills []string
 	installAgents []string
+	installTrust  bool
 )
 
 var addCmd = &cobra.Command{
@@ -70,10 +74,11 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 		}
 
 		result, err := pkgInstaller.Run(ctx, install.Options{
-			Source: source,
-			Skills: installSkills,
-			Agents: installAgents,
-			OnStep: onStep,
+			Source:       source,
+			Skills:       installSkills,
+			Agents:       installAgents,
+			OnStep:       onStep,
+			ContentCheck: buildContentCheck(cmd, installTrust),
 		})
 		if err != nil {
 			return err
@@ -232,6 +237,49 @@ func buildPackage(name, source string) packages.Package {
 	return pkg
 }
 
+// buildContentCheck returns a ContentCheck callback for install.Options.
+// When trust is true or the terminal is not a TTY, it returns nil (no check).
+// Otherwise it prompts the user for confirmation when executable files exist.
+func buildContentCheck(cmd *cobra.Command, trust bool) func(*safety.Classification) error {
+	if trust {
+		return nil
+	}
+
+	out := cmd.OutOrStdout()
+
+	return func(c *safety.Classification) error {
+		if len(c.Executable) == 0 {
+			return nil
+		}
+
+		if f, ok := out.(*os.File); !ok || !isatty.IsTerminal(f.Fd()) {
+			return nil
+		}
+
+		cli.Printf(out, "\n%s Package contains executable content:\n", cli.Err(out, "!"))
+
+		for _, f := range c.Executable {
+			cli.Printf(out, "  %s\n", cli.Mute(out, f))
+		}
+
+		cli.Printf(
+			out,
+			"\n%s\n\n> 1. Yes, I trust this package\n  2. No, cancel\n\nChoice [1]: ",
+			cli.Mute(out, "Allow? Only add packages from sources you trust."),
+		)
+
+		scanner := bufio.NewScanner(os.Stdin)
+		scanner.Scan()
+		answer := strings.TrimSpace(scanner.Text())
+
+		if answer == "2" {
+			return fmt.Errorf("install cancelled by user")
+		}
+
+		return nil
+	}
+}
+
 func init() {
 	rootCmd.AddCommand(addCmd)
 
@@ -239,4 +287,6 @@ func init() {
 		StringArrayVar(&installSkills, "skill", nil, "add only specific skill(s) by name (may be repeated)")
 	addCmd.Flags().
 		StringArrayVar(&installAgents, "agent", nil, "add only specific agent(s) by name (may be repeated)")
+	addCmd.Flags().
+		BoolVar(&installTrust, "trust", false, "skip executable content prompt (for CI)")
 }

@@ -43,6 +43,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/checksum"
+	"github.com/retr0h/agentpack/internal/safety"
 )
 
 // osMkdirTemp is swappable for testing.
@@ -75,15 +76,18 @@ type Result struct {
 	SHA     string
 	Files   []FileEntry
 	Total   int64
+	// Content holds the safety classification embedded in the archive metadata.
+	// Nil when the archive predates ADR-005.
+	Content *safety.Classification
 }
 
-// archiveMetadata mirrors the fields written by build.buildPlugin into
-// .agentpack/metadata.json.
+// archiveMetadata mirrors the fields written into .agentpack/metadata.json.
 type archiveMetadata struct {
-	Name           string `json:"name"`
-	Version        string `json:"version"`
-	GitCommitSHA   string `json:"gitCommitSHA"`
-	BuildTimestamp string `json:"buildTimestamp"`
+	Name           string                 `json:"name"`
+	Version        string                 `json:"version"`
+	GitCommitSHA   string                 `json:"gitCommitSHA"`
+	BuildTimestamp string                 `json:"buildTimestamp"`
+	Content        *safety.Classification `json:"content,omitempty"`
 }
 
 // Run extracts archivePath to a temp dir, reads metadata and checksums, walks
@@ -232,6 +236,7 @@ func (ins *Inspector) Run(ctx context.Context, opts Options) (*Result, error) {
 		SHA:     meta.GitCommitSHA,
 		Files:   files,
 		Total:   total,
+		Content: meta.Content,
 	}, nil
 }
 

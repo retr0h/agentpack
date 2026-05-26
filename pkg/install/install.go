@@ -50,6 +50,7 @@ import (
 	"github.com/retr0h/agentpack/internal/checksum"
 	"github.com/retr0h/agentpack/internal/fetcher"
 	"github.com/retr0h/agentpack/internal/metadata"
+	"github.com/retr0h/agentpack/internal/safety"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -101,6 +102,11 @@ type Options struct {
 	// the global target registry is consulted and only detected targets are
 	// used.
 	Targets []target.Target
+
+	// ContentCheck is called after reading metadata but before installing to
+	// targets. It receives the content classification and may return an error
+	// to abort the install. When nil the install proceeds unconditionally.
+	ContentCheck func(*safety.Classification) error
 }
 
 // Step represents a completed pipeline phase for display.
@@ -120,6 +126,9 @@ type Result struct {
 	Dirs map[string]string
 	// FileCounts maps target display-name → number of files installed.
 	FileCounts map[string]int
+	// ContentClassification holds the safety classification embedded in the
+	// package metadata. Nil when the archive predates ADR-005.
+	ContentClassification *safety.Classification
 }
 
 // Run installs from any source: .agentpack archive, git repo, or local path.
@@ -289,6 +298,12 @@ func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Resu
 		return nil, err
 	}
 
+	if opts.ContentCheck != nil && meta.Content != nil {
+		if checkErr := opts.ContentCheck(meta.Content); checkErr != nil {
+			return nil, checkErr
+		}
+	}
+
 	emitStep(opts, Step{
 		Name:   "verified checksums",
 		Detail: fmt.Sprintf("%d/%d OK", len(verifyResults), len(verifyResults)),
@@ -408,11 +423,12 @@ func installFromDir(
 	}
 
 	return &Result{
-		Name:       meta.Name,
-		Version:    meta.Version,
-		SHA:        shortSHA(meta.GitCommitSHA),
-		Dirs:       dirs,
-		FileCounts: fileCounts,
+		Name:                  meta.Name,
+		Version:               meta.Version,
+		SHA:                   shortSHA(meta.GitCommitSHA),
+		Dirs:                  dirs,
+		FileCounts:            fileCounts,
+		ContentClassification: meta.Content,
 	}, nil
 }
 
