@@ -62,23 +62,23 @@ type Target interface {
 **Tier 2 — data-driven agents** (`pkg/target/agents`; local installs go to
 `.agents/skills/{name}/` by default, or the agent's `LocalSkillsDir` when set):
 
-| Agent          | Local install dir               | Detect                         |
-| -------------- | ------------------------------- | ------------------------------ |
-| Windsurf       | `.windsurf/skills/{name}/`      | `~/.codeium/windsurf` exists   |
-| Cursor         | `.agents/skills/{name}/`        | `~/.cursor` exists             |
-| GitHub Copilot | `.agents/skills/{name}/`        | `~/.copilot` exists            |
-| Gemini CLI     | `.agents/skills/{name}/`        | `~/.gemini` exists             |
-| Codex          | `.agents/skills/{name}/`        | `CODEX_HOME` env or `~/.codex` |
-| OpenCode       | `.agents/skills/{name}/`        | `~/.config/opencode` exists    |
-| Cline          | `.agents/skills/{name}/`        | `~/.cline` exists              |
-| Goose          | `.agents/skills/{name}/`        | `~/.config/goose` exists       |
-| Roo Code       | `.agents/skills/{name}/`        | `~/.roo` exists                |
-| Amp            | `.agents/skills/{name}/`        | `~/.config/amp` exists         |
-| Continue       | `.agents/skills/{name}/`        | `~/.continue` exists           |
-| Kiro           | `.agents/skills/{name}/`        | `~/.kiro` exists               |
-| Devin          | `.agents/skills/{name}/`        | `~/.config/devin` exists       |
-| Warp           | `.agents/skills/{name}/`        | `~/.warp` exists               |
-| Trae           | `.agents/skills/{name}/`        | `~/.trae` exists               |
+| Agent          | Local install dir          | Detect                         |
+| -------------- | -------------------------- | ------------------------------ |
+| Windsurf       | `.windsurf/skills/{name}/` | `~/.codeium/windsurf` exists   |
+| Cursor         | `.agents/skills/{name}/`   | `~/.cursor` exists             |
+| GitHub Copilot | `.agents/skills/{name}/`   | `~/.copilot` exists            |
+| Gemini CLI     | `.agents/skills/{name}/`   | `~/.gemini` exists             |
+| Codex          | `.agents/skills/{name}/`   | `CODEX_HOME` env or `~/.codex` |
+| OpenCode       | `.agents/skills/{name}/`   | `~/.config/opencode` exists    |
+| Cline          | `.agents/skills/{name}/`   | `~/.cline` exists              |
+| Goose          | `.agents/skills/{name}/`   | `~/.config/goose` exists       |
+| Roo Code       | `.agents/skills/{name}/`   | `~/.roo` exists                |
+| Amp            | `.agents/skills/{name}/`   | `~/.config/amp` exists         |
+| Continue       | `.agents/skills/{name}/`   | `~/.continue` exists           |
+| Kiro           | `.agents/skills/{name}/`   | `~/.kiro` exists               |
+| Devin          | `.agents/skills/{name}/`   | `~/.config/devin` exists       |
+| Warp           | `.agents/skills/{name}/`   | `~/.warp` exists               |
+| Trae           | `.agents/skills/{name}/`   | `~/.trae` exists               |
 
 **Tier 3 — universal fallback** (always active):
 

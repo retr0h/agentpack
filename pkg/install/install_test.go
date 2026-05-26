@@ -1420,8 +1420,14 @@ func TestCollectTargetFiles(t *testing.T) {
 				srcDir := t.TempDir()
 				installDir := t.TempDir()
 
-				require.NoError(t, os.WriteFile(filepath.Join(srcDir, "skill.md"), []byte("# skill"), 0o644))
-				require.NoError(t, os.WriteFile(filepath.Join(installDir, "skill.md"), []byte("# skill"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(srcDir, "skill.md"), []byte("# skill"), 0o644),
+				)
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(installDir, "skill.md"), []byte("# skill"), 0o644),
+				)
 
 				return installDir, srcDir
 			},
@@ -1435,7 +1441,10 @@ func TestCollectTargetFiles(t *testing.T) {
 				srcDir := t.TempDir()
 				installDir := t.TempDir()
 
-				require.NoError(t, os.WriteFile(filepath.Join(srcDir, "missing.md"), []byte("# missing"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(srcDir, "missing.md"), []byte("# missing"), 0o644),
+				)
 
 				return installDir, srcDir
 			},
@@ -1458,8 +1467,14 @@ func TestCollectTargetFiles(t *testing.T) {
 				srcDir := t.TempDir()
 				installDir := t.TempDir()
 
-				require.NoError(t, os.WriteFile(filepath.Join(srcDir, "secret.md"), []byte("x"), 0o644))
-				require.NoError(t, os.WriteFile(filepath.Join(installDir, "secret.md"), []byte("x"), 0o000))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(srcDir, "secret.md"), []byte("x"), 0o644),
+				)
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(installDir, "secret.md"), []byte("x"), 0o000),
+				)
 
 				t.Cleanup(func() { _ = os.Chmod(filepath.Join(installDir, "secret.md"), 0o644) })
 
@@ -1476,9 +1491,19 @@ func TestCollectTargetFiles(t *testing.T) {
 				installDir := t.TempDir()
 
 				require.NoError(t, os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(srcDir, "sub", "deep.md"), []byte("# deep"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(srcDir, "sub", "deep.md"), []byte("# deep"), 0o644),
+				)
 				require.NoError(t, os.MkdirAll(filepath.Join(installDir, "sub"), 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(installDir, "sub", "deep.md"), []byte("# deep"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(
+						filepath.Join(installDir, "sub", "deep.md"),
+						[]byte("# deep"),
+						0o644,
+					),
+				)
 
 				return installDir, srcDir
 			},
