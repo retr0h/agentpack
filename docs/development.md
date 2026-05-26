@@ -79,6 +79,30 @@ function, with rows covering both the happy path and every failure mode.
 
 **One test file per production file.** `archive.go` → `archive_test.go`.
 
+### Assertions
+
+Use [testify](https://github.com/stretchr/testify) — `assert` for non-fatal
+checks, `require` for fatal ones. No stdlib `t.Errorf`/`t.Fatalf` for value
+checks. No custom assertion helpers. No custom messages on assertions:
+
+```go
+// Good
+assert.Equal(t, want, got)
+require.NoError(t, err)
+require.ErrorContains(t, err, "not found")
+
+// Bad — no custom messages
+assert.Equal(t, want, got, "values should match")
+
+// Bad — no custom helpers
+func assertContains(t *testing.T, ...) { ... }
+
+// Bad — no stdlib assertions
+if got != want { t.Errorf("got %v, want %v", got, want) }
+```
+
+### Virtual filesystem
+
 Tests use [AVFS](https://github.com/avfs/avfs) for virtual filesystem:
 production uses `osfs.NewWithNoIdm()`, tests use `memfs.New()`, error
 injection wraps `memfs` with a custom struct overriding methods.

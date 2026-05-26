@@ -25,11 +25,12 @@ import (
 	"errors"
 	"io/fs"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/memfs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/pkg/manifest"
 )
@@ -64,17 +65,11 @@ func makeFixtures(t *testing.T, files []string) (avfs.VFS, string) {
 	t.Helper()
 	vfs := memfs.New()
 	base := "/base"
-	if err := vfs.MkdirAll(base, 0o755); err != nil {
-		t.Fatalf("makeFixtures mkdir base: %v", err)
-	}
+	require.NoError(t, vfs.MkdirAll(base, 0o755))
 	for _, f := range files {
 		full := filepath.Join(base, f)
-		if err := vfs.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatalf("makeFixtures mkdir: %v", err)
-		}
-		if err := vfs.WriteFile(full, []byte(""), fs.FileMode(0o644)); err != nil {
-			t.Fatalf("makeFixtures write: %v", err)
-		}
+		require.NoError(t, vfs.MkdirAll(filepath.Dir(full), 0o755))
+		require.NoError(t, vfs.WriteFile(full, []byte(""), fs.FileMode(0o644)))
 	}
 	return vfs, base
 }
@@ -260,14 +255,10 @@ func TestResolveEntries(t *testing.T) {
 				// Use relErrorVFS so that Glob succeeds (finds files) but Rel
 				// returns an error.
 				base := memfs.New()
-				if err := base.MkdirAll("/base/skills", 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-				if err := base.WriteFile(
+				require.NoError(t, base.MkdirAll("/base/skills", 0o755))
+				require.NoError(t, base.WriteFile(
 					"/base/skills/intro.md", []byte(""), fs.FileMode(0o644),
-				); err != nil {
-					t.Fatalf("write: %v", err)
-				}
+				))
 				return relErrorVFS{VFS: base}, "/base"
 			},
 			entries: []manifest.Entry{
@@ -321,27 +312,17 @@ func TestResolveEntries(t *testing.T) {
 			got, err := manifest.ResolveEntries(ctx, vfs, base, tc.entries)
 
 			if tc.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error %q, got nil", tc.wantErr)
-				}
+				require.Error(t, err)
 				if tc.exactErr {
-					if err.Error() != tc.wantErr {
-						t.Fatalf("error = %q, want %q", err.Error(), tc.wantErr)
-					}
+					assert.Equal(t, tc.wantErr, err.Error())
 				} else {
-					if !strings.Contains(err.Error(), tc.wantErr) {
-						t.Fatalf("error = %q, want it to contain %q", err.Error(), tc.wantErr)
-					}
+					require.ErrorContains(t, err, tc.wantErr)
 				}
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if len(got) != tc.wantN {
-				t.Fatalf("len(pairs) = %d, want %d", len(got), tc.wantN)
-			}
+			require.NoError(t, err)
+			require.Len(t, got, tc.wantN)
 
 			if len(tc.wantDests) > 0 {
 				actual := make(map[string]bool, len(got))
@@ -349,14 +330,10 @@ func TestResolveEntries(t *testing.T) {
 					actual[fp.Dest] = true
 				}
 				for _, want := range tc.wantDests {
-					if !actual[want] {
-						t.Errorf("missing dest %q in results %v", want, got)
-					}
+					assert.True(t, actual[want])
 				}
 				for _, fp := range got {
-					if !filepath.IsAbs(fp.Src) {
-						t.Errorf("Src %q is not absolute", fp.Src)
-					}
+					assert.True(t, filepath.IsAbs(fp.Src))
 				}
 			}
 		})

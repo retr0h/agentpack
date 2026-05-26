@@ -22,9 +22,13 @@ package cursor_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/pkg/target"
 	"github.com/retr0h/agentpack/pkg/target/cursor"
@@ -45,9 +49,7 @@ func TestCursor_Name(t *testing.T) {
 			t.Parallel()
 
 			c := cursor.New()
-			if got := c.Name(); got != tt.want {
-				t.Errorf("Name() = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, c.Name())
 		})
 	}
 }
@@ -67,9 +69,7 @@ func TestCursor_DisplayName(t *testing.T) {
 			t.Parallel()
 
 			c := cursor.New()
-			if got := c.DisplayName(); got != tt.want {
-				t.Errorf("DisplayName() = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, c.DisplayName())
 		})
 	}
 }
@@ -79,27 +79,33 @@ func TestCursor_Detect(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		setupHome    func(t *testing.T) string
+		homeFunc     func(t *testing.T) func() (string, error)
 		wantDetected bool
 	}{
 		{
 			name: "detects when ~/.cursor exists",
-			setupHome: func(t *testing.T) string {
+			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
 				home := t.TempDir()
-				if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-
-				return home
+				require.NoError(t, os.MkdirAll(filepath.Join(home, ".cursor"), 0o755))
+				return func() (string, error) { return home, nil }
 			},
 			wantDetected: true,
 		},
 		{
 			name: "not detected when ~/.cursor absent",
-			setupHome: func(t *testing.T) string {
+			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
-				return t.TempDir()
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			},
+			wantDetected: false,
+		},
+		{
+			name: "home error returns false",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				return func() (string, error) { return "", errors.New("no home") }
 			},
 			wantDetected: false,
 		},
@@ -109,13 +115,8 @@ func TestCursor_Detect(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			home := tt.setupHome(t)
-			c := cursor.NewWithHome(func() (string, error) { return home, nil })
-			got := c.Detect()
-
-			if got != tt.wantDetected {
-				t.Errorf("Detect() = %v, want %v", got, tt.wantDetected)
-			}
+			c := cursor.NewWithHome(tt.homeFunc(t))
+			assert.Equal(t, tt.wantDetected, c.Detect())
 		})
 	}
 }
@@ -137,26 +138,20 @@ func TestCursor_Install(t *testing.T) {
 				src := t.TempDir()
 				skillsDir := filepath.Join(src, "skills")
 
-				if err := os.MkdirAll(skillsDir, 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-
-				if err := os.WriteFile(
+				require.NoError(t, os.MkdirAll(skillsDir, 0o755))
+				require.NoError(t, os.WriteFile(
 					filepath.Join(skillsDir, "my-skill.md"),
 					[]byte("# My Skill"),
 					0o644,
-				); err != nil {
-					t.Fatalf("WriteFile: %v", err)
-				}
+				))
 
 				return src
 			},
 			check: func(t *testing.T, destBase string, pluginName string) {
 				t.Helper()
-				target := filepath.Join(destBase, ".cursor", "rules", pluginName, "my-skill.md")
-				if _, err := os.Stat(target); err != nil {
-					t.Errorf("expected %s to exist: %v", target, err)
-				}
+				tgt := filepath.Join(destBase, ".cursor", "rules", pluginName, "my-skill.md")
+				_, err := os.Stat(tgt)
+				assert.NoError(t, err)
 			},
 		},
 		{
@@ -175,6 +170,43 @@ func TestCursor_Install(t *testing.T) {
 			},
 			wantErr: "context canceled",
 		},
+		{
+			name: "cwdFunc error propagates",
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "mkdirAll failure for destDir propagates error",
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			wantErr: "mkdir cursor rules dir",
+		},
+		{
+			name: "copyTreeIfExists error propagates from Install",
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				src := t.TempDir()
+				skillsDir := filepath.Join(src, "skills")
+				locked := filepath.Join(skillsDir, "locked")
+				if err := os.MkdirAll(locked, 0o755); err != nil {
+					require.NoError(t, err)
+				}
+				if err := os.WriteFile(filepath.Join(locked, "x.md"), []byte("x"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				if err := os.Chmod(locked, 0o000); err != nil {
+					require.NoError(t, err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+				return src
+			},
+			wantErr: "copy skills",
+		},
 	}
 
 	for _, tt := range tests {
@@ -184,9 +216,18 @@ func TestCursor_Install(t *testing.T) {
 			srcDir := tt.setupSrc(t)
 			destBase := t.TempDir()
 
-			// Override CWD by changing install destination via chdir.
-			// Since we can't override os.Getwd() easily, use the export hook.
-			c := cursor.NewWithCWD(func() (string, error) { return destBase, nil })
+			cwdFunc := func() (string, error) { return destBase, nil }
+			if tt.wantErr == "getwd" {
+				cwdFunc = func() (string, error) { return "", errors.New("getwd failed") }
+			}
+			if tt.wantErr == "mkdir cursor rules dir" {
+				roDir := t.TempDir()
+				require.NoError(t, os.Chmod(roDir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })
+				cwdFunc = func() (string, error) { return roDir, nil }
+			}
+
+			c := cursor.NewWithCWD(cwdFunc)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -203,20 +244,11 @@ func TestCursor_Install(t *testing.T) {
 			err := c.Install(ctx, opts)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strContains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.check != nil {
 				tt.check(t, destBase, opts.Name)
@@ -242,24 +274,157 @@ func TestCursor_List(t *testing.T) {
 			c := cursor.New()
 			got, err := c.List()
 
-			if err != nil {
-				t.Fatalf("List() error: %v", err)
-			}
-
-			if len(got) != tt.wantLen {
-				t.Errorf("len = %d, want %d", len(got), tt.wantLen)
-			}
+			require.NoError(t, err)
+			assert.Len(t, got, tt.wantLen)
 		})
 	}
 }
 
-func strContains(s, sub string) bool {
-	return len(sub) == 0 || (len(s) >= len(sub) && func() bool {
-		for i := 0; i <= len(s)-len(sub); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
+func TestCursor_CopyTreeIfExists(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (src, dst string)
+		ctx     func() context.Context
+		wantErr string
+	}{
+		{
+			name: "no-op when src does not exist",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "nonexistent"), t.TempDir()
+			},
+			ctx: func() context.Context { return context.Background() },
+		},
+		{
+			name: "copies files when src exists",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				if err := os.WriteFile(filepath.Join(src, "a.md"), []byte("a"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				return src, t.TempDir()
+			},
+			ctx: func() context.Context { return context.Background() },
+		},
+		{
+			name: "cancelled context inside walk returns error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				if err := os.WriteFile(filepath.Join(src, "a.md"), []byte("a"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				return src, t.TempDir()
+			},
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			wantErr: "context canceled",
+		},
+		{
+			name: "walkDir error on unreadable subdirectory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				locked := filepath.Join(src, "locked")
+				if err := os.MkdirAll(locked, 0o755); err != nil {
+					require.NoError(t, err)
+				}
+				if err := os.WriteFile(filepath.Join(locked, "x.md"), []byte("x"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				if err := os.Chmod(locked, 0o000); err != nil {
+					require.NoError(t, err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+				return src, t.TempDir()
+			},
+			ctx:     func() context.Context { return context.Background() },
+			wantErr: "permission denied",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			src, dst := tt.setup(t)
+			err := cursor.CopyTreeIfExists(tt.ctx(), src, dst)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
 			}
-		}
-		return false
-	}())
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestCursor_CopyFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (src, dst string)
+		wantErr string
+	}{
+		{
+			name: "copies file successfully",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := filepath.Join(t.TempDir(), "src.txt")
+				if err := os.WriteFile(src, []byte("hello"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				return src, filepath.Join(t.TempDir(), "dst.txt")
+			},
+		},
+		{
+			name: "read error on missing src",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "missing.txt"), filepath.Join(t.TempDir(), "dst.txt")
+			},
+			wantErr: "read",
+		},
+		{
+			name: "write error when dst is an existing directory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := filepath.Join(t.TempDir(), "src.txt")
+				if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				dstParent := t.TempDir()
+				existingDir := filepath.Join(dstParent, "subdir")
+				if err := os.MkdirAll(existingDir, 0o755); err != nil {
+					require.NoError(t, err)
+				}
+				return src, existingDir
+			},
+			wantErr: "write",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			src, dst := tt.setup(t)
+			err := cursor.CopyFile(src, dst)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
 }

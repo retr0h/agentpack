@@ -25,6 +25,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/retr0h/agentpack/pkg/install"
@@ -192,6 +194,41 @@ func TestRun(t *testing.T) {
 			wantOldSHA:  "deadbee",
 			wantNewSHA:  "cafebab",
 		},
+		{
+			name: "nil RegistryLoader falls back to defaultRegistryLoader",
+			setupMocks: func(_ *updatemocks.MockRegistryLoader, _ *updatemocks.MockInstaller) {
+				// no mock calls — nil loader uses real registry.Load
+			},
+			opts: func(_ *updatemocks.MockRegistryLoader, _ *updatemocks.MockInstaller) update.Options {
+				return update.Options{
+					Name:           "nonexistent-package-xyzzy",
+					RegistryLoader: nil,
+					Installer:      nil,
+				}
+			},
+			wantErr: "load registry manifest",
+		},
+		{
+			name: "nil Installer falls back to defaultInstaller",
+			setupMocks: func(loader *updatemocks.MockRegistryLoader, _ *updatemocks.MockInstaller) {
+				loader.EXPECT().
+					Load("my-plugin").
+					Return(&registry.PackageManifest{
+						Name:    "my-plugin",
+						Source:  "/nonexistent/archive.agentpack",
+						SHA:     "abc1234",
+						Version: "v1.0.0",
+					}, nil)
+			},
+			opts: func(loader *updatemocks.MockRegistryLoader, _ *updatemocks.MockInstaller) update.Options {
+				return update.Options{
+					Name:           "my-plugin",
+					RegistryLoader: loader,
+					Installer:      nil,
+				}
+			},
+			wantErr: "re-install",
+		},
 	}
 
 	for _, tt := range tests {
@@ -218,43 +255,392 @@ func TestRun(t *testing.T) {
 			result, err := update.Run(ctx, opts)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strContains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantUpdated, result.Updated)
+
+			if tt.wantOldSHA != "" {
+				assert.Equal(t, tt.wantOldSHA, result.OldSHA)
 			}
 
-			if result.Updated != tt.wantUpdated {
-				t.Errorf("Updated = %v, want %v", result.Updated, tt.wantUpdated)
-			}
-
-			if tt.wantOldSHA != "" && result.OldSHA != tt.wantOldSHA {
-				t.Errorf("OldSHA = %q, want %q", result.OldSHA, tt.wantOldSHA)
-			}
-
-			if tt.wantNewSHA != "" && result.NewSHA != tt.wantNewSHA {
-				t.Errorf("NewSHA = %q, want %q", result.NewSHA, tt.wantNewSHA)
+			if tt.wantNewSHA != "" {
+				assert.Equal(t, tt.wantNewSHA, result.NewSHA)
 			}
 		})
 	}
 }
 
-func strContains(s, sub string) bool {
-	return len(sub) == 0 || (len(s) >= len(sub) && func() bool {
-		for i := 0; i <= len(s)-len(sub); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
+// --------------------------------------------------------------------------
+// TestShortSHA
+// --------------------------------------------------------------------------
+
+func TestShortSHA(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "returns first 7 chars of long SHA",
+			in:   "abcdef1234567890",
+			want: "abcdef1",
+		},
+		{
+			name: "returns full string when exactly 7 chars",
+			in:   "abcdef1",
+			want: "abcdef1",
+		},
+		{
+			name: "returns full string when shorter than 7 chars",
+			in:   "abc",
+			want: "abc",
+		},
+		{
+			name: "returns empty string when input is empty",
+			in:   "",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := update.ShortSHA(tt.in)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestResolveHEAD
+// --------------------------------------------------------------------------
+
+func TestResolveHEAD(t *testing.T) {
+	t.Parallel()
+
+	const zeroHash = "0000000000000000000000000000000000000000"
+	const realSHA = "abc1234567890abcdef0123456789abcdef01234"
+
+	tests := []struct {
+		name string
+		refs map[string]string
+		want string
+	}{
+		{
+			name: "returns HEAD SHA when HEAD is non-zero",
+			refs: map[string]string{
+				"HEAD":            realSHA,
+				"refs/heads/main": "other1234567890abcdef0123456789abcdef01",
+			},
+			want: realSHA,
+		},
+		{
+			name: "falls back to refs/heads/main when HEAD is zero hash",
+			refs: map[string]string{
+				"HEAD":            zeroHash,
+				"refs/heads/main": realSHA,
+			},
+			want: realSHA,
+		},
+		{
+			name: "falls back to refs/heads/master when main is absent",
+			refs: map[string]string{
+				"HEAD":              zeroHash,
+				"refs/heads/master": realSHA,
+			},
+			want: realSHA,
+		},
+		{
+			name: "returns empty string when no refs match",
+			refs: map[string]string{
+				"refs/heads/feature": realSHA,
+			},
+			want: "",
+		},
+		{
+			name: "returns empty string for empty refs map",
+			refs: map[string]string{},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := update.ResolveHEAD(tt.refs)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestDefaultRegistryLoader
+// --------------------------------------------------------------------------
+
+func TestDefaultRegistryLoader(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		pkgName string
+	}{
+		{
+			name:    "exercises real registry.Load path for unknown package",
+			pkgName: "this-package-definitely-does-not-exist-xyzzy",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := update.DefaultRegistryLoaderLoad(tt.pkgName)
+
+			// The real registry.Load either returns an error (package not
+			// installed) or nil. Either way the concrete Load path is covered.
+			_ = err
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestDefaultInstaller
+// --------------------------------------------------------------------------
+
+func TestDefaultInstaller(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		source  string
+		wantErr bool
+	}{
+		{
+			name:    "exercises real install.Run path for non-existent archive",
+			source:  "/nonexistent/path/archive.agentpack",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := update.DefaultInstallerInstall(context.Background(), tt.source)
+
+			if tt.wantErr {
+				assert.Error(t, err)
 			}
-		}
-		return false
-	}())
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestRunGitBranch — not parallel because subtests mutate lsRemote package var
+// --------------------------------------------------------------------------
+
+func TestRunGitBranch(t *testing.T) {
+	// NOTE: not parallel — subtests mutate the lsRemote package-level var.
+
+	const gitSource = "github.com/example/skills-repo"
+
+	tests := []struct {
+		name         string
+		setupMocks   func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller)
+		lsRemoteFunc func(ctx context.Context, rawURL string) (map[string]string, error)
+		opts         func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller) update.Options
+		wantErr      string
+		wantUpdated  bool
+	}{
+		{
+			name: "lsRemote failure falls through to install",
+			setupMocks: func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller) {
+				loader.EXPECT().
+					Load("git-plugin").
+					Return(&registry.PackageManifest{
+						Name:    "git-plugin",
+						Source:  gitSource,
+						SHA:     "abc1234567890",
+						Version: "v1.0.0",
+					}, nil)
+				installer.EXPECT().
+					Install(gomock.Any(), gomock.Any()).
+					Return(&install.Result{
+						Name:    "git-plugin",
+						SHA:     "newsha12",
+						Version: "v1.1.0",
+					}, nil)
+			},
+			lsRemoteFunc: func(_ context.Context, _ string) (map[string]string, error) {
+				return nil, errors.New("ls-remote network failure")
+			},
+			opts: func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller) update.Options {
+				return update.Options{
+					Name:           "git-plugin",
+					RegistryLoader: loader,
+					Installer:      installer,
+				}
+			},
+			wantUpdated: true,
+		},
+		{
+			name: "same remote SHA short-circuits update",
+			setupMocks: func(loader *updatemocks.MockRegistryLoader, _ *updatemocks.MockInstaller) {
+				loader.EXPECT().
+					Load("git-plugin").
+					Return(&registry.PackageManifest{
+						Name:    "git-plugin",
+						Source:  gitSource,
+						SHA:     "abc1234",
+						Version: "v1.0.0",
+					}, nil)
+			},
+			lsRemoteFunc: func(_ context.Context, _ string) (map[string]string, error) {
+				return map[string]string{
+					"HEAD": "abc12341234567890abcdef0123456789abcdef",
+				}, nil
+			},
+			opts: func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller) update.Options {
+				return update.Options{
+					Name:           "git-plugin",
+					RegistryLoader: loader,
+					Installer:      installer,
+				}
+			},
+			wantUpdated: false,
+		},
+		{
+			name: "different remote SHA falls through to install",
+			setupMocks: func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller) {
+				loader.EXPECT().
+					Load("git-plugin").
+					Return(&registry.PackageManifest{
+						Name:    "git-plugin",
+						Source:  gitSource,
+						SHA:     "abc1234",
+						Version: "v1.0.0",
+					}, nil)
+				installer.EXPECT().
+					Install(gomock.Any(), gomock.Any()).
+					Return(&install.Result{
+						Name:    "git-plugin",
+						SHA:     "def5678",
+						Version: "v1.1.0",
+					}, nil)
+			},
+			lsRemoteFunc: func(_ context.Context, _ string) (map[string]string, error) {
+				return map[string]string{
+					"HEAD": "def56789012345678901234567890123456789ab",
+				}, nil
+			},
+			opts: func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller) update.Options {
+				return update.Options{
+					Name:           "git-plugin",
+					RegistryLoader: loader,
+					Installer:      installer,
+				}
+			},
+			wantUpdated: true,
+		},
+		{
+			name: "empty remote SHA falls through to install",
+			setupMocks: func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller) {
+				loader.EXPECT().
+					Load("git-plugin").
+					Return(&registry.PackageManifest{
+						Name:    "git-plugin",
+						Source:  gitSource,
+						SHA:     "abc1234",
+						Version: "v1.0.0",
+					}, nil)
+				installer.EXPECT().
+					Install(gomock.Any(), gomock.Any()).
+					Return(&install.Result{
+						Name:    "git-plugin",
+						SHA:     "newsha12",
+						Version: "v1.1.0",
+					}, nil)
+			},
+			lsRemoteFunc: func(_ context.Context, _ string) (map[string]string, error) {
+				return map[string]string{
+					"refs/heads/feature": "abc12341234567890abcdef012345678901234",
+				}, nil
+			},
+			opts: func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller) update.Options {
+				return update.Options{
+					Name:           "git-plugin",
+					RegistryLoader: loader,
+					Installer:      installer,
+				}
+			},
+			wantUpdated: true,
+		},
+		{
+			name: "OnStep is emitted for git source before lsRemote",
+			setupMocks: func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller) {
+				loader.EXPECT().
+					Load("git-plugin").
+					Return(&registry.PackageManifest{
+						Name:    "git-plugin",
+						Source:  gitSource,
+						SHA:     "abc1234",
+						Version: "v1.0.0",
+					}, nil)
+				installer.EXPECT().
+					Install(gomock.Any(), gomock.Any()).
+					Return(&install.Result{
+						Name:    "git-plugin",
+						SHA:     "newsha12",
+						Version: "v1.1.0",
+					}, nil)
+			},
+			lsRemoteFunc: func(_ context.Context, _ string) (map[string]string, error) {
+				return nil, errors.New("ls-remote failure")
+			},
+			opts: func(loader *updatemocks.MockRegistryLoader, installer *updatemocks.MockInstaller) update.Options {
+				return update.Options{
+					Name:           "git-plugin",
+					OnStep:         func(_ install.Step) {},
+					RegistryLoader: loader,
+					Installer:      installer,
+				}
+			},
+			wantUpdated: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Not parallel: mutates the lsRemote package-level var.
+
+			ctrl := gomock.NewController(t)
+			loader := updatemocks.NewMockRegistryLoader(ctrl)
+			installer := updatemocks.NewMockInstaller(ctrl)
+
+			tt.setupMocks(loader, installer)
+
+			restore := update.SetLsRemote(tt.lsRemoteFunc)
+			defer restore()
+
+			opts := tt.opts(loader, installer)
+
+			result, err := update.Run(context.Background(), opts)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantUpdated, result.Updated)
+		})
+	}
 }

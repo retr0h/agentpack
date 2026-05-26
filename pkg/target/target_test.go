@@ -23,6 +23,8 @@ package target_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/retr0h/agentpack/pkg/target"
@@ -104,14 +106,10 @@ func TestRegister(t *testing.T) {
 
 			all := target.All()
 
-			if len(all) != len(tt.wantNames) {
-				t.Fatalf("All() len = %d, want %d", len(all), len(tt.wantNames))
-			}
+			require.Len(t, all, len(tt.wantNames))
 
 			for i, wantName := range tt.wantNames {
-				if all[i].Name() != wantName {
-					t.Errorf("All()[%d].Name() = %q, want %q", i, all[i].Name(), wantName)
-				}
+				assert.Equal(t, wantName, all[i].Name())
 			}
 		})
 	}
@@ -172,9 +170,7 @@ func TestAll(t *testing.T) {
 
 			all := target.All()
 
-			if len(all) != tt.wantLen {
-				t.Fatalf("All() len = %d, want %d", len(all), tt.wantLen)
-			}
+			assert.Len(t, all, tt.wantLen)
 		})
 	}
 }
@@ -274,14 +270,10 @@ func TestDetected(t *testing.T) {
 
 			detected := target.Detected()
 
-			if len(detected) != len(tt.wantNames) {
-				t.Fatalf("Detected() len = %d, want %d", len(detected), len(tt.wantNames))
-			}
+			require.Len(t, detected, len(tt.wantNames))
 
 			for i, wantName := range tt.wantNames {
-				if detected[i].Name() != wantName {
-					t.Errorf("Detected()[%d].Name() = %q, want %q", i, detected[i].Name(), wantName)
-				}
+				assert.Equal(t, wantName, detected[i].Name())
 			}
 		})
 	}

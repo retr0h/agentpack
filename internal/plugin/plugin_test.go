@@ -22,8 +22,10 @@ package plugin_test
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/internal/plugin"
 	"github.com/retr0h/agentpack/pkg/manifest"
@@ -50,32 +52,18 @@ func TestGenerateMarketplace(t *testing.T) {
 			},
 			checkJSON: func(t *testing.T, data map[string]any) {
 				t.Helper()
-				if data["name"] != "zeek-pros" {
-					t.Errorf("name = %v, want zeek-pros", data["name"])
-				}
+				assert.Equal(t, "zeek-pros", data["name"])
 				owner := data["owner"].(map[string]any)
-				if owner["name"] != "John Dewey" {
-					t.Errorf("owner.name = %v, want John Dewey", owner["name"])
-				}
+				assert.Equal(t, "John Dewey", owner["name"])
 				meta := data["metadata"].(map[string]any)
-				if meta["version"] != "1.0.0" {
-					t.Errorf("metadata.version = %v, want 1.0.0", meta["version"])
-				}
+				assert.Equal(t, "1.0.0", meta["version"])
 				plugins := data["plugins"].([]any)
-				if len(plugins) != 1 {
-					t.Fatalf("plugins length = %d, want 1", len(plugins))
-				}
+				require.Len(t, plugins, 1)
 				p := plugins[0].(map[string]any)
-				if p["source"] != "./" {
-					t.Errorf("plugins[0].source = %v, want ./", p["source"])
-				}
-				if p["category"] != "security" {
-					t.Errorf("plugins[0].category = %v, want security", p["category"])
-				}
+				assert.Equal(t, "./", p["source"])
+				assert.Equal(t, "security", p["category"])
 				author := p["author"].(map[string]any)
-				if author["email"] != "john@dewey.ws" {
-					t.Errorf("plugins[0].author.email = %v, want john@dewey.ws", author["email"])
-				}
+				assert.Equal(t, "john@dewey.ws", author["email"])
 			},
 		},
 		{
@@ -89,12 +77,8 @@ func TestGenerateMarketplace(t *testing.T) {
 				t.Helper()
 				plugins := data["plugins"].([]any)
 				p := plugins[0].(map[string]any)
-				if _, ok := p["author"]; ok {
-					t.Error("expected no author field for empty author")
-				}
-				if p["source"] != "./" {
-					t.Errorf("source = %v, want ./", p["source"])
-				}
+				assert.NotContains(t, p, "author")
+				assert.Equal(t, "./", p["source"])
 			},
 		},
 	}
@@ -104,14 +88,11 @@ func TestGenerateMarketplace(t *testing.T) {
 			t.Parallel()
 
 			got, err := plugin.GenerateMarketplace(tt.plugin)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			var data map[string]any
-			if err := json.Unmarshal(got, &data); err != nil {
-				t.Fatalf("invalid JSON: %v", err)
-			}
+			err = json.Unmarshal(got, &data)
+			require.NoError(t, err)
 
 			tt.checkJSON(t, data)
 		})
@@ -140,19 +121,11 @@ func TestGeneratePlugin(t *testing.T) {
 			commandPaths: []string{"commands/init.md", "commands/push.md"},
 			checkJSON: func(t *testing.T, data map[string]any) {
 				t.Helper()
-				if data["name"] != "git-commands" {
-					t.Errorf("name = %v, want git-commands", data["name"])
-				}
+				assert.Equal(t, "git-commands", data["name"])
 				cmds := data["commands"].([]any)
-				if len(cmds) != 2 {
-					t.Fatalf("commands length = %d, want 2", len(cmds))
-				}
-				if cmds[0] != "./commands/init.md" {
-					t.Errorf("commands[0] = %v, want ./commands/init.md", cmds[0])
-				}
-				if cmds[1] != "./commands/push.md" {
-					t.Errorf("commands[1] = %v, want ./commands/push.md", cmds[1])
-				}
+				require.Len(t, cmds, 2)
+				assert.Equal(t, "./commands/init.md", cmds[0])
+				assert.Equal(t, "./commands/push.md", cmds[1])
 			},
 		},
 		{
@@ -165,9 +138,7 @@ func TestGeneratePlugin(t *testing.T) {
 			commandPaths: nil,
 			checkJSON: func(t *testing.T, data map[string]any) {
 				t.Helper()
-				if _, ok := data["commands"]; ok {
-					t.Error("expected no commands field when none provided")
-				}
+				assert.NotContains(t, data, "commands")
 			},
 		},
 		{
@@ -179,9 +150,7 @@ func TestGeneratePlugin(t *testing.T) {
 			},
 			checkJSON: func(t *testing.T, data map[string]any) {
 				t.Helper()
-				if _, ok := data["author"]; ok {
-					t.Error("expected no author field for empty author")
-				}
+				assert.NotContains(t, data, "author")
 			},
 		},
 	}
@@ -191,14 +160,11 @@ func TestGeneratePlugin(t *testing.T) {
 			t.Parallel()
 
 			got, err := plugin.GeneratePlugin(tt.plugin, tt.commandPaths)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			var data map[string]any
-			if err := json.Unmarshal(got, &data); err != nil {
-				t.Fatalf("invalid JSON: %v", err)
-			}
+			err = json.Unmarshal(got, &data)
+			require.NoError(t, err)
 
 			tt.checkJSON(t, data)
 		})
@@ -228,12 +194,8 @@ func TestGenerateMCPConfig(t *testing.T) {
 				t.Helper()
 				servers := data["mcpServers"].(map[string]any)
 				s := servers["my-remote"].(map[string]any)
-				if s["url"] != "https://mcp.example.com/v1" {
-					t.Errorf("url = %v", s["url"])
-				}
-				if _, ok := s["command"]; ok {
-					t.Error("remote server should not have command")
-				}
+				assert.Equal(t, "https://mcp.example.com/v1", s["url"])
+				assert.NotContains(t, s, "command")
 			},
 		},
 		{
@@ -250,19 +212,11 @@ func TestGenerateMCPConfig(t *testing.T) {
 				t.Helper()
 				servers := data["mcpServers"].(map[string]any)
 				s := servers["my-ux"].(map[string]any)
-				if s["command"] != "npx" {
-					t.Errorf("command = %v, want npx", s["command"])
-				}
+				assert.Equal(t, "npx", s["command"])
 				args := s["args"].([]any)
-				if len(args) != 2 {
-					t.Fatalf("args length = %d, want 2", len(args))
-				}
-				if args[0] != "@mycompany/my-server" {
-					t.Errorf("args[0] = %v", args[0])
-				}
-				if args[1] != "--verbose" {
-					t.Errorf("args[1] = %v", args[1])
-				}
+				require.Len(t, args, 2)
+				assert.Equal(t, "@mycompany/my-server", args[0])
+				assert.Equal(t, "--verbose", args[1])
 			},
 		},
 		{
@@ -332,15 +286,9 @@ func TestGenerateMCPConfig(t *testing.T) {
 			checkJSON: func(t *testing.T, data map[string]any) {
 				t.Helper()
 				servers := data["mcpServers"].(map[string]any)
-				if len(servers) != 2 {
-					t.Errorf("server count = %d, want 2", len(servers))
-				}
-				if _, ok := servers["ux-srv"]; !ok {
-					t.Error("missing ux-srv")
-				}
-				if _, ok := servers["rem-srv"]; !ok {
-					t.Error("missing rem-srv")
-				}
+				assert.Len(t, servers, 2)
+				assert.Contains(t, servers, "ux-srv")
+				assert.Contains(t, servers, "rem-srv")
 			},
 		},
 	}
@@ -352,30 +300,20 @@ func TestGenerateMCPConfig(t *testing.T) {
 			got, err := plugin.GenerateMCPConfig(tt.entries)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.wantNil {
-				if got != nil {
-					t.Fatalf("expected nil, got %s", got)
-				}
+				assert.Nil(t, got)
 				return
 			}
 
 			var data map[string]any
-			if err := json.Unmarshal(got, &data); err != nil {
-				t.Fatalf("invalid JSON: %v", err)
-			}
+			err = json.Unmarshal(got, &data)
+			require.NoError(t, err)
 
 			if tt.checkJSON != nil {
 				tt.checkJSON(t, data)

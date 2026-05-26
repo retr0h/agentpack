@@ -28,9 +28,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/pkg/fetcher"
 )
@@ -230,31 +232,22 @@ func TestHTTPFetcherFetch(t *testing.T) {
 			err := f.Fetch(ctx, url, dest)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
 			if err != nil && tt.wantErr == "" {
 				// For tests without explicit wantErr, only fail if truly unexpected.
 				if tt.checkBody != "" {
-					t.Fatalf("unexpected error: %v", err)
+					require.NoError(t, err)
 				}
 				return
 			}
 
 			if tt.checkBody != "" {
 				data, err := os.ReadFile(dest)
-				if err != nil {
-					t.Fatalf("read dest: %v", err)
-				}
-				if string(data) != tt.checkBody {
-					t.Errorf("dest content = %q, want %q", string(data), tt.checkBody)
-				}
+				require.NoError(t, err)
+				assert.Equal(t, tt.checkBody, string(data))
 			}
 		})
 	}

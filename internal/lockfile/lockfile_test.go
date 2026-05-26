@@ -25,6 +25,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/retr0h/agentpack/internal/lockfile"
 )
 
@@ -57,9 +60,8 @@ func TestRead(t *testing.T) {
 				dir := t.TempDir()
 				p := filepath.Join(dir, "agentpack-lock.yaml")
 				content := "installs:\n  - name: my-plugin\n    source: github.com/org/repo\n    enabled: true\n"
-				if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-					t.Fatalf("setup: %v", err)
-				}
+				err := os.WriteFile(p, []byte(content), 0o644)
+				require.NoError(t, err)
 				return p
 			},
 			wantLen:   1,
@@ -71,9 +73,8 @@ func TestRead(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 				p := filepath.Join(dir, "agentpack-lock.yaml")
-				if err := os.WriteFile(p, []byte("installs: [\nnot valid"), 0o644); err != nil {
-					t.Fatalf("setup: %v", err)
-				}
+				err := os.WriteFile(p, []byte("installs: [\nnot valid"), 0o644)
+				require.NoError(t, err)
 				return p
 			},
 			wantErr: "parse lockfile",
@@ -88,27 +89,15 @@ func TestRead(t *testing.T) {
 			lf, err := lockfile.Read(path)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if len(lf.Installs) != tt.wantLen {
-				t.Errorf("len(Installs) = %d, want %d", len(lf.Installs), tt.wantLen)
-			}
+			require.NoError(t, err)
+			assert.Len(t, lf.Installs, tt.wantLen)
 
 			if tt.wantFirst != "" && len(lf.Installs) > 0 {
-				if lf.Installs[0].Name != tt.wantFirst {
-					t.Errorf("Installs[0].Name = %q, want %q", lf.Installs[0].Name, tt.wantFirst)
-				}
+				assert.Equal(t, tt.wantFirst, lf.Installs[0].Name)
 			}
 		})
 	}
@@ -154,28 +143,16 @@ func TestWrite(t *testing.T) {
 			err := lockfile.Write(path, tt.lf)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			// Round-trip: read back and verify counts.
 			got, readErr := lockfile.Read(path)
-			if readErr != nil {
-				t.Fatalf("read back: %v", readErr)
-			}
-
-			if len(got.Installs) != len(tt.lf.Installs) {
-				t.Errorf("round-trip len = %d, want %d", len(got.Installs), len(tt.lf.Installs))
-			}
+			require.NoError(t, readErr)
+			assert.Len(t, got.Installs, len(tt.lf.Installs))
 		})
 	}
 }
@@ -228,18 +205,12 @@ func TestLockfile_Add(t *testing.T) {
 			lf := &lockfile.Lockfile{Installs: tt.initial}
 			lf.Add(tt.add)
 
-			if len(lf.Installs) != tt.wantLen {
-				t.Fatalf("len = %d, want %d", len(lf.Installs), tt.wantLen)
-			}
+			require.Len(t, lf.Installs, tt.wantLen)
 
 			got := lf.Find(tt.add.Name)
-			if got == nil {
-				t.Fatal("Find returned nil after Add")
-			}
+			require.NotNil(t, got)
 
-			if len(got.Targets) != len(tt.wantTarget) {
-				t.Errorf("Targets = %v, want %v", got.Targets, tt.wantTarget)
-			}
+			assert.Len(t, got.Targets, len(tt.wantTarget))
 		})
 	}
 }
@@ -284,9 +255,7 @@ func TestLockfile_Remove(t *testing.T) {
 			lf := &lockfile.Lockfile{Installs: tt.initial}
 			lf.Remove(tt.remove)
 
-			if len(lf.Installs) != tt.wantLen {
-				t.Errorf("len = %d, want %d", len(lf.Installs), tt.wantLen)
-			}
+			assert.Len(t, lf.Installs, tt.wantLen)
 		})
 	}
 }
@@ -333,19 +302,12 @@ func TestLockfile_Find(t *testing.T) {
 			got := lf.Find(tt.find)
 
 			if tt.wantNil {
-				if got != nil {
-					t.Errorf("expected nil, got %v", got)
-				}
+				assert.Nil(t, got)
 				return
 			}
 
-			if got == nil {
-				t.Fatal("expected non-nil, got nil")
-			}
-
-			if got.Name != tt.wantName {
-				t.Errorf("Name = %q, want %q", got.Name, tt.wantName)
-			}
+			require.NotNil(t, got)
+			assert.Equal(t, tt.wantName, got.Name)
 		})
 	}
 }
@@ -397,32 +359,125 @@ func TestLockfile_SetEnabled(t *testing.T) {
 			lf := &lockfile.Lockfile{Installs: tt.initial}
 			updated := lf.SetEnabled(tt.target, tt.enabled)
 
-			if updated != tt.wantUpdated {
-				t.Errorf("SetEnabled returned %v, want %v", updated, tt.wantUpdated)
-			}
+			assert.Equal(t, tt.wantUpdated, updated)
 
 			if tt.wantUpdated {
 				got := lf.Find(tt.target)
-				if got == nil {
-					t.Fatal("Find returned nil after SetEnabled")
-				}
-
-				if got.Enabled != tt.wantEnabled {
-					t.Errorf("Enabled = %v, want %v", got.Enabled, tt.wantEnabled)
-				}
+				require.NotNil(t, got)
+				assert.Equal(t, tt.wantEnabled, got.Enabled)
 			}
 		})
 	}
 }
 
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
-		func() bool {
-			for i := 0; i <= len(s)-len(sub); i++ {
-				if s[i:i+len(sub)] == sub {
-					return true
-				}
+// --------------------------------------------------------------------------
+// TestReadPermissionDenied
+// --------------------------------------------------------------------------
+
+func TestReadPermissionDenied(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string
+		wantErr string
+	}{
+		{
+			name: "unreadable file returns read lockfile error",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				p := filepath.Join(dir, "agentpack-lock.yaml")
+				err := os.WriteFile(p, []byte("installs: []"), 0o644)
+				require.NoError(t, err)
+				err = os.Chmod(p, 0o000)
+				require.NoError(t, err)
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			wantErr: "read lockfile",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getuid() == 0 {
+				t.Skip("root bypasses file permissions")
 			}
-			return false
-		}())
+
+			path := tt.setup(t)
+			_, err := lockfile.Read(path)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestWriteErrorPaths
+// --------------------------------------------------------------------------
+
+func TestWriteErrorPaths(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string
+		wantErr string
+	}{
+		{
+			name: "mkdirall fails when parent is a regular file",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				blocker := filepath.Join(dir, "notadir")
+				err := os.WriteFile(blocker, []byte("x"), 0o644)
+				require.NoError(t, err)
+				return filepath.Join(blocker, "sub", "agentpack-lock.yaml")
+			},
+			wantErr: "mkdir for lockfile",
+		},
+		{
+			name: "writefile fails when dest dir is read-only",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				sub := filepath.Join(dir, "ro")
+				err := os.MkdirAll(sub, 0o755)
+				require.NoError(t, err)
+				err = os.Chmod(sub, 0o555)
+				require.NoError(t, err)
+				t.Cleanup(func() { _ = os.Chmod(sub, 0o755) })
+				return filepath.Join(sub, "agentpack-lock.yaml")
+			},
+			wantErr: "write lockfile",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getuid() == 0 {
+				t.Skip("root bypasses file permissions")
+			}
+
+			path := tt.setup(t)
+			err := lockfile.Write(path, &lockfile.Lockfile{})
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
 }

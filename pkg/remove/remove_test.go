@@ -27,8 +27,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/retr0h/agentpack/pkg/registry"
@@ -47,6 +50,8 @@ func sha256Of(data []byte) string {
 // --------------------------------------------------------------------------
 
 func TestRun(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		cancelCtx  bool
@@ -62,10 +67,7 @@ func TestRun(t *testing.T) {
 			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
 				content := []byte("# skill content\n")
 				filePath := filepath.Join(pluginDir, "skill.md")
-
-				if err := os.WriteFile(filePath, content, 0o644); err != nil {
-					t.Fatalf("setup WriteFile: %v", err)
-				}
+				require.NoError(t, os.WriteFile(filePath, content, 0o644))
 
 				m := &registry.PackageManifest{
 					Name:   "test-plugin",
@@ -89,9 +91,8 @@ func TestRun(t *testing.T) {
 			wantSkpLen: 0,
 			checkFiles: func(t *testing.T, pluginDir string) {
 				t.Helper()
-				if _, err := os.Stat(filepath.Join(pluginDir, "skill.md")); !os.IsNotExist(err) {
-					t.Error("expected skill.md to be removed")
-				}
+				_, err := os.Stat(filepath.Join(pluginDir, "skill.md"))
+				assert.True(t, os.IsNotExist(err))
 			},
 		},
 		{
@@ -99,17 +100,12 @@ func TestRun(t *testing.T) {
 			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
 				filePath := filepath.Join(pluginDir, "skill.md")
 				original := []byte("# original\n")
-
-				if err := os.WriteFile(filePath, original, 0o644); err != nil {
-					t.Fatalf("setup WriteFile: %v", err)
-				}
+				require.NoError(t, os.WriteFile(filePath, original, 0o644))
 
 				recordedSHA := sha256Of(original)
 
 				// Modify file after recording SHA.
-				if err := os.WriteFile(filePath, []byte("# MODIFIED\n"), 0o644); err != nil {
-					t.Fatalf("setup modify: %v", err)
-				}
+				require.NoError(t, os.WriteFile(filePath, []byte("# MODIFIED\n"), 0o644))
 
 				m := &registry.PackageManifest{
 					Name:   "modified-plugin",
@@ -161,10 +157,7 @@ func TestRun(t *testing.T) {
 			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
 				content := []byte("# skill content\n")
 				filePath := filepath.Join(pluginDir, "step.md")
-
-				if err := os.WriteFile(filePath, content, 0o644); err != nil {
-					t.Fatalf("setup WriteFile: %v", err)
-				}
+				require.NoError(t, os.WriteFile(filePath, content, 0o644))
 
 				m := &registry.PackageManifest{
 					Name:   "step-plugin",
@@ -195,16 +188,11 @@ func TestRun(t *testing.T) {
 			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
 				filePath := filepath.Join(pluginDir, "skip.md")
 				original := []byte("# original\n")
-
-				if err := os.WriteFile(filePath, original, 0o644); err != nil {
-					t.Fatalf("setup WriteFile: %v", err)
-				}
+				require.NoError(t, os.WriteFile(filePath, original, 0o644))
 
 				recordedSHA := sha256Of(original)
 
-				if err := os.WriteFile(filePath, []byte("# MODIFIED\n"), 0o644); err != nil {
-					t.Fatalf("setup modify: %v", err)
-				}
+				require.NoError(t, os.WriteFile(filePath, []byte("# MODIFIED\n"), 0o644))
 
 				m := &registry.PackageManifest{
 					Name:   "skip-step-plugin",
@@ -275,10 +263,113 @@ func TestRun(t *testing.T) {
 			},
 			wantErr: "remove registry entry",
 		},
+		{
+			name: "context cancelled mid-loop returns error",
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
+				// Two files: the first passes checksum and is removed; the second
+				// is skipped because of a missing checksum match — but we cancel
+				// the context via the OnStep callback so the loop exits on
+				// ctx.Err() check at the top of the second iteration.
+				content := []byte("# first\n")
+				first := filepath.Join(pluginDir, "first.md")
+				require.NoError(t, os.WriteFile(first, content, 0o644))
+
+				m := &registry.PackageManifest{
+					Name:   "mid-cancel-plugin",
+					Source: "github.com/org/repo",
+					Files: []registry.InstalledFile{
+						{Path: "first.md", SHA256: sha256Of(content), Target: "claude-code", Dir: pluginDir},
+						{Path: "second.md", SHA256: "deadbeef", Target: "claude-code", Dir: pluginDir},
+					},
+				}
+
+				reg.EXPECT().Load("mid-cancel-plugin").Return(m, nil)
+				// Remove is NOT expected — we cancel before it's called.
+
+				return m
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.Name = "mid-cancel-plugin"
+				// We cancel via the OnStep hook after the first file is processed.
+			},
+			wantErr: "context canceled",
+		},
+		{
+			name: "read lockfile error is propagated",
+			setupMocks: func(reg *removemocks.MockRegistry, _ string) *registry.PackageManifest {
+				m := &registry.PackageManifest{
+					Name:   "lockread-fail-plugin",
+					Source: "github.com/org/repo",
+					Files:  []registry.InstalledFile{},
+				}
+
+				reg.EXPECT().Load("lockread-fail-plugin").Return(m, nil)
+				reg.EXPECT().Remove("lockread-fail-plugin").Return(nil)
+
+				return m
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.Name = "lockread-fail-plugin"
+				// Point to an unreadable (existing) file to trigger lockfile.Read error.
+				// We'll override LockfilePath with a chmod-0 file in the test body.
+			},
+			wantErr: "read lockfile",
+		},
+		{
+			name: "write lockfile error is propagated",
+			setupMocks: func(reg *removemocks.MockRegistry, _ string) *registry.PackageManifest {
+				m := &registry.PackageManifest{
+					Name:   "lockwrite-fail-plugin",
+					Source: "github.com/org/repo",
+					Files:  []registry.InstalledFile{},
+				}
+
+				reg.EXPECT().Load("lockwrite-fail-plugin").Return(m, nil)
+				reg.EXPECT().Remove("lockwrite-fail-plugin").Return(nil)
+
+				return m
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.Name = "lockwrite-fail-plugin"
+				// LockfilePath will be overridden to a read-only dir path in test body.
+			},
+			wantErr: "write lockfile",
+		},
+		{
+			name: "os.Remove failure returns wrapped error",
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
+				// Create a file with correct checksum but make its parent dir
+				// read-only so os.Remove fails.
+				subDir := filepath.Join(pluginDir, "subdir")
+				require.NoError(t, os.Mkdir(subDir, 0o755))
+				content := []byte("# protected\n")
+				filePath := filepath.Join(subDir, "protected.md")
+				require.NoError(t, os.WriteFile(filePath, content, 0o644))
+
+				m := &registry.PackageManifest{
+					Name:   "perm-remove-plugin",
+					Source: "github.com/org/repo",
+					Files: []registry.InstalledFile{
+						{Path: "protected.md", SHA256: sha256Of(content), Target: "claude-code", Dir: subDir},
+					},
+				}
+
+				reg.EXPECT().Load("perm-remove-plugin").Return(m, nil)
+				// Remove is NOT expected — we error on os.Remove.
+
+				return m
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.Name = "perm-remove-plugin"
+			},
+			wantErr: "remove",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			pluginDir := t.TempDir()
 			tmp := t.TempDir()
 
@@ -298,10 +389,6 @@ func TestRun(t *testing.T) {
 				Registry:     reg,
 			}
 
-			if tt.extraOpts != nil {
-				tt.extraOpts(&opts)
-			}
-
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -309,31 +396,53 @@ func TestRun(t *testing.T) {
 				cancel()
 			}
 
+			// For the "mid-loop cancel" test, cancel via the OnStep hook.
+			if tt.name == "context cancelled mid-loop returns error" {
+				opts.OnStep = func(_ remove.Step) {
+					cancel()
+				}
+			}
+
+			// For the "os.Remove failure" test, make the subdir unreadable
+			// AFTER setupMocks (so the file was written), right before Run.
+			if tt.name == "os.Remove failure returns wrapped error" {
+				subDir := filepath.Join(pluginDir, "subdir")
+				require.NoError(t, os.Chmod(subDir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(subDir, 0o755) })
+			}
+
+			// For "read lockfile error" test, create an unreadable lockfile.
+			if tt.name == "read lockfile error is propagated" {
+				lockFile := filepath.Join(tmp, "agentpack-lock.yaml")
+				require.NoError(t, os.WriteFile(lockFile, []byte("installs: []\n"), 0o644))
+				require.NoError(t, os.Chmod(lockFile, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(lockFile, 0o644) })
+				opts.LockfilePath = lockFile
+			}
+
+			// For "write lockfile error" test, point lockfile into a read-only dir.
+			if tt.name == "write lockfile error is propagated" {
+				roDir := filepath.Join(tmp, "readonly")
+				require.NoError(t, os.Mkdir(roDir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })
+				opts.LockfilePath = filepath.Join(roDir, "lock.yaml")
+			}
+
+			if tt.extraOpts != nil {
+				tt.extraOpts(&opts)
+			}
+
 			result, err := remove.Run(ctx, opts)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strContains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.Error(t, err)
+				assert.True(t, strings.Contains(err.Error(), tt.wantErr))
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if len(result.Removed) != tt.wantRemLen {
-				t.Errorf("Removed len = %d, want %d", len(result.Removed), tt.wantRemLen)
-			}
-
-			if len(result.Skipped) != tt.wantSkpLen {
-				t.Errorf("Skipped len = %d, want %d", len(result.Skipped), tt.wantSkpLen)
-			}
+			require.NoError(t, err)
+			assert.Len(t, result.Removed, tt.wantRemLen)
+			assert.Len(t, result.Skipped, tt.wantSkpLen)
 
 			if tt.checkFiles != nil {
 				tt.checkFiles(t, pluginDir)
@@ -342,13 +451,81 @@ func TestRun(t *testing.T) {
 	}
 }
 
-func strContains(s, sub string) bool {
-	return len(sub) == 0 || (len(s) >= len(sub) && func() bool {
-		for i := 0; i <= len(s)-len(sub); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
+// --------------------------------------------------------------------------
+// TestRunWithDefaultRegistry covers the defaultRegistry wrapper methods.
+// These tests mutate the registry package-level osUserHomeDir global and
+// therefore must NOT run in parallel with each other or other tests that
+// use that global.
+// --------------------------------------------------------------------------
+
+func TestRunWithDefaultRegistry(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr string
+	}{
+		{
+			name:    "defaultRegistry.Load is called when Registry is nil",
+			wantErr: "load registry manifest",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			// Redirect the registry to a temp home so we don't touch ~/.config.
+			restore := registry.SetOsUserHomeDir(func() (string, error) { return tmp, nil })
+			defer restore()
+
+			// Registry is nil — Run will use defaultRegistry{} which calls
+			// registry.Load("no-such-pkg"). That returns "not found in registry"
+			// which is wrapped as "load registry manifest: ...".
+			_, err := remove.Run(context.Background(), remove.Options{
+				Name:         "no-such-pkg",
+				LockfilePath: filepath.Join(tmp, "lock.yaml"),
+				Registry:     nil,
+			})
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+// TestRunDefaultRegistryRemove covers defaultRegistry.Remove by performing
+// a full successful remove using the real registry (with redirected home).
+func TestRunDefaultRegistryRemove(t *testing.T) {
+	tests := []struct {
+		name       string
+		wantRemLen int
+	}{
+		{
+			name:       "defaultRegistry.Remove is called on successful run",
+			wantRemLen: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			restore := registry.SetOsUserHomeDir(func() (string, error) { return tmp, nil })
+			defer restore()
+
+			// Save a real registry manifest so defaultRegistry.Load succeeds.
+			m := &registry.PackageManifest{
+				Name:   "real-pkg",
+				Source: "github.com/org/real",
+				Files:  []registry.InstalledFile{},
 			}
-		}
-		return false
-	}())
+			require.NoError(t, registry.Save(m))
+
+			result, err := remove.Run(context.Background(), remove.Options{
+				Name:         "real-pkg",
+				LockfilePath: filepath.Join(tmp, "lock.yaml"),
+				Registry:     nil,
+			})
+
+			require.NoError(t, err)
+			assert.Len(t, result.Removed, tt.wantRemLen)
+		})
+	}
 }

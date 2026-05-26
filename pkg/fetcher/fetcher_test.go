@@ -22,8 +22,10 @@ package fetcher_test
 
 import (
 	"fmt"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/pkg/fetcher"
 )
@@ -126,28 +128,16 @@ func TestNew(t *testing.T) {
 			f, err := fetcher.New(tt.source)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if f == nil {
-				t.Fatal("expected non-nil Fetcher")
-			}
+			require.NoError(t, err)
+			require.NotNil(t, f)
 
 			// Use fmt.Sprintf to get the type name for comparison.
 			got := fmt.Sprintf("%T", f)
-			if got != tt.wantType {
-				t.Errorf("fetcher type = %q, want %q", got, tt.wantType)
-			}
+			assert.Equal(t, tt.wantType, got)
 		})
 	}
 }

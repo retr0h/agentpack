@@ -32,6 +32,8 @@ import (
 
 	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/memfs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/internal/checksum"
 )
@@ -163,14 +165,10 @@ func TestComputeBytes(t *testing.T) {
 			t.Parallel()
 
 			got := checksum.ComputeBytes(tt.data)
-			if len(got) != tt.wantLen {
-				t.Errorf("hash length = %d, want %d (hash = %q)", len(got), tt.wantLen, got)
-			}
+			assert.Len(t, got, tt.wantLen)
 
 			again := checksum.ComputeBytes(tt.data)
-			if got != again {
-				t.Errorf("non-deterministic: %q != %q", got, again)
-			}
+			assert.Equal(t, got, again)
 		})
 	}
 }
@@ -192,9 +190,8 @@ func TestComputeFile(t *testing.T) {
 			setupVFS: func(t *testing.T) (avfs.VFS, string) {
 				t.Helper()
 				vfs := memfs.New()
-				if err := vfs.WriteFile("/input.bin", []byte("hello, agentpack"), fs.FileMode(0o600)); err != nil {
-					t.Fatal(err)
-				}
+				err := vfs.WriteFile("/input.bin", []byte("hello, agentpack"), fs.FileMode(0o600))
+				require.NoError(t, err)
 				return vfs, "/input.bin"
 			},
 			wantLen: 64,
@@ -204,9 +201,8 @@ func TestComputeFile(t *testing.T) {
 			setupVFS: func(t *testing.T) (avfs.VFS, string) {
 				t.Helper()
 				vfs := memfs.New()
-				if err := vfs.WriteFile("/empty.bin", []byte{}, fs.FileMode(0o600)); err != nil {
-					t.Fatal(err)
-				}
+				err := vfs.WriteFile("/empty.bin", []byte{}, fs.FileMode(0o600))
+				require.NoError(t, err)
 				return vfs, "/empty.bin"
 			},
 			wantLen: 64,
@@ -216,9 +212,8 @@ func TestComputeFile(t *testing.T) {
 			setupVFS: func(t *testing.T) (avfs.VFS, string) {
 				t.Helper()
 				vfs := memfs.New()
-				if err := vfs.WriteFile("/bin.bin", []byte{0x00, 0xFF, 0x1A, 0x2B, 0x3C, 0xDE, 0xAD, 0xBE, 0xEF}, fs.FileMode(0o600)); err != nil {
-					t.Fatal(err)
-				}
+				err := vfs.WriteFile("/bin.bin", []byte{0x00, 0xFF, 0x1A, 0x2B, 0x3C, 0xDE, 0xAD, 0xBE, 0xEF}, fs.FileMode(0o600))
+				require.NoError(t, err)
 				return vfs, "/bin.bin"
 			},
 			wantLen: 64,
@@ -245,9 +240,8 @@ func TestComputeFile(t *testing.T) {
 			setupVFS: func(t *testing.T) (avfs.VFS, string) {
 				t.Helper()
 				vfs := memfs.New()
-				if err := vfs.WriteFile("/data.bin", []byte("data"), fs.FileMode(0o600)); err != nil {
-					t.Fatal(err)
-				}
+				err := vfs.WriteFile("/data.bin", []byte("data"), fs.FileMode(0o600))
+				require.NoError(t, err)
 				return copyErrorVFS{VFS: vfs}, "/data.bin"
 			},
 			wantErr:     true,
@@ -263,24 +257,16 @@ func TestComputeFile(t *testing.T) {
 			got, err := checksum.ComputeFile(ctx, vfs, path)
 
 			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
 				if tt.wantErrFrag != "" {
-					if err.Error() == "" {
-						t.Errorf("expected error containing %q, got empty", tt.wantErrFrag)
-					}
+					require.ErrorContains(t, err, tt.wantErrFrag)
+				} else {
+					require.Error(t, err)
 				}
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if len(got) != tt.wantLen {
-				t.Errorf("hash length = %d, want %d (hash = %q)", len(got), tt.wantLen, got)
-			}
+			require.NoError(t, err)
+			assert.Len(t, got, tt.wantLen)
 		})
 	}
 }
@@ -317,19 +303,11 @@ func TestWriteFile(t *testing.T) {
 			checkRead: func(t *testing.T, path string, want []checksum.Entry) {
 				t.Helper()
 				got, err := checksum.ReadFile(path)
-				if err != nil {
-					t.Fatalf("ReadFile: %v", err)
-				}
-				if len(got) != len(want) {
-					t.Fatalf("entry count = %d, want %d", len(got), len(want))
-				}
+				require.NoError(t, err)
+				require.Len(t, got, len(want))
 				for i, w := range want {
-					if got[i].Hash != w.Hash {
-						t.Errorf("entry[%d].Hash = %q, want %q", i, got[i].Hash, w.Hash)
-					}
-					if got[i].Path != w.Path {
-						t.Errorf("entry[%d].Path = %q, want %q", i, got[i].Path, w.Path)
-					}
+					assert.Equal(t, w.Hash, got[i].Hash)
+					assert.Equal(t, w.Path, got[i].Path)
 				}
 			},
 		},
@@ -405,32 +383,28 @@ func TestWriteFile(t *testing.T) {
 			err := checksum.WriteFile(ctx, vfs, path, tt.entries)
 
 			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
+				if tt.wantErrFrag != "" {
+					require.ErrorContains(t, err, tt.wantErrFrag)
+				} else {
+					require.Error(t, err)
 				}
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			// For the round-trip check, write to OS temp dir then read from there.
 			if tt.checkRead != nil {
 				// Write to a real OS file so ReadFile (which uses os.Open) can read it.
 				osPath := filepath.Join(t.TempDir(), "checksums.txt")
 				osVFS := memfs.New()
-				if err2 := checksum.WriteFile(ctx, osVFS, "/checksums.txt", tt.entries); err2 != nil {
-					t.Fatalf("write to memfs: %v", err2)
-				}
+				err2 := checksum.WriteFile(ctx, osVFS, "/checksums.txt", tt.entries)
+				require.NoError(t, err2)
 				// Read from memfs and write to real OS file for ReadFile to consume.
 				data, err2 := osVFS.ReadFile("/checksums.txt")
-				if err2 != nil {
-					t.Fatalf("read from memfs: %v", err2)
-				}
-				if err2 := os.WriteFile(osPath, data, 0o600); err2 != nil {
-					t.Fatalf("write to OS: %v", err2)
-				}
+				require.NoError(t, err2)
+				err2 = os.WriteFile(osPath, data, 0o600)
+				require.NoError(t, err2)
 				tt.checkRead(t, osPath, tt.entries)
 			}
 		})
@@ -495,14 +469,12 @@ func TestReadFile(t *testing.T) {
 				// Write a line that exceeds bufio.MaxScanTokenSize (64 KiB).
 				longLine := strings.Repeat("a", 70000) + "  file.txt\n"
 				p = filepath.Join(t.TempDir(), "checksums_long.txt")
-				if err := os.WriteFile(p, []byte(longLine), 0o600); err != nil {
-					t.Fatalf("setup: write file: %v", err)
-				}
+				err := os.WriteFile(p, []byte(longLine), 0o600)
+				require.NoError(t, err)
 			} else if tt.content != "" {
 				p = filepath.Join(t.TempDir(), "checksums.txt")
-				if err := os.WriteFile(p, []byte(tt.content), 0o600); err != nil {
-					t.Fatalf("setup: write file: %v", err)
-				}
+				err := os.WriteFile(p, []byte(tt.content), 0o600)
+				require.NoError(t, err)
 			} else {
 				p = filepath.Join(t.TempDir(), "nonexistent.txt")
 			}
@@ -510,27 +482,16 @@ func TestReadFile(t *testing.T) {
 			got, err := checksum.ReadFile(p)
 
 			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
+				require.Error(t, err)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if len(got) != len(tt.want) {
-				t.Fatalf("entry count = %d, want %d", len(got), len(tt.want))
-			}
+			require.NoError(t, err)
+			require.Len(t, got, len(tt.want))
 
 			for i, w := range tt.want {
-				if got[i].Hash != w.Hash {
-					t.Errorf("entry[%d].Hash = %q, want %q", i, got[i].Hash, w.Hash)
-				}
-				if got[i].Path != w.Path {
-					t.Errorf("entry[%d].Path = %q, want %q", i, got[i].Path, w.Path)
-				}
+				assert.Equal(t, w.Hash, got[i].Hash)
+				assert.Equal(t, w.Path, got[i].Path)
 			}
 		})
 	}
@@ -610,13 +571,10 @@ func TestVerify(t *testing.T) {
 
 			for rel, content := range tt.setupFiles {
 				path := filepath.Join(dir, rel)
-				if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-					t.Fatalf("setup: mkdir: %v", err)
-				}
-
-				if err := os.WriteFile(path, content, 0o600); err != nil {
-					t.Fatalf("setup: write %s: %v", rel, err)
-				}
+				err := os.MkdirAll(filepath.Dir(path), 0o700)
+				require.NoError(t, err)
+				err = os.WriteFile(path, content, 0o600)
+				require.NoError(t, err)
 			}
 
 			ctx := context.Background()
@@ -628,33 +586,18 @@ func TestVerify(t *testing.T) {
 
 			results, err := checksum.Verify(ctx, dir, tt.entries)
 			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
+				require.Error(t, err)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("Verify returned unexpected error: %v", err)
-			}
-
-			if len(results) != len(tt.wantOK) {
-				t.Fatalf("result count = %d, want %d", len(results), len(tt.wantOK))
-			}
+			require.NoError(t, err)
+			require.Len(t, results, len(tt.wantOK))
 
 			for i, want := range tt.wantOK {
-				if results[i].OK != want {
-					t.Errorf(
-						"results[%d].OK = %v, want %v (Err=%q)",
-						i,
-						results[i].OK,
-						want,
-						results[i].Err,
-					)
-				}
+				assert.Equal(t, want, results[i].OK)
 
-				if !want && results[i].Err == "" {
-					t.Errorf("results[%d].OK=false but Err is empty", i)
+				if !want {
+					assert.NotEmpty(t, results[i].Err)
 				}
 			}
 		})

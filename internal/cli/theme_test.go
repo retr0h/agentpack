@@ -26,6 +26,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/retr0h/agentpack/internal/cli"
 )
 
@@ -54,15 +57,9 @@ func TestBanner(t *testing.T) {
 			got := cli.Banner(&buf)
 			lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
 
-			if len(lines) != tt.wantLines {
-				t.Fatalf("line count = %d, want %d", len(lines), tt.wantLines)
-			}
-			if !strings.Contains(got, tt.wantTop) {
-				t.Errorf("missing top line %q in %q", tt.wantTop, got)
-			}
-			if !strings.Contains(got, tt.wantBot) {
-				t.Errorf("missing bot line %q in %q", tt.wantBot, got)
-			}
+			require.Len(t, lines, tt.wantLines)
+			assert.Contains(t, got, tt.wantTop)
+			assert.Contains(t, got, tt.wantBot)
 		})
 	}
 }
@@ -108,9 +105,7 @@ func TestThemeRenders(t *testing.T) {
 
 			var buf bytes.Buffer
 			got := tt.render(&buf)
-			if !strings.Contains(got, tt.want) {
-				t.Errorf("render = %q, want it to contain %q", got, tt.want)
-			}
+			assert.Contains(t, got, tt.want)
 		})
 	}
 }
@@ -144,9 +139,7 @@ func TestPrintf(t *testing.T) {
 
 			var buf bytes.Buffer
 			cli.Printf(&buf, tt.format, tt.args...)
-			if buf.String() != tt.want {
-				t.Errorf("Printf output = %q, want %q", buf.String(), tt.want)
-			}
+			assert.Equal(t, tt.want, buf.String())
 		})
 	}
 }
@@ -177,9 +170,7 @@ func TestPrint(t *testing.T) {
 
 			var buf bytes.Buffer
 			cli.Print(&buf, tt.text)
-			if buf.String() != tt.want {
-				t.Errorf("Print output = %q, want %q", buf.String(), tt.want)
-			}
+			assert.Equal(t, tt.want, buf.String())
 		})
 	}
 }
@@ -224,9 +215,7 @@ func TestPad(t *testing.T) {
 			t.Parallel()
 
 			got := cli.Pad(tt.s, tt.w)
-			if got != tt.want {
-				t.Errorf("Pad(%q, %d) = %q, want %q", tt.s, tt.w, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -266,9 +255,7 @@ func TestHumanSize(t *testing.T) {
 			t.Parallel()
 
 			got := cli.HumanSize(tt.bytes)
-			if got != tt.want {
-				t.Errorf("HumanSize(%d) = %q, want %q", tt.bytes, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -290,9 +277,7 @@ func TestCheckmark(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if cli.Checkmark != tt.want {
-				t.Errorf("Checkmark = %q, want %q", cli.Checkmark, tt.want)
-			}
+			assert.Equal(t, tt.want, cli.Checkmark)
 		})
 	}
 }
@@ -342,9 +327,7 @@ func TestPlural(t *testing.T) {
 			t.Parallel()
 
 			got := cli.Plural(tt.n, tt.singular, tt.pluralForm)
-			if got != tt.want {
-				t.Errorf("Plural(%d, %q, %q) = %q, want %q", tt.n, tt.singular, tt.pluralForm, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -384,9 +367,7 @@ func TestShortSHA(t *testing.T) {
 			t.Parallel()
 
 			got := cli.ShortSHA(tt.sha)
-			if got != tt.want {
-				t.Errorf("ShortSHA(%q) = %q, want %q", tt.sha, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -441,9 +422,7 @@ func TestSourceBaseName(t *testing.T) {
 			t.Parallel()
 
 			got := cli.SourceBaseName(tt.source)
-			if got != tt.want {
-				t.Errorf("SourceBaseName(%q) = %q, want %q", tt.source, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -484,9 +463,7 @@ func TestStepLine(t *testing.T) {
 			var buf bytes.Buffer
 			cli.StepLine(&buf, tt.stepName, tt.detail)
 			got := buf.String()
-			if !strings.Contains(got, tt.wantSubstr) {
-				t.Errorf("StepLine output %q does not contain %q", got, tt.wantSubstr)
-			}
+			assert.Contains(t, got, tt.wantSubstr)
 		})
 	}
 }
@@ -543,9 +520,7 @@ func TestTreeRow(t *testing.T) {
 			var buf bytes.Buffer
 			cli.TreeRow(&buf, tt.isLast, tt.rowName, tt.nameWidth, tt.detail)
 			got := buf.String()
-			if !strings.Contains(got, tt.wantSubstr) {
-				t.Errorf("TreeRow output %q does not contain %q", got, tt.wantSubstr)
-			}
+			assert.Contains(t, got, tt.wantSubstr)
 		})
 	}
 }
@@ -586,9 +561,7 @@ func TestHeader(t *testing.T) {
 			var buf bytes.Buffer
 			cli.Header(&buf, tt.action, tt.pluginName)
 			got := buf.String()
-			if !strings.Contains(got, tt.wantSubstr) {
-				t.Errorf("Header output %q does not contain %q", got, tt.wantSubstr)
-			}
+			assert.Contains(t, got, tt.wantSubstr)
 		})
 	}
 }
@@ -629,9 +602,7 @@ func TestField(t *testing.T) {
 			var buf bytes.Buffer
 			cli.Field(&buf, tt.label, tt.value)
 			got := buf.String()
-			if !strings.Contains(got, tt.wantSubstr) {
-				t.Errorf("Field output %q does not contain %q", got, tt.wantSubstr)
-			}
+			assert.Contains(t, got, tt.wantSubstr)
 		})
 	}
 }
@@ -666,9 +637,7 @@ func TestFieldMuted(t *testing.T) {
 			var buf bytes.Buffer
 			cli.FieldMuted(&buf, tt.label, tt.value)
 			got := buf.String()
-			if !strings.Contains(got, tt.wantSubstr) {
-				t.Errorf("FieldMuted output %q does not contain %q", got, tt.wantSubstr)
-			}
+			assert.Contains(t, got, tt.wantSubstr)
 		})
 	}
 }
@@ -720,8 +689,8 @@ func TestTable(t *testing.T) {
 			var buf bytes.Buffer
 			cli.Table(&buf, tt.cols)
 			got := buf.String()
-			if tt.wantSubstr != "" && !strings.Contains(got, tt.wantSubstr) {
-				t.Errorf("Table output %q does not contain %q", got, tt.wantSubstr)
+			if tt.wantSubstr != "" {
+				assert.Contains(t, got, tt.wantSubstr)
 			}
 		})
 	}
@@ -748,18 +717,12 @@ func TestBannerWithFile(t *testing.T) {
 
 			// Use a real *os.File to exercise the rendererFor *os.File branch.
 			f, err := os.CreateTemp(t.TempDir(), "banner-*.txt")
-			if err != nil {
-				t.Fatalf("create temp file: %v", err)
-			}
+			require.NoError(t, err)
 			defer func() { _ = f.Close() }()
 
 			got := cli.Banner(f)
-			if !strings.Contains(got, tt.wantTop) {
-				t.Errorf("missing top line %q in %q", tt.wantTop, got)
-			}
-			if !strings.Contains(got, tt.wantBot) {
-				t.Errorf("missing bot line %q in %q", tt.wantBot, got)
-			}
+			assert.Contains(t, got, tt.wantTop)
+			assert.Contains(t, got, tt.wantBot)
 		})
 	}
 }

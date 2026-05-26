@@ -18,6 +18,13 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+// NOTE: registry tests deliberately do NOT call t.Parallel() at the top
+// level because they all mutate the package-level osUserHomeDir variable via
+// SetOsUserHomeDir. Running them in parallel would cause a data race between
+// subtests. Sub-tests within a single table function are also sequential for
+// the same reason.
+//
+
 package registry_test
 
 import (
@@ -26,30 +33,190 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
 // tempHome returns a SetOsUserHomeDir restore function that directs all
 // registry I/O to a fresh temp directory, preventing real-home pollution.
-func tempHome(t *testing.T) func() {
+func tempHome(t *testing.T) (string, func()) {
 	t.Helper()
 
 	tmp := t.TempDir()
-
-	return registry.SetOsUserHomeDir(func() (string, error) {
+	restore := registry.SetOsUserHomeDir(func() (string, error) {
 		return tmp, nil
 	})
+
+	return tmp, restore
 }
 
 // --------------------------------------------------------------------------
-// TestSaveAndLoad
+// TestDir
+// --------------------------------------------------------------------------
+
+func TestDir(t *testing.T) {
+	tests := []struct {
+		name       string
+		homeFunc   func(t *testing.T) func() (string, error)
+		wantSuffix string
+		wantErr    string
+	}{
+		{
+			name: "returns registry dir under temp home",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				tmp := t.TempDir()
+				return func() (string, error) { return tmp, nil }
+			},
+			wantSuffix: filepath.Join(".config", "agentpack", "packages"),
+		},
+		{
+			name: "returns error when home dir lookup fails",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				return func() (string, error) { return "", fmt.Errorf("no home") }
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "returns error when mkdir fails because file blocks directory",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				tmp := t.TempDir()
+				// Place a regular file where .config should be created.
+				blocker := filepath.Join(tmp, ".config")
+				require.NoError(t, os.WriteFile(blocker, []byte("block"), 0o644))
+				return func() (string, error) { return tmp, nil }
+			},
+			wantErr: "mkdir registry dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restore := registry.SetOsUserHomeDir(tt.homeFunc(t))
+			defer restore()
+
+			got, err := registry.Dir()
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.True(t, filepath.IsAbs(got))
+			assert.Contains(t, got, tt.wantSuffix)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestSave
+// --------------------------------------------------------------------------
+
+func TestSave(t *testing.T) {
+	tests := []struct {
+		name     string
+		manifest *registry.PackageManifest
+		setup    func(t *testing.T, pkgDir string)
+		wantErr  string
+	}{
+		{
+			name: "saves manifest successfully",
+			manifest: &registry.PackageManifest{
+				Name:    "save-ok",
+				Source:  "github.com/org/repo",
+				Version: "1.0.0",
+				Files: []registry.InstalledFile{
+					{Path: "skills/foo.md", SHA256: "abc123", Target: "claude-code", Dir: "/tmp/dir"},
+				},
+			},
+		},
+		{
+			name: "saves manifest with no files",
+			manifest: &registry.PackageManifest{
+				Name:   "empty-plugin",
+				Source: "github.com/org/empty",
+			},
+		},
+		{
+			name: "returns error when registry dir is read-only",
+			manifest: &registry.PackageManifest{
+				Name:   "ro-plugin",
+				Source: "src",
+			},
+			setup: func(t *testing.T, pkgDir string) {
+				t.Helper()
+				require.NoError(t, os.Chmod(pkgDir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(pkgDir, 0o755) })
+			},
+			wantErr: "write manifest",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp, restore := tempHome(t)
+			defer restore()
+
+			// Pre-create the packages dir.
+			pkgDir := filepath.Join(tmp, ".config", "agentpack", "packages")
+			require.NoError(t, os.MkdirAll(pkgDir, 0o755))
+
+			if tt.setup != nil {
+				tt.setup(t, pkgDir)
+			}
+
+			err := registry.Save(tt.manifest)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestSaveDirFailure covers the Dir() failure path inside Save (separate
+// table because it overrides osUserHomeDir differently).
+func TestSaveDirFailure(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr string
+	}{
+		{
+			name:    "returns error when Dir fails",
+			wantErr: "home dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restore := registry.SetOsUserHomeDir(func() (string, error) {
+				return "", fmt.Errorf("no home")
+			})
+			defer restore()
+
+			err := registry.Save(&registry.PackageManifest{Name: "x", Source: "s"})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestSaveAndLoad (round-trip)
 // --------------------------------------------------------------------------
 
 func TestSaveAndLoad(t *testing.T) {
 	tests := []struct {
 		name     string
 		manifest *registry.PackageManifest
-		wantErr  string
 	}{
 		{
 			name: "save and load round-trip",
@@ -73,90 +240,16 @@ func TestSaveAndLoad(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			restore := tempHome(t)
+			_, restore := tempHome(t)
 			defer restore()
 
-			err := registry.Save(tt.manifest)
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error %q, got nil", tt.wantErr)
-				}
+			require.NoError(t, registry.Save(tt.manifest))
 
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("Save: %v", err)
-			}
-
-			got, loadErr := registry.Load(tt.manifest.Name)
-			if loadErr != nil {
-				t.Fatalf("Load: %v", loadErr)
-			}
-
-			if got.Name != tt.manifest.Name {
-				t.Errorf("Name = %q, want %q", got.Name, tt.manifest.Name)
-			}
-
-			if got.Source != tt.manifest.Source {
-				t.Errorf("Source = %q, want %q", got.Source, tt.manifest.Source)
-			}
-
-			if len(got.Files) != len(tt.manifest.Files) {
-				t.Errorf("Files len = %d, want %d", len(got.Files), len(tt.manifest.Files))
-			}
-		})
-	}
-}
-
-// --------------------------------------------------------------------------
-// TestDir
-// --------------------------------------------------------------------------
-
-func TestDir(t *testing.T) {
-	tests := []struct {
-		name       string
-		homeFunc   func() (string, error)
-		wantSuffix string
-		wantErr    string
-	}{
-		{
-			name: "returns registry dir under temp home",
-			homeFunc: func() (string, error) {
-				return t.TempDir(), nil
-			},
-			wantSuffix: filepath.Join(".config", "agentpack", "packages"),
-		},
-		{
-			name: "returns error when home dir lookup fails",
-			homeFunc: func() (string, error) {
-				return "", fmt.Errorf("no home")
-			},
-			wantErr: "home dir",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			restore := registry.SetOsUserHomeDir(tt.homeFunc)
-			defer restore()
-
-			got, err := registry.Dir()
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error %q, got nil", tt.wantErr)
-				}
-
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if !filepath.IsAbs(got) {
-				t.Errorf("Dir() = %q, want absolute path", got)
-			}
+			got, err := registry.Load(tt.manifest.Name)
+			require.NoError(t, err)
+			assert.Equal(t, tt.manifest.Name, got.Name)
+			assert.Equal(t, tt.manifest.Source, got.Source)
+			assert.Equal(t, len(tt.manifest.Files), len(got.Files))
 		})
 	}
 }
@@ -168,33 +261,64 @@ func TestDir(t *testing.T) {
 func TestLoad(t *testing.T) {
 	tests := []struct {
 		name    string
-		pkgName string
+		setup   func(t *testing.T, pkgDir string) string // returns package name
 		wantErr string
 	}{
 		{
-			name:    "nonexistent package returns error",
-			pkgName: "does-not-exist",
+			name: "nonexistent package returns not-found error",
+			setup: func(t *testing.T, _ string) string {
+				t.Helper()
+				return "does-not-exist"
+			},
 			wantErr: "not found in registry",
+		},
+		{
+			name: "unreadable file returns read error",
+			setup: func(t *testing.T, pkgDir string) string {
+				t.Helper()
+				name := "unreadable"
+				path := filepath.Join(pkgDir, name+".yaml")
+				require.NoError(t, os.WriteFile(path, []byte("name: unreadable\n"), 0o644))
+				require.NoError(t, os.Chmod(path, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+				return name
+			},
+			wantErr: "read manifest",
+		},
+		{
+			name: "corrupt YAML returns parse error",
+			setup: func(t *testing.T, pkgDir string) string {
+				t.Helper()
+				name := "corrupt"
+				path := filepath.Join(pkgDir, name+".yaml")
+				// A tab at the start of a continuation line violates YAML indentation
+				// rules and causes yaml.v3 to return a parse error.
+				require.NoError(t, os.WriteFile(path, []byte("name: test\n\tversion: 1.0\n"), 0o644))
+				return name
+			},
+			wantErr: "parse manifest",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			restore := tempHome(t)
+			tmp, restore := tempHome(t)
 			defer restore()
 
-			_, err := registry.Load(tt.pkgName)
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error %q, got nil", tt.wantErr)
-				}
+			// Pre-create the packages dir.
+			pkgDir := filepath.Join(tmp, ".config", "agentpack", "packages")
+			require.NoError(t, os.MkdirAll(pkgDir, 0o755))
 
+			pkgName := tt.setup(t, pkgDir)
+
+			_, err := registry.Load(pkgName)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
@@ -206,57 +330,117 @@ func TestLoad(t *testing.T) {
 func TestRemove(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(t *testing.T) string // returns pkg name to remove
+		setup   func(t *testing.T, pkgDir string) string // returns pkg name
 		wantErr string
 	}{
 		{
 			name: "remove existing manifest",
-			setup: func(t *testing.T) string {
+			setup: func(t *testing.T, _ string) string {
 				t.Helper()
 				m := &registry.PackageManifest{Name: "to-remove", Source: "src"}
-				if err := registry.Save(m); err != nil {
-					t.Fatalf("setup Save: %v", err)
-				}
-
+				require.NoError(t, registry.Save(m))
 				return "to-remove"
 			},
 		},
 		{
 			name: "remove nonexistent is no-op",
-			setup: func(t *testing.T) string {
+			setup: func(t *testing.T, _ string) string {
 				t.Helper()
-
 				return "ghost"
 			},
+		},
+		{
+			name: "returns error when file cannot be removed due to dir permissions",
+			setup: func(t *testing.T, pkgDir string) string {
+				t.Helper()
+				name := "perm-blocked"
+				path := filepath.Join(pkgDir, name+".yaml")
+				require.NoError(t, os.WriteFile(path, []byte("name: perm-blocked\n"), 0o644))
+				// Make directory read-only so os.Remove fails.
+				require.NoError(t, os.Chmod(pkgDir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(pkgDir, 0o755) })
+				return name
+			},
+			wantErr: "remove manifest",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			restore := tempHome(t)
+			tmp, restore := tempHome(t)
 			defer restore()
 
-			pkgName := tt.setup(t)
+			// Pre-create the packages dir.
+			pkgDir := filepath.Join(tmp, ".config", "agentpack", "packages")
+			require.NoError(t, os.MkdirAll(pkgDir, 0o755))
+
+			pkgName := tt.setup(t, pkgDir)
 
 			err := registry.Remove(pkgName)
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error %q, got nil", tt.wantErr)
-				}
-
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
-			// Verify it's gone.
-			dir, _ := registry.Dir()
+			dir, dirErr := registry.Dir()
+			require.NoError(t, dirErr)
 			_, statErr := os.Stat(filepath.Join(dir, pkgName+".yaml"))
-			if !os.IsNotExist(statErr) {
-				t.Error("manifest file still exists after Remove")
-			}
+			assert.True(t, os.IsNotExist(statErr))
+		})
+	}
+}
+
+// TestLoadDirFailure covers the Dir() failure path inside Load.
+func TestLoadDirFailure(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr string
+	}{
+		{
+			name:    "returns error when Dir fails",
+			wantErr: "home dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restore := registry.SetOsUserHomeDir(func() (string, error) {
+				return "", fmt.Errorf("no home")
+			})
+			defer restore()
+
+			_, err := registry.Load("any-pkg")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+// TestRemoveDirFailure covers the Dir() failure path inside Remove.
+func TestRemoveDirFailure(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr string
+	}{
+		{
+			name:    "returns error when Dir fails",
+			wantErr: "home dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restore := registry.SetOsUserHomeDir(func() (string, error) {
+				return "", fmt.Errorf("no home")
+			})
+			defer restore()
+
+			err := registry.Remove("some-pkg")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
 }
@@ -268,44 +452,95 @@ func TestRemove(t *testing.T) {
 func TestList(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(t *testing.T)
+		setup   func(t *testing.T, pkgDir string)
 		wantLen int
+		wantErr string
 	}{
 		{
 			name:    "empty registry returns nil",
-			setup:   func(t *testing.T) { t.Helper() },
+			setup:   func(t *testing.T, _ string) { t.Helper() },
 			wantLen: 0,
 		},
 		{
 			name: "lists all saved manifests",
-			setup: func(t *testing.T) {
+			setup: func(t *testing.T, _ string) {
 				t.Helper()
-
 				for _, n := range []string{"alpha", "beta", "gamma"} {
-					if err := registry.Save(&registry.PackageManifest{Name: n, Source: "src"}); err != nil {
-						t.Fatalf("setup Save %s: %v", n, err)
-					}
+					require.NoError(t, registry.Save(&registry.PackageManifest{Name: n, Source: "src"}))
 				}
 			},
 			wantLen: 3,
+		},
+		{
+			name: "skips subdirectories and non-yaml files",
+			setup: func(t *testing.T, pkgDir string) {
+				t.Helper()
+				require.NoError(t, registry.Save(&registry.PackageManifest{Name: "valid", Source: "src"}))
+				// Write a non-yaml file (should be skipped).
+				require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "notes.txt"), []byte("ignore"), 0o644))
+				// Create a subdirectory (should be skipped).
+				require.NoError(t, os.Mkdir(filepath.Join(pkgDir, "subdir"), 0o755))
+			},
+			wantLen: 1,
+		},
+		{
+			name: "returns error when a manifest fails to load",
+			setup: func(t *testing.T, pkgDir string) {
+				t.Helper()
+				// A tab at the start of a continuation line causes yaml.v3 to return
+				// a parse error.
+				require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "bad.yaml"), []byte("name: test\n\tversion: 1.0\n"), 0o644))
+			},
+			wantErr: "parse manifest",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			restore := tempHome(t)
+			tmp, restore := tempHome(t)
 			defer restore()
 
-			tt.setup(t)
+			// Pre-create the packages dir.
+			pkgDir := filepath.Join(tmp, ".config", "agentpack", "packages")
+			require.NoError(t, os.MkdirAll(pkgDir, 0o755))
+
+			tt.setup(t, pkgDir)
 
 			got, err := registry.List()
-			if err != nil {
-				t.Fatalf("List: %v", err)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
 			}
 
-			if len(got) != tt.wantLen {
-				t.Errorf("len = %d, want %d", len(got), tt.wantLen)
-			}
+			require.NoError(t, err)
+			assert.Len(t, got, tt.wantLen)
+		})
+	}
+}
+
+// TestListDirFailure covers the Dir() failure path inside List.
+func TestListDirFailure(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr string
+	}{
+		{
+			name:    "returns error when Dir fails",
+			wantErr: "home dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restore := registry.SetOsUserHomeDir(func() (string, error) {
+				return "", fmt.Errorf("no home")
+			})
+			defer restore()
+
+			_, err := registry.List()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
 }

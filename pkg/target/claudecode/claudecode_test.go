@@ -2,22 +2,114 @@ package claudecode_test
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/target"
 	"github.com/retr0h/agentpack/pkg/target/claudecode"
 )
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+}
+
+func writeJSON(t *testing.T, path string, v any) {
+	t.Helper()
+	data, err := json.Marshal(v)
+	require.NoError(t, err)
+	writeFile(t, path, string(data))
+}
+
+func TestClaudeCode_Name(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		want string
+	}{
+		{name: "returns claude-code", want: "claude-code"},
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cc := claudecode.New()
+			assert.Equal(t, tt.want, cc.Name())
+		})
+	}
+}
+
+func TestClaudeCode_DisplayName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		want string
+	}{
+		{name: "returns Claude Code", want: "Claude Code"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cc := claudecode.New()
+			assert.Equal(t, tt.want, cc.DisplayName())
+		})
+	}
+}
+
+func TestClaudeCode_Detect(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		homeFunc     func() (string, error)
+		wantDetected bool
+	}{
+		{
+			name: "home error returns false",
+			homeFunc: func() (string, error) {
+				return "", errors.New("no home")
+			},
+			wantDetected: false,
+		},
+		{
+			name: "detects when ~/.claude exists",
+			homeFunc: func() (string, error) {
+				home := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(home, ".claude"), 0o755))
+				return home, nil
+			},
+			wantDetected: true,
+		},
+		{
+			name: "not detected when ~/.claude absent",
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			wantDetected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cc := claudecode.New()
+			claudecode.SetUserHome(cc, tt.homeFunc)
+			assert.Equal(t, tt.wantDetected, cc.Detect())
+		})
 	}
 }
 
@@ -25,10 +117,12 @@ func TestInstall(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T) (srcDir string, installDir string)
-		wantErr string
-		check   func(t *testing.T, installDir string)
+		name      string
+		setup     func(t *testing.T) (srcDir string, installDir string)
+		homeFunc  func() (string, error)
+		mkdirFunc func(string, os.FileMode) error
+		wantErr   string
+		check     func(t *testing.T, installDir string)
 	}{
 		{
 			name: "copies skills recursively to .claude/skills/",
@@ -41,9 +135,8 @@ func TestInstall(t *testing.T) {
 			check: func(t *testing.T, dir string) {
 				t.Helper()
 				p := filepath.Join(dir, ".claude", "skills", "review", "SKILL.md")
-				if _, err := os.Stat(p); err != nil {
-					t.Errorf("skill not installed: %v", err)
-				}
+				_, err := os.Stat(p)
+				assert.NoError(t, err)
 			},
 		},
 		{
@@ -56,9 +149,8 @@ func TestInstall(t *testing.T) {
 			},
 			check: func(t *testing.T, dir string) {
 				t.Helper()
-				if _, err := os.Stat(filepath.Join(dir, ".claude", "commands", "scan.md")); err != nil {
-					t.Errorf("command not installed: %v", err)
-				}
+				_, err := os.Stat(filepath.Join(dir, ".claude", "commands", "scan.md"))
+				assert.NoError(t, err)
 			},
 		},
 		{
@@ -76,6 +168,43 @@ func TestInstall(t *testing.T) {
 			},
 			wantErr: "context canceled",
 		},
+		{
+			name: "uses home dir when opts.Dir is empty",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, ""
+			},
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			check: func(t *testing.T, _ string) {},
+		},
+		{
+			name: "home dir error when opts.Dir is empty",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			homeFunc: func() (string, error) {
+				return "", errors.New("home unavailable")
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "mkdirAll failure propagates error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, t.TempDir()
+			},
+			mkdirFunc: func(string, os.FileMode) error {
+				return errors.New("disk full")
+			},
+			wantErr: "install skills",
+		},
 	}
 
 	for _, tt := range tests {
@@ -83,6 +212,12 @@ func TestInstall(t *testing.T) {
 			t.Parallel()
 			srcDir, installDir := tt.setup(t)
 			cc := claudecode.New()
+			if tt.homeFunc != nil {
+				claudecode.SetUserHome(cc, tt.homeFunc)
+			}
+			if tt.mkdirFunc != nil {
+				claudecode.SetOsMkdirAll(cc, tt.mkdirFunc)
+			}
 			ctx := context.Background()
 			if tt.wantErr == "context canceled" {
 				var cancel context.CancelFunc
@@ -93,20 +228,250 @@ func TestInstall(t *testing.T) {
 				Name: "test", SourceDir: srcDir, Dir: installDir,
 			})
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 			if tt.check != nil {
 				tt.check(t, installDir)
 			}
+		})
+	}
+}
+
+func TestClaudeCode_List(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		homeFunc  func(t *testing.T) func() (string, error)
+		wantErr   string
+		wantNames []string
+	}{
+		{
+			name: "home error propagates",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				return func() (string, error) { return "", errors.New("no home") }
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "marketplaces dir absent returns nil",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			},
+			wantNames: nil,
+		},
+		{
+			name: "returns plugins with valid metadata",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				home := t.TempDir()
+				mdir := filepath.Join(home, ".claude", "plugins", "marketplaces", "my-plugin", ".agentpack")
+				writeJSON(t, filepath.Join(mdir, "metadata.json"), metadata.Metadata{
+					Name:           "my-plugin",
+					Version:        "v1.0.0",
+					GitCommitSHA:   "abc1234567890",
+					BuildTimestamp: "2026-05-24T12:00:00Z",
+				})
+				return func() (string, error) { return home, nil }
+			},
+			wantNames: []string{"my-plugin"},
+		},
+		{
+			name: "skips non-directory entries in marketplaces dir",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				home := t.TempDir()
+				mdir := filepath.Join(home, ".claude", "plugins", "marketplaces")
+				writeFile(t, filepath.Join(mdir, "not-a-dir.txt"), "file")
+				return func() (string, error) { return home, nil }
+			},
+			wantNames: nil,
+		},
+		{
+			name: "skips plugin dirs with invalid JSON metadata",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				home := t.TempDir()
+				mdir := filepath.Join(home, ".claude", "plugins", "marketplaces", "bad-plugin", ".agentpack")
+				writeFile(t, filepath.Join(mdir, "metadata.json"), "not-json{{{")
+				return func() (string, error) { return home, nil }
+			},
+			wantNames: nil,
+		},
+		{
+			name: "skips plugin dirs without metadata file",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				home := t.TempDir()
+				mdir := filepath.Join(home, ".claude", "plugins", "marketplaces", "no-meta")
+				require.NoError(t, os.MkdirAll(mdir, 0o755))
+				return func() (string, error) { return home, nil }
+			},
+			wantNames: nil,
+		},
+		{
+			name: "readdir error on unreadable marketplaces dir",
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				home := t.TempDir()
+				mdir := filepath.Join(home, ".claude", "plugins", "marketplaces")
+				require.NoError(t, os.MkdirAll(mdir, 0o755))
+				require.NoError(t, os.Chmod(mdir, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(mdir, 0o755) })
+				return func() (string, error) { return home, nil }
+			},
+			wantErr: "read marketplaces dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cc := claudecode.New()
+			claudecode.SetUserHome(cc, tt.homeFunc(t))
+
+			plugins, err := cc.List()
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Len(t, plugins, len(tt.wantNames))
+
+			for i, name := range tt.wantNames {
+				assert.Equal(t, name, plugins[i].Name)
+			}
+		})
+	}
+}
+
+func TestCopyFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (src, dst string)
+		wantErr string
+	}{
+		{
+			name: "copies file successfully",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := filepath.Join(t.TempDir(), "src.txt")
+				require.NoError(t, os.WriteFile(src, []byte("hello"), 0o644))
+				dst := filepath.Join(t.TempDir(), "dst.txt")
+				return src, dst
+			},
+		},
+		{
+			name: "read error on missing src",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "nonexistent.txt"), filepath.Join(t.TempDir(), "dst.txt")
+			},
+			wantErr: "read",
+		},
+		{
+			name: "write error when dst is an existing directory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := filepath.Join(t.TempDir(), "src.txt")
+				require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
+				// dst points at an existing directory — os.WriteFile fails with EISDIR.
+				dstDir := t.TempDir()
+				existingDir := filepath.Join(dstDir, "subdir")
+				require.NoError(t, os.MkdirAll(existingDir, 0o755))
+				return src, existingDir
+			},
+			wantErr: "is a directory",
+		},
+		{
+			name: "mkdirAll error when dst parent is read-only",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := filepath.Join(t.TempDir(), "src.txt")
+				require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
+				// Make a read-only parent so MkdirAll inside copyFile fails.
+				roDir := t.TempDir()
+				require.NoError(t, os.Chmod(roDir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })
+				return src, filepath.Join(roDir, "newsubdir", "dst.txt")
+			},
+			wantErr: "permission denied",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			src, dst := tt.setup(t)
+			err := claudecode.CopyFile(src, dst)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestCopyTree(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (src, dst string)
+		wantErr string
+	}{
+		{
+			name: "copies files recursively",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "sub", "a.md"), "a")
+				return src, t.TempDir()
+			},
+		},
+		{
+			name: "walkDir error on unreadable subdirectory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				unreadable := filepath.Join(src, "locked")
+				require.NoError(t, os.MkdirAll(unreadable, 0o755))
+				writeFile(t, filepath.Join(unreadable, "x.md"), "x")
+				require.NoError(t, os.Chmod(unreadable, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(unreadable, 0o755) })
+				return src, t.TempDir()
+			},
+			wantErr: "permission denied",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			src, dst := tt.setup(t)
+			err := claudecode.CopyTree(os.MkdirAll, src, dst)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
 		})
 	}
 }
@@ -121,9 +486,7 @@ func TestShortSHA(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := claudecode.ShortSHA(tt.sha); got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, claudecode.ShortSHA(tt.sha))
 		})
 	}
 }
@@ -137,9 +500,7 @@ func TestFormatDate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := claudecode.FormatDate(tt.ts); got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, claudecode.FormatDate(tt.ts))
 		})
 	}
 }

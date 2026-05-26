@@ -42,6 +42,10 @@ import (
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
+// lsRemote is a swappable wrapper around fetcher.LsRemote so tests can inject
+// a fake without network access.
+var lsRemote = fetcher.LsRemote
+
 // RegistryLoader loads a single package manifest from the registry.
 // Implement this interface to inject a test double in place of registry.Load.
 type RegistryLoader interface {
@@ -131,7 +135,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 				opts.OnStep(install.Step{Name: "checking", Detail: m.Source})
 			}
 
-			refs, lsErr := fetcher.LsRemote(ctx, m.Source)
+			refs, lsErr := lsRemote(ctx, m.Source)
 			if lsErr == nil {
 				remoteSHA := resolveHEAD(refs)
 				remoteShort := shortSHA(remoteSHA)

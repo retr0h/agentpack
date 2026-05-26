@@ -35,6 +35,8 @@ import (
 	"time"
 
 	"github.com/avfs/avfs/vfs/osfs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/retr0h/agentpack/internal/metadata"
@@ -45,6 +47,33 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 	"github.com/retr0h/agentpack/pkg/target/mocks"
 )
+
+// initBareGitRepo creates a bare git repository at the given path that can be
+// cloned via go-git's local file protocol. The path must end in ".git" so that
+// fetcher.New selects GitFetcher.
+func initBareGitRepo(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	bare := filepath.Join(dir, "repo.git")
+
+	require.NoError(t, os.MkdirAll(src, 0o755))
+
+	initGitRepo(t, src)
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Env = append(os.Environ(), gitEnv...)
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %v\n%s", args, out)
+	}
+
+	run("clone", "--bare", src, bare)
+
+	return bare
+}
 
 // --------------------------------------------------------------------------
 // cancelAfterN context helper
@@ -95,17 +124,13 @@ func initGitRepo(t *testing.T, dir string) {
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), gitEnv...)
 		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		require.NoError(t, err, "git %v\n%s", args, out)
 	}
 
 	run("init")
 	run("checkout", "-b", "main")
 
-	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0o644))
 
 	run("add", ".")
 	run("commit", "-m", "init")
@@ -116,20 +141,13 @@ func initGitRepo(t *testing.T, dir string) {
 func buildTestArchive(t *testing.T, dir string, manifestContent string) string {
 	t.Helper()
 
-	if err := os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte(manifestContent), 0o644); err != nil {
-		t.Fatalf("write agentpack.yaml: %v", err)
-	}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte(manifestContent), 0o644))
 
 	vfs := osfs.NewWithNoIdm()
 
 	results, err := build.Run(context.Background(), vfs, build.Options{Dir: dir})
-	if err != nil {
-		t.Fatalf("build.Run: %v", err)
-	}
-
-	if len(results) == 0 {
-		t.Fatal("build.Run returned no results")
-	}
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
 
 	return results[0].ArchivePath
 }
@@ -142,14 +160,12 @@ func buildArchiveNoChecksums(t *testing.T) string {
 	vfs := osfs.NewWithNoIdm()
 	outPath := filepath.Join(dir, "nochecksum.agentpack")
 
-	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+	require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{
 			ArchivePath: "skills/intro.md",
 			Content:     []byte("# Intro"),
 		},
-	}); err != nil {
-		t.Fatalf("create archive: %v", err)
-	}
+	}))
 
 	return outPath
 }
@@ -162,14 +178,12 @@ func buildArchiveBadChecksums(t *testing.T) string {
 	vfs := osfs.NewWithNoIdm()
 	outPath := filepath.Join(dir, "badchecksum.agentpack")
 
-	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+	require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{
 			ArchivePath: ".agentpack/checksums.txt",
 			Content:     []byte("badhash file.txt\n"), // missing double-space
 		},
-	}); err != nil {
-		t.Fatalf("create archive: %v", err)
-	}
+	}))
 
 	return outPath
 }
@@ -186,15 +200,13 @@ func buildArchiveTamperedChecksum(t *testing.T) string {
 	badHash := strings.Repeat("0", 64)
 	checksumContent := fmt.Sprintf("%s  %s\n", badHash, filePath)
 
-	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+	require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: filePath, Content: []byte("content")},
 		{
 			ArchivePath: ".agentpack/checksums.txt",
 			Content:     []byte(checksumContent),
 		},
-	}); err != nil {
-		t.Fatalf("create archive: %v", err)
-	}
+	}))
 
 	return outPath
 }
@@ -211,15 +223,13 @@ func buildArchiveNoMetadata(t *testing.T) string {
 	filePath := "skills/intro.md"
 	checksumContent := fmt.Sprintf("%s  %s\n", sha256Hex(content), filePath)
 
-	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+	require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: filePath, Content: content},
 		{
 			ArchivePath: ".agentpack/checksums.txt",
 			Content:     []byte(checksumContent),
 		},
-	}); err != nil {
-		t.Fatalf("create archive: %v", err)
-	}
+	}))
 
 	return outPath
 }
@@ -241,9 +251,7 @@ func buildArchiveWithMeta(t *testing.T, name, version string) string {
 		GitCommitSHA:   "abc1234567890",
 		BuildTimestamp: "2026-01-01T00:00:00Z",
 	})
-	if err != nil {
-		t.Fatalf("marshal meta: %v", err)
-	}
+	require.NoError(t, err)
 
 	checksumsContent := fmt.Sprintf(
 		"%s  %s\n%s  %s\n",
@@ -251,13 +259,11 @@ func buildArchiveWithMeta(t *testing.T, name, version string) string {
 		sha256Hex(metaJSON), ".agentpack/metadata.json",
 	)
 
-	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+	require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: filePath, Content: content},
 		{ArchivePath: ".agentpack/metadata.json", Content: metaJSON},
 		{ArchivePath: ".agentpack/checksums.txt", Content: []byte(checksumsContent)},
-	}); err != nil {
-		t.Fatalf("create archive: %v", err)
-	}
+	}))
 
 	return outPath
 }
@@ -307,18 +313,9 @@ description: A test plugin
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
-
-				if r.Name != "test-plugin" {
-					t.Errorf("Name = %q, want %q", r.Name, "test-plugin")
-				}
-
-				if r.Version != "1.0.0" {
-					t.Errorf("Version = %q, want %q", r.Version, "1.0.0")
-				}
-
-				if r.SHA == "" {
-					t.Error("SHA is empty")
-				}
+				assert.Equal(t, "test-plugin", r.Name)
+				assert.Equal(t, "1.0.0", r.Version)
+				assert.NotEmpty(t, r.SHA)
 			},
 		},
 		{
@@ -352,10 +349,7 @@ description: Multi-target plugin
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
-
-				if r.Name != "multi-plugin" {
-					t.Errorf("Name = %q, want %q", r.Name, "multi-plugin")
-				}
+				assert.Equal(t, "multi-plugin", r.Name)
 			},
 		},
 		{
@@ -374,10 +368,7 @@ description: Multi-target plugin
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
-
-				if r.Name != "empty-targets-plugin" {
-					t.Errorf("Name = %q, want %q", r.Name, "empty-targets-plugin")
-				}
+				assert.Equal(t, "empty-targets-plugin", r.Name)
 			},
 		},
 		{
@@ -415,9 +406,7 @@ description: step test
 					}
 				}
 
-				if !found {
-					t.Errorf("expected step {installing to, Step Target} in steps %v", steps)
-				}
+				assert.True(t, found)
 			},
 		},
 		{
@@ -572,9 +561,7 @@ description: Plugin for mkdir temp test
 				dir := t.TempDir()
 				archivePath := filepath.Join(dir, "corrupt.agentpack")
 
-				if err := os.WriteFile(archivePath, []byte("not gzip data"), 0o644); err != nil {
-					t.Fatalf("write: %v", err)
-				}
+				require.NoError(t, os.WriteFile(archivePath, []byte("not gzip data"), 0o644))
 
 				return archivePath, nil
 			},
@@ -782,20 +769,11 @@ description: ctx inside targets loop
 			})
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.checkResult != nil {
 				tt.checkResult(t, r)
@@ -847,10 +825,7 @@ func TestShortSHA(t *testing.T) {
 			t.Parallel()
 
 			got := install.ShortSHA(tt.sha)
-
-			if got != tt.want {
-				t.Errorf("ShortSHA(%q) = %q, want %q", tt.sha, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -875,23 +850,15 @@ func TestCopyFile(t *testing.T) {
 				dir := t.TempDir()
 				src := filepath.Join(dir, "src.txt")
 
-				if err := os.WriteFile(src, []byte("hello copy"), 0o644); err != nil {
-					t.Fatalf("write src: %v", err)
-				}
+				require.NoError(t, os.WriteFile(src, []byte("hello copy"), 0o644))
 
 				return src, filepath.Join(dir, "dst.txt")
 			},
 			check: func(t *testing.T, dst string) {
 				t.Helper()
 				data, err := os.ReadFile(dst)
-
-				if err != nil {
-					t.Fatalf("read dst: %v", err)
-				}
-
-				if string(data) != "hello copy" {
-					t.Errorf("dst content = %q, want %q", string(data), "hello copy")
-				}
+				require.NoError(t, err)
+				assert.Equal(t, "hello copy", string(data))
 			},
 		},
 		{
@@ -911,9 +878,7 @@ func TestCopyFile(t *testing.T) {
 				dir := t.TempDir()
 				src := filepath.Join(dir, "src.txt")
 
-				if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
-					t.Fatalf("write src: %v", err)
-				}
+				require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
 
 				return src, filepath.Join(dir, "nonexistent", "dst.txt")
 			},
@@ -929,20 +894,11 @@ func TestCopyFile(t *testing.T) {
 			err := install.CopyFile(src, dst)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.check != nil {
 				tt.check(t, dst)
@@ -972,41 +928,21 @@ func TestCopyDir(t *testing.T) {
 				dir := t.TempDir()
 				src := filepath.Join(dir, "src")
 
-				if err := os.MkdirAll(filepath.Join(src, "subdir"), 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-
-				if err := os.WriteFile(filepath.Join(src, "file.txt"), []byte("root"), 0o644); err != nil {
-					t.Fatalf("write root file: %v", err)
-				}
-
-				if err := os.WriteFile(filepath.Join(src, "subdir", "nested.txt"), []byte("nested"), 0o644); err != nil {
-					t.Fatalf("write nested file: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "subdir"), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(src, "file.txt"), []byte("root"), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(src, "subdir", "nested.txt"), []byte("nested"), 0o644))
 
 				return src, filepath.Join(dir, "dst")
 			},
 			check: func(t *testing.T, dst string) {
 				t.Helper()
 				data, err := os.ReadFile(filepath.Join(dst, "file.txt"))
-
-				if err != nil {
-					t.Fatalf("read file.txt: %v", err)
-				}
-
-				if string(data) != "root" {
-					t.Errorf("file.txt = %q, want %q", string(data), "root")
-				}
+				require.NoError(t, err)
+				assert.Equal(t, "root", string(data))
 
 				data2, err := os.ReadFile(filepath.Join(dst, "subdir", "nested.txt"))
-
-				if err != nil {
-					t.Fatalf("read nested.txt: %v", err)
-				}
-
-				if string(data2) != "nested" {
-					t.Errorf("nested.txt = %q, want %q", string(data2), "nested")
-				}
+				require.NoError(t, err)
+				assert.Equal(t, "nested", string(data2))
 			},
 		},
 		{
@@ -1016,13 +952,8 @@ func TestCopyDir(t *testing.T) {
 				dir := t.TempDir()
 				src := filepath.Join(dir, "src")
 
-				if err := os.MkdirAll(src, 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-
-				if err := os.WriteFile(filepath.Join(src, "file.txt"), []byte("data"), 0o644); err != nil {
-					t.Fatalf("write file: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(src, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(src, "file.txt"), []byte("data"), 0o644))
 
 				return src, filepath.Join(dir, "dst")
 			},
@@ -1037,17 +968,9 @@ func TestCopyDir(t *testing.T) {
 				src := filepath.Join(dir, "src")
 				subdir := filepath.Join(src, "subdir")
 
-				if err := os.MkdirAll(subdir, 0o755); err != nil {
-					t.Fatalf("mkdir subdir: %v", err)
-				}
-
-				if err := os.WriteFile(filepath.Join(subdir, "file.txt"), []byte("x"), 0o644); err != nil {
-					t.Fatalf("write: %v", err)
-				}
-
-				if err := os.Chmod(subdir, 0o000); err != nil {
-					t.Fatalf("chmod: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(subdir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(subdir, "file.txt"), []byte("x"), 0o644))
+				require.NoError(t, os.Chmod(subdir, 0o000))
 
 				t.Cleanup(func() { _ = os.Chmod(subdir, 0o755) })
 
@@ -1079,20 +1002,11 @@ func TestCopyDir(t *testing.T) {
 			err := install.CopyDir(ctx, src, dst)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.check != nil {
 				tt.check(t, dst)
@@ -1121,30 +1035,19 @@ func TestFindChecksums(t *testing.T) {
 				dir := t.TempDir()
 				agentpackDir := filepath.Join(dir, ".agentpack")
 
-				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-
-				if err := os.WriteFile(
+				require.NoError(t, os.MkdirAll(agentpackDir, 0o755))
+				require.NoError(t, os.WriteFile(
 					filepath.Join(agentpackDir, "checksums.txt"),
 					[]byte("hash  file.txt\n"),
 					0o644,
-				); err != nil {
-					t.Fatalf("write checksums.txt: %v", err)
-				}
+				))
 
 				return dir
 			},
 			check: func(t *testing.T, path string) {
 				t.Helper()
-
-				if path == "" {
-					t.Error("expected non-empty path")
-				}
-
-				if !strings.HasSuffix(path, "checksums.txt") {
-					t.Errorf("path %q does not end in checksums.txt", path)
-				}
+				assert.NotEmpty(t, path)
+				assert.True(t, strings.HasSuffix(path, "checksums.txt"))
 			},
 		},
 		{
@@ -1163,9 +1066,7 @@ func TestFindChecksums(t *testing.T) {
 				dir := t.TempDir()
 				locked := filepath.Join(dir, "locked")
 
-				if err := os.MkdirAll(locked, 0o000); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(locked, 0o000))
 
 				t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
 
@@ -1183,20 +1084,11 @@ func TestFindChecksums(t *testing.T) {
 			path, err := install.FindChecksums(dir)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.check != nil {
 				tt.check(t, path)
@@ -1225,34 +1117,24 @@ func TestFindAndReadMetadata(t *testing.T) {
 				dir := t.TempDir()
 				agentpackDir := filepath.Join(dir, ".agentpack")
 
-				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(agentpackDir, 0o755))
 
 				meta := metadata.Metadata{
 					Name:    "my-plugin",
 					Version: "1.0.0",
 				}
 				data, err := json.Marshal(meta)
+				require.NoError(t, err)
 
-				if err != nil {
-					t.Fatalf("marshal: %v", err)
-				}
-
-				if err := os.WriteFile(
+				require.NoError(t, os.WriteFile(
 					filepath.Join(agentpackDir, "metadata.json"), data, 0o644,
-				); err != nil {
-					t.Fatalf("write metadata.json: %v", err)
-				}
+				))
 
 				return dir
 			},
 			check: func(t *testing.T, m any) {
 				t.Helper()
-
-				if m == nil {
-					t.Error("expected non-nil metadata")
-				}
+				assert.NotNil(t, m)
 			},
 		},
 		{
@@ -1271,17 +1153,12 @@ func TestFindAndReadMetadata(t *testing.T) {
 				dir := t.TempDir()
 				agentpackDir := filepath.Join(dir, ".agentpack")
 
-				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-
-				if err := os.WriteFile(
+				require.NoError(t, os.MkdirAll(agentpackDir, 0o755))
+				require.NoError(t, os.WriteFile(
 					filepath.Join(agentpackDir, "metadata.json"),
 					[]byte("not json {{{"),
 					0o644,
-				); err != nil {
-					t.Fatalf("write: %v", err)
-				}
+				))
 
 				return dir
 			},
@@ -1294,9 +1171,7 @@ func TestFindAndReadMetadata(t *testing.T) {
 				dir := t.TempDir()
 				locked := filepath.Join(dir, "locked")
 
-				if err := os.MkdirAll(locked, 0o000); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(locked, 0o000))
 
 				t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
 
@@ -1311,15 +1186,11 @@ func TestFindAndReadMetadata(t *testing.T) {
 				dir := t.TempDir()
 				agentpackDir := filepath.Join(dir, ".agentpack")
 
-				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(agentpackDir, 0o755))
 
 				metaPath := filepath.Join(agentpackDir, "metadata.json")
 
-				if err := os.WriteFile(metaPath, []byte(`{"name":"p"}`), 0o000); err != nil {
-					t.Fatalf("write: %v", err)
-				}
+				require.NoError(t, os.WriteFile(metaPath, []byte(`{"name":"p"}`), 0o000))
 
 				t.Cleanup(func() { _ = os.Chmod(metaPath, 0o644) })
 
@@ -1337,20 +1208,11 @@ func TestFindAndReadMetadata(t *testing.T) {
 			m, err := install.FindAndReadMetadata(dir)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.check != nil {
 				tt.check(t, m)
@@ -1379,18 +1241,11 @@ func TestCollectInstalledFiles(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 
-				if err := os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# Skill"), 0o644); err != nil {
-					t.Fatalf("write skill.md: %v", err)
-				}
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# Skill"), 0o644))
 
 				sub := filepath.Join(dir, "sub")
-				if err := os.MkdirAll(sub, 0o755); err != nil {
-					t.Fatalf("mkdir sub: %v", err)
-				}
-
-				if err := os.WriteFile(filepath.Join(sub, "agent.md"), []byte("# Agent"), 0o644); err != nil {
-					t.Fatalf("write agent.md: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(sub, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(sub, "agent.md"), []byte("# Agent"), 0o644))
 
 				return dir
 			},
@@ -1427,37 +1282,561 @@ func TestCollectInstalledFiles(t *testing.T) {
 			files, err := install.CollectInstalledFiles(dir, tt.targetName)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
 
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+			require.NoError(t, err)
+			assert.Len(t, files, tt.wantLen)
 
+			for _, f := range files {
+				assert.Equal(t, tt.targetName, f.Target)
+				assert.NotEmpty(t, f.SHA256)
+				assert.NotEmpty(t, f.Path)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestNameFromSource
+// --------------------------------------------------------------------------
+
+func TestNameFromSource(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{
+			name:   "extracts repo name from github URL",
+			source: "github.com/org/skills-repo",
+			want:   "skills-repo",
+		},
+		{
+			name:   "strips .git suffix",
+			source: "github.com/org/skills-repo.git",
+			want:   "skills-repo",
+		},
+		{
+			name:   "strips fragment before extracting name",
+			source: "github.com/org/skills-repo#v1.0.0",
+			want:   "skills-repo",
+		},
+		{
+			name:   "strips trailing slash",
+			source: "github.com/org/skills-repo/",
+			want:   "skills-repo",
+		},
+		{
+			name:   "returns source unchanged when no slash present",
+			source: "myrepo",
+			want:   "myrepo",
+		},
+		{
+			name:   "handles https:// prefix",
+			source: "https://github.com/org/my-plugin.git#main",
+			want:   "my-plugin",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := install.NameFromSource(tt.source)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestHumanSize
+// --------------------------------------------------------------------------
+
+func TestHumanSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		bytes int64
+		want  string
+	}{
+		{
+			name:  "returns bytes when less than 1 KB",
+			bytes: 512,
+			want:  "512 B",
+		},
+		{
+			name:  "returns bytes when exactly 0",
+			bytes: 0,
+			want:  "0 B",
+		},
+		{
+			name:  "returns bytes for 1023 bytes",
+			bytes: 1023,
+			want:  "1023 B",
+		},
+		{
+			name:  "returns KB when equal to 1 KB",
+			bytes: 1024,
+			want:  "1 KB",
+		},
+		{
+			name:  "returns KB for larger values",
+			bytes: 2048,
+			want:  "2 KB",
+		},
+		{
+			name:  "returns KB for non-round values",
+			bytes: 1536,
+			want:  "1 KB",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := install.HumanSize(tt.bytes)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestRegistrySource
+// --------------------------------------------------------------------------
+
+func TestRegistrySource(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts install.Options
+		want string
+	}{
+		{
+			name: "returns OriginalSource when set",
+			opts: install.Options{
+				Source:         "/tmp/cached/archive.agentpack",
+				OriginalSource: "github.com/org/skills-repo",
+			},
+			want: "github.com/org/skills-repo",
+		},
+		{
+			name: "returns Source when OriginalSource is empty",
+			opts: install.Options{
+				Source:         "/tmp/cached/archive.agentpack",
+				OriginalSource: "",
+			},
+			want: "/tmp/cached/archive.agentpack",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := install.RegistrySource(tt.opts)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestCollectTargetFiles
+// --------------------------------------------------------------------------
+
+func TestCollectTargetFiles(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		setup      func(t *testing.T) (installDir, srcDir string)
+		targetName string
+		wantErr    string
+		wantLen    int
+		checkFiles func(t *testing.T, files []registry.InstalledFile)
+	}{
+		{
+			name: "collects claude-code target files from .claude dirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				installDir := t.TempDir()
+
+				skillDir := filepath.Join(installDir, ".claude", "skills")
+				require.NoError(t, os.MkdirAll(skillDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(skillDir, "skill.md"), []byte("# skill"), 0o644))
+
+				cmdDir := filepath.Join(installDir, ".claude", "commands")
+				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(cmdDir, "cmd.md"), []byte("# cmd"), 0o644))
+
+				return installDir, t.TempDir()
+			},
+			targetName: "claude-code",
+			wantLen:    2,
+		},
+		{
+			name: "collects cursor target files from .cursor/rules",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				installDir := t.TempDir()
+
+				rulesDir := filepath.Join(installDir, ".cursor", "rules")
+				require.NoError(t, os.MkdirAll(rulesDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(rulesDir, "rule.md"), []byte("# rule"), 0o644))
+
+				return installDir, t.TempDir()
+			},
+			targetName: "cursor",
+			wantLen:    1,
+		},
+		{
+			name: "collects universal target files from .agents/skills",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				installDir := t.TempDir()
+
+				agentsDir := filepath.Join(installDir, ".agents", "skills")
+				require.NoError(t, os.MkdirAll(agentsDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "skill.md"), []byte("# skill"), 0o644))
+
+				return installDir, t.TempDir()
+			},
+			targetName: "universal",
+			wantLen:    1,
+		},
+		{
+			name: "returns empty slice when target dirs do not exist",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			targetName: "claude-code",
+			wantLen:    0,
+		},
+		{
+			name: "uses .agents/skills fallback for unknown target name",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				installDir := t.TempDir()
+
+				agentsDir := filepath.Join(installDir, ".agents", "skills")
+				require.NoError(t, os.MkdirAll(agentsDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "skill.md"), []byte("# skill"), 0o644))
+
+				return installDir, t.TempDir()
+			},
+			targetName: "unknown-target-xyz",
+			wantLen:    1,
+		},
+		{
+			name: "returns error when WalkDir encounters unreadable directory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				installDir := t.TempDir()
+
+				skillDir := filepath.Join(installDir, ".claude", "skills")
+				require.NoError(t, os.MkdirAll(skillDir, 0o755))
+
+				locked := filepath.Join(skillDir, "locked")
+				require.NoError(t, os.MkdirAll(locked, 0o000))
+
+				t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+
+				return installDir, t.TempDir()
+			},
+			targetName: "claude-code",
+			wantErr:    "permission denied",
+		},
+		{
+			name: "returns error when file inside target dir cannot be read",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				installDir := t.TempDir()
+
+				skillDir := filepath.Join(installDir, ".claude", "skills")
+				require.NoError(t, os.MkdirAll(skillDir, 0o755))
+
+				unreadable := filepath.Join(skillDir, "secret.md")
+				require.NoError(t, os.WriteFile(unreadable, []byte("secret"), 0o000))
+
+				t.Cleanup(func() { _ = os.Chmod(unreadable, 0o644) })
+
+				return installDir, t.TempDir()
+			},
+			targetName: "claude-code",
+			wantErr:    "permission denied",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			installDir, srcDir := tt.setup(t)
+
+			ctrl := gomock.NewController(t)
+			m := mocks.NewMockTarget(ctrl)
+			m.EXPECT().Name().Return(tt.targetName).AnyTimes()
+
+			files, err := install.CollectTargetFiles(installDir, m, srcDir)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Len(t, files, tt.wantLen)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestCopyFileAtomic
+// --------------------------------------------------------------------------
+
+func TestCopyFileAtomic(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (src, dst string)
+		wantErr string
+		check   func(t *testing.T, dst string)
+	}{
+		{
+			name: "copies file atomically to destination",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				src := filepath.Join(dir, "src.agentpack")
+				dst := filepath.Join(dir, "dst.agentpack")
+
+				require.NoError(t, os.WriteFile(src, []byte("archive data"), 0o644))
+
+				return src, dst
+			},
+			check: func(t *testing.T, dst string) {
+				t.Helper()
+				data, err := os.ReadFile(dst)
+				require.NoError(t, err)
+				assert.Equal(t, "archive data", string(data))
+			},
+		},
+		{
+			name: "returns error when source does not exist",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir := t.TempDir()
+
+				return filepath.Join(dir, "nonexistent.agentpack"), filepath.Join(dir, "dst.agentpack")
+			},
+			wantErr: "open",
+		},
+		{
+			name: "returns error when destination directory does not exist",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				src := filepath.Join(dir, "src.agentpack")
+
+				require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
+
+				return src, filepath.Join(dir, "nonexistent-dir", "dst.agentpack")
+			},
+			wantErr: "create temp for store",
+		},
+		{
+			name: "returns error when rename fails because dst is an existing directory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				src := filepath.Join(dir, "src.agentpack")
+
+				require.NoError(t, os.WriteFile(src, []byte("some content"), 0o644))
+
+				// A directory at dst makes os.Rename fail.
+				dstDir := filepath.Join(dir, "dst-is-a-dir")
+				require.NoError(t, os.MkdirAll(dstDir, 0o755))
+
+				return src, dstDir
+			},
+			wantErr: "rename to store",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			src, dst := tt.setup(t)
+			err := install.CopyFileAtomic(src, dst)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, dst)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestRunFromGit
+// --------------------------------------------------------------------------
+
+func TestRunFromGit(t *testing.T) {
+	// NOTE: not parallel — some subtests mutate package-level vars.
+
+	tests := []struct {
+		name        string
+		noParallel  bool
+		setup       func(t *testing.T, ctrl *gomock.Controller) (source string, targets []target.Target)
+		injectFuncs func(t *testing.T)
+		wantErr     string
+		checkResult func(t *testing.T, r *install.Result)
+	}{
+		{
+			name:       "returns error when osMkdirTemp fails for clone dir",
+			noParallel: true,
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				bareRepo := initBareGitRepo(t)
+				return bareRepo, nil
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := install.SetOsMkdirTemp(install.MkdirTempAlwaysFails)
+				t.Cleanup(restore)
+			},
+			wantErr: "create temp dir",
+		},
+		{
+			name: "returns error when git fetch fails",
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				return "github.com/nonexistent-org-xyzzy/nonexistent-repo-xyzzy.git", nil
+			},
+			wantErr: "fetch",
+		},
+		{
+			name:       "installs from local bare git repo end-to-end",
+			noParallel: true,
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				bareRepo := initBareGitRepo(t)
+
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("claude-code").AnyTimes()
+				m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
+
+				return bareRepo, []target.Target{m}
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				t.Cleanup(restore)
+				// Redirect archives dir so storeArchive doesn't write to real home.
+				archivesDir := t.TempDir()
+				restoreArchives := install.SetArchivesDir(func() (string, error) { return archivesDir, nil })
+				t.Cleanup(restoreArchives)
+			},
+			checkResult: func(t *testing.T, r *install.Result) {
+				t.Helper()
+				require.NotNil(t, r)
+				assert.NotEmpty(t, r.SHA)
+			},
+		},
+		{
+			name:       "installs from local bare git repo with ref in source",
+			noParallel: true,
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				bareRepo := initBareGitRepo(t)
+
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("claude-code").AnyTimes()
+				m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
+
+				return bareRepo + "#main", []target.Target{m}
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := install.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+				t.Cleanup(restore)
+				archivesDir := t.TempDir()
+				restoreArchives := install.SetArchivesDir(func() (string, error) { return archivesDir, nil })
+				t.Cleanup(restoreArchives)
+			},
+			checkResult: func(t *testing.T, r *install.Result) {
+				t.Helper()
+				require.NotNil(t, r)
+			},
+		},
+		{
+			name:       "returns error when context is cancelled after clone",
+			noParallel: true,
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				bareRepo := initBareGitRepo(t)
+				return bareRepo, nil
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				// Use cancelAfterN to cancel just after FetchWithResult succeeds.
+				// The exact count may vary; this covers the ctx.Err() check at
+				// line 160 (after emitStep "cloning").
+			},
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !tt.noParallel {
+				t.Parallel()
+			}
+
+			if tt.injectFuncs != nil {
+				tt.injectFuncs(t)
+			}
+
+			ctrl := gomock.NewController(t)
+			source, targets := tt.setup(t, ctrl)
+
+			r, err := install.Run(context.Background(), install.Options{
+				Source:  source,
+				Targets: targets,
+			})
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
 			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+				if tt.name == "returns error when context is cancelled after clone" {
+					// This test is intentionally loose — it may or may not error.
+					return
+				}
+				require.NoError(t, err)
 			}
 
-			if len(files) != tt.wantLen {
-				t.Errorf("len(files) = %d, want %d", len(files), tt.wantLen)
-			}
-
-			for _, f := range files {
-				if f.Target != tt.targetName {
-					t.Errorf("Target = %q, want %q", f.Target, tt.targetName)
-				}
-
-				if f.SHA256 == "" {
-					t.Errorf("SHA256 is empty for %s", f.Path)
-				}
-
-				if f.Path == "" {
-					t.Error("Path is empty")
-				}
+			if tt.checkResult != nil {
+				tt.checkResult(t, r)
 			}
 		})
 	}

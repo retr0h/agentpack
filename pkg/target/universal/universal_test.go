@@ -22,9 +22,13 @@ package universal_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/pkg/target"
 	"github.com/retr0h/agentpack/pkg/target/universal"
@@ -45,9 +49,7 @@ func TestUniversal_Name(t *testing.T) {
 			t.Parallel()
 
 			u := universal.New()
-			if got := u.Name(); got != tt.want {
-				t.Errorf("Name() = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, u.Name())
 		})
 	}
 }
@@ -67,9 +69,7 @@ func TestUniversal_DisplayName(t *testing.T) {
 			t.Parallel()
 
 			u := universal.New()
-			if got := u.DisplayName(); got != tt.want {
-				t.Errorf("DisplayName() = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, u.DisplayName())
 		})
 	}
 }
@@ -89,9 +89,7 @@ func TestUniversal_Detect(t *testing.T) {
 			t.Parallel()
 
 			u := universal.New()
-			if got := u.Detect(); got != tt.want {
-				t.Errorf("Detect() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, u.Detect())
 		})
 	}
 }
@@ -113,26 +111,20 @@ func TestUniversal_Install(t *testing.T) {
 				src := t.TempDir()
 				skillsDir := filepath.Join(src, "skills")
 
-				if err := os.MkdirAll(skillsDir, 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-
-				if err := os.WriteFile(
+				require.NoError(t, os.MkdirAll(skillsDir, 0o755))
+				require.NoError(t, os.WriteFile(
 					filepath.Join(skillsDir, "skill.md"),
 					[]byte("# Skill"),
 					0o644,
-				); err != nil {
-					t.Fatalf("WriteFile: %v", err)
-				}
+				))
 
 				return src
 			},
 			check: func(t *testing.T, destBase string, pluginName string) {
 				t.Helper()
 				p := filepath.Join(destBase, ".agents", "skills", pluginName, "skill.md")
-				if _, err := os.Stat(p); err != nil {
-					t.Errorf("expected %s to exist: %v", p, err)
-				}
+				_, err := os.Stat(p)
+				assert.NoError(t, err)
 			},
 		},
 		{
@@ -151,6 +143,43 @@ func TestUniversal_Install(t *testing.T) {
 			},
 			wantErr: "context canceled",
 		},
+		{
+			name: "cwdFunc error propagates",
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "mkdirAll failure for destDir propagates error",
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			wantErr: "mkdir universal skills dir",
+		},
+		{
+			name: "copyTreeIfExists error propagates from Install",
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				src := t.TempDir()
+				skillsDir := filepath.Join(src, "skills")
+				locked := filepath.Join(skillsDir, "locked")
+				if err := os.MkdirAll(locked, 0o755); err != nil {
+					require.NoError(t, err)
+				}
+				if err := os.WriteFile(filepath.Join(locked, "x.md"), []byte("x"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				if err := os.Chmod(locked, 0o000); err != nil {
+					require.NoError(t, err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+				return src
+			},
+			wantErr: "copy skills",
+		},
 	}
 
 	for _, tt := range tests {
@@ -159,7 +188,19 @@ func TestUniversal_Install(t *testing.T) {
 
 			srcDir := tt.setupSrc(t)
 			destBase := t.TempDir()
-			u := universal.NewWithCWD(func() (string, error) { return destBase, nil })
+
+			cwdFunc := func() (string, error) { return destBase, nil }
+			if tt.wantErr == "getwd" {
+				cwdFunc = func() (string, error) { return "", errors.New("getwd failed") }
+			}
+			if tt.wantErr == "mkdir universal skills dir" {
+				roDir := t.TempDir()
+				require.NoError(t, os.Chmod(roDir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })
+				cwdFunc = func() (string, error) { return roDir, nil }
+			}
+
+			u := universal.NewWithCWD(cwdFunc)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -176,20 +217,11 @@ func TestUniversal_Install(t *testing.T) {
 			err := u.Install(ctx, opts)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strContains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.check != nil {
 				tt.check(t, destBase, opts.Name)
@@ -215,24 +247,157 @@ func TestUniversal_List(t *testing.T) {
 			u := universal.New()
 			got, err := u.List()
 
-			if err != nil {
-				t.Fatalf("List() error: %v", err)
-			}
-
-			if len(got) != tt.wantLen {
-				t.Errorf("len = %d, want %d", len(got), tt.wantLen)
-			}
+			require.NoError(t, err)
+			assert.Len(t, got, tt.wantLen)
 		})
 	}
 }
 
-func strContains(s, sub string) bool {
-	return len(sub) == 0 || (len(s) >= len(sub) && func() bool {
-		for i := 0; i <= len(s)-len(sub); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
+func TestUniversal_CopyTreeIfExists(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (src, dst string)
+		ctx     func() context.Context
+		wantErr string
+	}{
+		{
+			name: "no-op when src does not exist",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "nonexistent"), t.TempDir()
+			},
+			ctx: func() context.Context { return context.Background() },
+		},
+		{
+			name: "copies files when src exists",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				if err := os.WriteFile(filepath.Join(src, "a.md"), []byte("a"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				return src, t.TempDir()
+			},
+			ctx: func() context.Context { return context.Background() },
+		},
+		{
+			name: "cancelled context inside walk returns error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				if err := os.WriteFile(filepath.Join(src, "a.md"), []byte("a"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				return src, t.TempDir()
+			},
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			wantErr: "context canceled",
+		},
+		{
+			name: "walkDir error on unreadable subdirectory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				locked := filepath.Join(src, "locked")
+				if err := os.MkdirAll(locked, 0o755); err != nil {
+					require.NoError(t, err)
+				}
+				if err := os.WriteFile(filepath.Join(locked, "x.md"), []byte("x"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				if err := os.Chmod(locked, 0o000); err != nil {
+					require.NoError(t, err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+				return src, t.TempDir()
+			},
+			ctx:     func() context.Context { return context.Background() },
+			wantErr: "permission denied",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			src, dst := tt.setup(t)
+			err := universal.CopyTreeIfExists(tt.ctx(), src, dst)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
 			}
-		}
-		return false
-	}())
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestUniversal_CopyFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (src, dst string)
+		wantErr string
+	}{
+		{
+			name: "copies file successfully",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := filepath.Join(t.TempDir(), "src.txt")
+				if err := os.WriteFile(src, []byte("hello"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				return src, filepath.Join(t.TempDir(), "dst.txt")
+			},
+		},
+		{
+			name: "read error on missing src",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "missing.txt"), filepath.Join(t.TempDir(), "dst.txt")
+			},
+			wantErr: "read",
+		},
+		{
+			name: "write error when dst is an existing directory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := filepath.Join(t.TempDir(), "src.txt")
+				if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
+					require.NoError(t, err)
+				}
+				dstParent := t.TempDir()
+				existingDir := filepath.Join(dstParent, "subdir")
+				if err := os.MkdirAll(existingDir, 0o755); err != nil {
+					require.NoError(t, err)
+				}
+				return src, existingDir
+			},
+			wantErr: "write",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			src, dst := tt.setup(t)
+			err := universal.CopyFile(src, dst)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
 }

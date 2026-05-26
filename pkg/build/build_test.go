@@ -34,6 +34,8 @@ import (
 	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/build"
@@ -101,7 +103,7 @@ func (statAlwaysErrorVFS) Stat(string) (fs.FileInfo, error) {
 type errOnlyContext struct{}
 
 func (errOnlyContext) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (errOnlyContext) Done() <-chan struct{}       { return nil }
+func (errOnlyContext) Done() <-chan struct{}        { return nil }
 func (errOnlyContext) Err() error                  { return errors.New("context canceled") }
 func (errOnlyContext) Value(_ any) any             { return nil }
 
@@ -126,16 +128,14 @@ func initGitRepo(t *testing.T, dir string) {
 		cmd.Env = append(os.Environ(), gitEnv...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
+			require.NoError(t, err, "git %v\n%s", args, out)
 		}
 	}
 
 	run("init")
 	run("checkout", "-b", "main")
 
-	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0o644))
 
 	run("add", ".")
 	run("commit", "-m", "init")
@@ -144,9 +144,7 @@ func initGitRepo(t *testing.T, dir string) {
 // writeManifest writes content as agentpack.yaml in dir.
 func writeManifest(t *testing.T, dir, content string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte(content), 0o644); err != nil {
-		t.Fatalf("write agentpack.yaml: %v", err)
-	}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "agentpack.yaml"), []byte(content), 0o644))
 }
 
 // --------------------------------------------------------------------------
@@ -182,31 +180,14 @@ description: A test plugin
 			},
 			checkResult: func(t *testing.T, results []build.Result) {
 				t.Helper()
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
+				require.Len(t, results, 1)
 				r := results[0]
-				if r.Name != "my-plugin" {
-					t.Errorf("Name = %q, want %q", r.Name, "my-plugin")
-				}
-				if r.Version != "1.0.0" {
-					t.Errorf("Version = %q, want %q", r.Version, "1.0.0")
-				}
-				if r.SHA256 == "" {
-					t.Error("SHA256 is empty")
-				}
-				if len(r.SHA256) != 64 {
-					t.Errorf("SHA256 length = %d, want 64", len(r.SHA256))
-				}
-				if r.Size == 0 {
-					t.Error("Size is 0")
-				}
-				if !strings.HasSuffix(r.ArchivePath, "my-plugin-1.0.0.agentpack") {
-					t.Errorf(
-						"ArchivePath = %q, expected suffix my-plugin-1.0.0.agentpack",
-						r.ArchivePath,
-					)
-				}
+				assert.Equal(t, "my-plugin", r.Name)
+				assert.Equal(t, "1.0.0", r.Version)
+				assert.NotEmpty(t, r.SHA256)
+				assert.Len(t, r.SHA256, 64)
+				assert.NotZero(t, r.Size)
+				assert.True(t, strings.HasSuffix(r.ArchivePath, "my-plugin-1.0.0.agentpack"))
 			},
 		},
 		{
@@ -231,16 +212,12 @@ plugins:
 			},
 			checkResult: func(t *testing.T, results []build.Result) {
 				t.Helper()
-				if len(results) != 2 {
-					t.Fatalf("result count = %d, want 2", len(results))
-				}
+				require.Len(t, results, 2)
 				names := map[string]bool{}
 				for _, r := range results {
 					names[r.Name] = true
 				}
-				if !names["plugin-a"] || !names["plugin-b"] {
-					t.Errorf("results = %v, want plugin-a and plugin-b", names)
-				}
+				assert.True(t, names["plugin-a"] && names["plugin-b"])
 			},
 		},
 		{
@@ -265,12 +242,8 @@ plugins:
 			},
 			checkResult: func(t *testing.T, results []build.Result) {
 				t.Helper()
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-				if results[0].Name != "plugin-b" {
-					t.Errorf("Name = %q, want plugin-b", results[0].Name)
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "plugin-b", results[0].Name)
 			},
 		},
 		{
@@ -350,12 +323,8 @@ plugins:
 				initGitRepo(t, dir)
 
 				skillDir := filepath.Join(dir, "skills")
-				if err := os.MkdirAll(skillDir, 0o755); err != nil {
-					t.Fatalf("mkdir skills: %v", err)
-				}
-				if err := os.WriteFile(filepath.Join(skillDir, "intro.md"), []byte("# Intro"), fs.FileMode(0o644)); err != nil {
-					t.Fatalf("write skill: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(skillDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(skillDir, "intro.md"), []byte("# Intro"), fs.FileMode(0o644)))
 
 				writeManifest(t, dir, `
 name: skill-plugin
@@ -371,12 +340,8 @@ skills:
 			},
 			checkResult: func(t *testing.T, results []build.Result) {
 				t.Helper()
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-				if results[0].FileCount == 0 {
-					t.Error("FileCount is 0, expected > 0")
-				}
+				require.Len(t, results, 1)
+				assert.NotZero(t, results[0].FileCount)
 			},
 		},
 		{
@@ -402,12 +367,8 @@ mcp:
 			},
 			checkResult: func(t *testing.T, results []build.Result) {
 				t.Helper()
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-				if results[0].Name != "mcp-remote-plugin" {
-					t.Errorf("Name = %q, want mcp-remote-plugin", results[0].Name)
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "mcp-remote-plugin", results[0].Name)
 			},
 		},
 		{
@@ -433,12 +394,8 @@ mcp:
 			},
 			checkResult: func(t *testing.T, results []build.Result) {
 				t.Helper()
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-				if results[0].Name != "mcp-ux-plugin" {
-					t.Errorf("Name = %q, want mcp-ux-plugin", results[0].Name)
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "mcp-ux-plugin", results[0].Name)
 			},
 		},
 		{
@@ -450,9 +407,7 @@ mcp:
 
 				// Write a .mcp.json config file.
 				mcpContent := `{"mcpServers":{"my-srv":{"url":"https://example.com"}}}`
-				if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(mcpContent), 0o644); err != nil {
-					t.Fatalf("write .mcp.json: %v", err)
-				}
+				require.NoError(t, os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(mcpContent), 0o644))
 
 				writeManifest(t, dir, `
 name: mcp-config-plugin
@@ -470,12 +425,8 @@ mcp:
 			},
 			checkResult: func(t *testing.T, results []build.Result) {
 				t.Helper()
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-				if results[0].Name != "mcp-config-plugin" {
-					t.Errorf("Name = %q, want mcp-config-plugin", results[0].Name)
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "mcp-config-plugin", results[0].Name)
 			},
 		},
 		{
@@ -558,18 +509,11 @@ plugins:
 			results, err := build.Run(ctx, vfs, opts)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.checkResult != nil {
 				tt.checkResult(t, results)
@@ -606,7 +550,7 @@ func TestComputeArchiveChecksums(t *testing.T) {
 				t.Helper()
 				p := filepath.Join(t.TempDir(), "data.txt")
 				if err := os.WriteFile(p, []byte("hello"), 0o644); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return []build.FileEntry{
 					{Src: p, ArchivePath: "data.txt"},
@@ -631,7 +575,7 @@ func TestComputeArchiveChecksums(t *testing.T) {
 				t.Helper()
 				p := filepath.Join(t.TempDir(), "data.txt")
 				if err := os.WriteFile(p, []byte("hello"), 0o644); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return []build.FileEntry{
 					{Src: p, ArchivePath: "data.txt"},
@@ -661,27 +605,15 @@ func TestComputeArchiveChecksums(t *testing.T) {
 			}
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if len(entries) != tt.wantN {
-				t.Fatalf("entry count = %d, want %d", len(entries), tt.wantN)
-			}
+			require.NoError(t, err)
+			require.Len(t, entries, tt.wantN)
 
 			for _, e := range entries {
-				if len(e.Hash) != 64 {
-					t.Errorf("hash length = %d, want 64 for %q", len(e.Hash), e.Path)
-				}
+				assert.Len(t, e.Hash, 64)
 			}
 		})
 	}
@@ -830,18 +762,11 @@ func TestBuildPlugin(t *testing.T) {
 			_, err := build.BuildPlugin(testCtx, vfs, dir, p, meta)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
@@ -888,7 +813,7 @@ func TestBuildMCPEntries(t *testing.T) {
 				// Write real config files so stat passes.
 				cfg := `{"mcpServers":{}}`
 				if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(cfg), 0o644); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				p := manifest.Plugin{
 					MCP: []manifest.MCPEntry{
@@ -918,18 +843,11 @@ func TestBuildMCPEntries(t *testing.T) {
 			_, err := build.BuildMCPEntries(testCtx, vfs, dir, p)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }

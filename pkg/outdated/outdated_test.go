@@ -23,14 +23,43 @@ package outdated_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"go.uber.org/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/pkg/outdated"
 	outdatedmocks "github.com/retr0h/agentpack/pkg/outdated/mocks"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
+
+// cancelAfterFirstErrCtx is a context whose Err() returns nil on the first
+// call and context.Canceled on all subsequent calls. This lets a test pass
+// the function-entry ctx.Err() check but fail the per-manifest loop check.
+type cancelAfterFirstErrCtx struct {
+	callCount int
+}
+
+func newCancelAfterFirstErrCtx() *cancelAfterFirstErrCtx {
+	return &cancelAfterFirstErrCtx{}
+}
+
+func (c *cancelAfterFirstErrCtx) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *cancelAfterFirstErrCtx) Done() <-chan struct{}        { return nil }
+func (c *cancelAfterFirstErrCtx) Value(_ any) any             { return nil }
+
+func (c *cancelAfterFirstErrCtx) Err() error {
+	c.callCount++
+	if c.callCount == 1 {
+		return nil
+	}
+
+	return errors.New("context canceled")
+}
 
 // --------------------------------------------------------------------------
 // TestRun
@@ -39,11 +68,13 @@ import (
 func TestRun(t *testing.T) {
 	// Cannot call t.Parallel() — subtests use t.Setenv.
 	tests := []struct {
-		name      string
-		names     []string
-		cancelCtx bool
-		wantErr   string
-		wantLen   int
+		name        string
+		names       []string
+		cancelCtx   bool
+		setup       func(t *testing.T, home string)
+		wantErr     string
+		wantLen     int
+		checkResult func(t *testing.T, entries []outdated.Entry)
 	}{
 		{
 			name:    "empty registry returns empty slice",
@@ -61,6 +92,40 @@ func TestRun(t *testing.T) {
 			names:   []string{"ghost-plugin"},
 			wantErr: "load ghost-plugin",
 		},
+		{
+			name:  "named plugin found in registry produces entry",
+			names: []string{"real-plugin"},
+			setup: func(t *testing.T, home string) {
+				t.Helper()
+				dir := filepath.Join(home, ".config", "agentpack", "packages")
+				require.NoError(t, os.MkdirAll(dir, 0o755))
+				manifest := "name: real-plugin\nsource: /nonexistent/path\nsha: abc123\n"
+				p := filepath.Join(dir, "real-plugin.yaml")
+				require.NoError(t, os.WriteFile(p, []byte(manifest), 0o644))
+			},
+			wantLen: 1,
+			checkResult: func(t *testing.T, entries []outdated.Entry) {
+				t.Helper()
+				assert.Equal(t, "real-plugin", entries[0].Name)
+			},
+		},
+		{
+			name:  "all plugins via defaultRegistry with installed packages",
+			names: nil,
+			setup: func(t *testing.T, home string) {
+				t.Helper()
+				dir := filepath.Join(home, ".config", "agentpack", "packages")
+				require.NoError(t, os.MkdirAll(dir, 0o755))
+				manifest := "name: installed-plugin\nsource: /nonexistent/path\nsha: abc123\n"
+				p := filepath.Join(dir, "installed-plugin.yaml")
+				require.NoError(t, os.WriteFile(p, []byte(manifest), 0o644))
+			},
+			wantLen: 1,
+			checkResult: func(t *testing.T, entries []outdated.Entry) {
+				t.Helper()
+				assert.Equal(t, "installed-plugin", entries[0].Name)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -74,28 +139,25 @@ func TestRun(t *testing.T) {
 			}
 
 			// Use t.TempDir() as HOME so registry.Load() returns empty.
-			t.Setenv("HOME", t.TempDir())
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+
+			if tt.setup != nil {
+				tt.setup(t, home)
+			}
 
 			entries, err := outdated.Run(ctx, tt.names)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strContains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
+			assert.Len(t, entries, tt.wantLen)
 
-			if len(entries) != tt.wantLen {
-				t.Errorf("len = %d, want %d", len(entries), tt.wantLen)
+			if tt.checkResult != nil {
+				tt.checkResult(t, entries)
 			}
 		})
 	}
@@ -111,6 +173,7 @@ func TestRunWithOptions(t *testing.T) {
 	tests := []struct {
 		name        string
 		cancelCtx   bool
+		customCtx   context.Context
 		setupMocks  func(reg *outdatedmocks.MockRegistry, checker *outdatedmocks.MockRemoteChecker)
 		extraOpts   func(opts *outdated.Options)
 		wantErr     string
@@ -151,9 +214,7 @@ func TestRunWithOptions(t *testing.T) {
 			wantLen: 0,
 			checkSteps: func(t *testing.T, steps []string) {
 				t.Helper()
-				if len(steps) != 0 {
-					t.Errorf("expected 0 steps, got %d", len(steps))
-				}
+				assert.Empty(t, steps)
 			},
 		},
 		{
@@ -170,12 +231,8 @@ func TestRunWithOptions(t *testing.T) {
 			wantLen: 1,
 			checkResult: func(t *testing.T, entries []outdated.Entry) {
 				t.Helper()
-				if entries[0].Outdated {
-					t.Errorf("expected Outdated=false, got true")
-				}
-				if entries[0].InstalledSHA != entries[0].RemoteSHA {
-					t.Errorf("expected InstalledSHA == RemoteSHA")
-				}
+				assert.False(t, entries[0].Outdated)
+				assert.Equal(t, entries[0].InstalledSHA, entries[0].RemoteSHA)
 			},
 		},
 		{
@@ -191,9 +248,7 @@ func TestRunWithOptions(t *testing.T) {
 			wantLen: 1,
 			checkResult: func(t *testing.T, entries []outdated.Entry) {
 				t.Helper()
-				if !entries[0].Outdated {
-					t.Errorf("expected Outdated=true, got false")
-				}
+				assert.True(t, entries[0].Outdated)
 			},
 		},
 		{
@@ -209,12 +264,8 @@ func TestRunWithOptions(t *testing.T) {
 			wantLen: 1,
 			checkResult: func(t *testing.T, entries []outdated.Entry) {
 				t.Helper()
-				if entries[0].RemoteSHA != "" {
-					t.Errorf("expected empty RemoteSHA, got %q", entries[0].RemoteSHA)
-				}
-				if entries[0].Outdated {
-					t.Errorf("expected Outdated=false on ls-remote failure")
-				}
+				assert.Empty(t, entries[0].RemoteSHA)
+				assert.False(t, entries[0].Outdated)
 			},
 		},
 		{
@@ -232,10 +283,88 @@ func TestRunWithOptions(t *testing.T) {
 			wantLen: 2,
 			checkSteps: func(t *testing.T, steps []string) {
 				t.Helper()
-				if len(steps) != 2 {
-					t.Errorf("expected 2 steps, got %d: %v", len(steps), steps)
-				}
+				assert.Len(t, steps, 2)
 			},
+		},
+		{
+			name: "HEAD not found in remote refs produces non-outdated entry with empty remote SHA",
+			setupMocks: func(reg *outdatedmocks.MockRegistry, checker *outdatedmocks.MockRemoteChecker) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{Name: "my-plugin", Source: "https://example.com/plugin.agentpack", SHA: "abc123"},
+				}, nil)
+				checker.EXPECT().
+					LsRemote(gomock.Any(), "https://example.com/plugin.agentpack").
+					Return(map[string]string{"refs/tags/v1.0.0": "deadbeef"}, nil)
+			},
+			wantLen: 1,
+			checkResult: func(t *testing.T, entries []outdated.Entry) {
+				t.Helper()
+				assert.Empty(t, entries[0].RemoteSHA)
+				assert.False(t, entries[0].Outdated)
+			},
+		},
+		{
+			name: "refs/heads/main fallback resolves head",
+			setupMocks: func(reg *outdatedmocks.MockRegistry, checker *outdatedmocks.MockRemoteChecker) {
+				sha := "mainsha1234567890abc"
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{Name: "my-plugin", Source: "https://example.com/plugin.agentpack", SHA: "oldshavalue"},
+				}, nil)
+				checker.EXPECT().
+					LsRemote(gomock.Any(), "https://example.com/plugin.agentpack").
+					Return(map[string]string{"refs/heads/main": sha}, nil)
+			},
+			wantLen: 1,
+			checkResult: func(t *testing.T, entries []outdated.Entry) {
+				t.Helper()
+				assert.NotEmpty(t, entries[0].RemoteSHA)
+				assert.True(t, entries[0].Outdated)
+			},
+		},
+		{
+			name: "refs/heads/master fallback resolves head",
+			setupMocks: func(reg *outdatedmocks.MockRegistry, checker *outdatedmocks.MockRemoteChecker) {
+				sha := "mastersha123456789ab"
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{Name: "my-plugin", Source: "https://example.com/plugin.agentpack", SHA: "oldshavalue"},
+				}, nil)
+				checker.EXPECT().
+					LsRemote(gomock.Any(), "https://example.com/plugin.agentpack").
+					Return(map[string]string{"refs/heads/master": sha}, nil)
+			},
+			wantLen: 1,
+			checkResult: func(t *testing.T, entries []outdated.Entry) {
+				t.Helper()
+				assert.NotEmpty(t, entries[0].RemoteSHA)
+				assert.True(t, entries[0].Outdated)
+			},
+		},
+		{
+			name: "nil remote checker uses defaultRemoteChecker which fails on unreachable source",
+			setupMocks: func(reg *outdatedmocks.MockRegistry, _ *outdatedmocks.MockRemoteChecker) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{Name: "my-plugin", Source: "/nonexistent/path/to/repo", SHA: "abc123"},
+				}, nil)
+			},
+			extraOpts: func(opts *outdated.Options) {
+				opts.RemoteChecker = nil
+			},
+			wantLen: 1,
+			checkResult: func(t *testing.T, entries []outdated.Entry) {
+				t.Helper()
+				assert.Empty(t, entries[0].RemoteSHA)
+				assert.False(t, entries[0].Outdated)
+			},
+		},
+		{
+			name:      "context cancelled between manifest iterations returns error",
+			customCtx: newCancelAfterFirstErrCtx(),
+			setupMocks: func(reg *outdatedmocks.MockRegistry, _ *outdatedmocks.MockRemoteChecker) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{Name: "plugin-x", Source: "https://example.com/x.agentpack", SHA: "sha-x"},
+				}, nil)
+			},
+			wantErr: "context canceled",
 		},
 	}
 
@@ -251,12 +380,21 @@ func TestRunWithOptions(t *testing.T) {
 				tt.setupMocks(reg, checker)
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			var ctx context.Context
+			var cancel context.CancelFunc
 
-			if tt.cancelCtx {
+			switch {
+			case tt.customCtx != nil:
+				ctx = tt.customCtx
+				cancel = func() {}
+			case tt.cancelCtx:
+				ctx, cancel = context.WithCancel(context.Background())
 				cancel()
+			default:
+				ctx, cancel = context.WithCancel(context.Background())
 			}
+
+			defer cancel()
 
 			var steps []string
 			opts := outdated.Options{
@@ -275,24 +413,12 @@ func TestRunWithOptions(t *testing.T) {
 			entries, err := outdated.RunWithOptions(ctx, opts)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strContains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if len(entries) != tt.wantLen {
-				t.Errorf("len = %d, want %d", len(entries), tt.wantLen)
-			}
+			require.NoError(t, err)
+			assert.Len(t, entries, tt.wantLen)
 
 			if tt.checkSteps != nil {
 				tt.checkSteps(t, steps)
@@ -303,15 +429,4 @@ func TestRunWithOptions(t *testing.T) {
 			}
 		})
 	}
-}
-
-func strContains(s, sub string) bool {
-	return len(sub) == 0 || (len(s) >= len(sub) && func() bool {
-		for i := 0; i <= len(s)-len(sub); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
-			}
-		}
-		return false
-	}())
 }

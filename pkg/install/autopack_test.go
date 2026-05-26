@@ -28,8 +28,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/pkg/install"
 )
@@ -44,15 +48,11 @@ func listArchiveEntries(t *testing.T, archivePath string) []string {
 	t.Helper()
 
 	f, err := os.Open(archivePath)
-	if err != nil {
-		t.Fatalf("open archive: %v", err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = f.Close() }()
 
 	gr, err := gzip.NewReader(f)
-	if err != nil {
-		t.Fatalf("gzip reader: %v", err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = gr.Close() }()
 
 	tr := tar.NewReader(gr)
@@ -63,9 +63,7 @@ func listArchiveEntries(t *testing.T, archivePath string) []string {
 		if errors.Is(err, io.EOF) {
 			break
 		}
-		if err != nil {
-			t.Fatalf("tar next: %v", err)
-		}
+		require.NoError(t, err)
 		names = append(names, hdr.Name)
 	}
 
@@ -80,16 +78,12 @@ func makeSkillRepo(t *testing.T, skills []string) string {
 
 	for _, s := range skills {
 		skillDir := filepath.Join(dir, "skills", s)
-		if err := os.MkdirAll(skillDir, 0o755); err != nil {
-			t.Fatalf("mkdir skill %s: %v", s, err)
-		}
-		if err := os.WriteFile(
+		require.NoError(t, os.MkdirAll(skillDir, 0o755))
+		require.NoError(t, os.WriteFile(
 			filepath.Join(skillDir, "SKILL.md"),
 			[]byte("# "+s+"\n"),
 			0o644,
-		); err != nil {
-			t.Fatalf("write SKILL.md: %v", err)
-		}
+		))
 	}
 
 	return dir
@@ -102,35 +96,21 @@ func makeRepoWithContent(t *testing.T) string {
 
 	// Recognized content.
 	skillDir := filepath.Join(dir, "skills", "my-skill")
-	if err := os.MkdirAll(skillDir, 0o755); err != nil {
-		t.Fatalf("mkdir skill: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# skill\n"), 0o644); err != nil {
-		t.Fatalf("write SKILL.md: %v", err)
-	}
+	require.NoError(t, os.MkdirAll(skillDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# skill\n"), 0o644))
 
 	cmdDir := filepath.Join(dir, "commands")
-	if err := os.MkdirAll(cmdDir, 0o755); err != nil {
-		t.Fatalf("mkdir commands: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(cmdDir, "scan.md"), []byte("# scan\n"), 0o644); err != nil {
-		t.Fatalf("write scan.md: %v", err)
-	}
+	require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(cmdDir, "scan.md"), []byte("# scan\n"), 0o644))
 
 	// Noise that should never appear in the archive.
 	for _, noise := range []string{".github", ".git", "tools", "scripts"} {
 		noiseDir := filepath.Join(dir, noise)
-		if err := os.MkdirAll(noiseDir, 0o755); err != nil {
-			t.Fatalf("mkdir %s: %v", noise, err)
-		}
-		if err := os.WriteFile(filepath.Join(noiseDir, "file.txt"), []byte("noise\n"), 0o644); err != nil {
-			t.Fatalf("write noise: %v", err)
-		}
+		require.NoError(t, os.MkdirAll(noiseDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(noiseDir, "file.txt"), []byte("noise\n"), 0o644))
 	}
 
-	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("readme\n"), 0o644); err != nil {
-		t.Fatalf("write README: %v", err)
-	}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("readme\n"), 0o644))
 
 	return dir
 }
@@ -149,6 +129,7 @@ func TestAutoPackage(t *testing.T) {
 		skillFilter  []string
 		agentFilter  []string
 		cancelCtx    bool
+		customCtx    context.Context
 		wantErr      string
 		checkEntries func(t *testing.T, entries []string)
 	}{
@@ -170,24 +151,13 @@ func TestAutoPackage(t *testing.T) {
 					".agentpack/checksums.txt",
 				}
 				for _, want := range wantContains {
-					found := false
-					for _, e := range entries {
-						if e == want {
-							found = true
-							break
-						}
-					}
-					if !found {
-						t.Errorf("archive missing entry %q; got: %v", want, entries)
-					}
+					assert.True(t, slices.Contains(entries, want))
 				}
 
 				// Must NOT contain noise dirs.
 				for _, e := range entries {
 					for _, bad := range []string{".github", ".git/", "tools/", "scripts/", "README.md"} {
-						if strings.HasPrefix(e, bad) || e == bad {
-							t.Errorf("archive contains excluded entry %q", e)
-						}
+						assert.False(t, strings.HasPrefix(e, bad) || e == bad)
 					}
 				}
 			},
@@ -208,23 +178,12 @@ func TestAutoPackage(t *testing.T) {
 					"skills/review/SKILL.md",
 					"skills/scan/SKILL.md",
 				} {
-					found := false
-					for _, e := range entries {
-						if e == want {
-							found = true
-							break
-						}
-					}
-					if !found {
-						t.Errorf("missing expected entry %q; got: %v", want, entries)
-					}
+					assert.True(t, slices.Contains(entries, want))
 				}
 
 				// deploy must be absent.
 				for _, e := range entries {
-					if strings.HasPrefix(e, "skills/deploy/") {
-						t.Errorf("deploy skill should be filtered out but found entry %q", e)
-					}
+					assert.False(t, strings.HasPrefix(e, "skills/deploy/"))
 				}
 			},
 		},
@@ -242,16 +201,7 @@ func TestAutoPackage(t *testing.T) {
 					".agentpack/metadata.json",
 					".agentpack/checksums.txt",
 				} {
-					found := false
-					for _, e := range entries {
-						if e == want {
-							found = true
-							break
-						}
-					}
-					if !found {
-						t.Errorf("missing %q in entries: %v", want, entries)
-					}
+					assert.True(t, slices.Contains(entries, want))
 				}
 			},
 		},
@@ -261,28 +211,14 @@ func TestAutoPackage(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 				skillsDir := filepath.Join(dir, "skills")
-				if err := os.MkdirAll(skillsDir, 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-				if err := os.WriteFile(filepath.Join(skillsDir, "flat.md"), []byte("# flat\n"), 0o644); err != nil {
-					t.Fatalf("write: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(skillsDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(skillsDir, "flat.md"), []byte("# flat\n"), 0o644))
 				return dir
 			},
 			sha: "flat1234",
 			checkEntries: func(t *testing.T, entries []string) {
 				t.Helper()
-
-				found := false
-				for _, e := range entries {
-					if e == "skills/flat.md" {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("flat file missing from archive; entries: %v", entries)
-				}
+				assert.True(t, slices.Contains(entries, "skills/flat.md"))
 			},
 		},
 		{
@@ -293,6 +229,45 @@ func TestAutoPackage(t *testing.T) {
 			},
 			sha:       "abc",
 			cancelCtx: true,
+			wantErr:   "context canceled",
+		},
+		{
+			name: "returns error when WalkDir encounters permission denied in skills dir",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				skillDir := filepath.Join(dir, "skills", "my-skill")
+
+				require.NoError(t, os.MkdirAll(skillDir, 0o755))
+
+				locked := filepath.Join(skillDir, "locked")
+				require.NoError(t, os.MkdirAll(locked, 0o000))
+
+				t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+
+				return dir
+			},
+			sha:     "abc",
+			wantErr: "walk skills",
+		},
+		{
+			name: "returns error when context cancelled inside content dirs loop",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return makeSkillRepo(t, []string{"review"})
+			},
+			sha:       "abc",
+			customCtx: newCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "returns error when context cancelled inside roots loop",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return makeSkillRepo(t, []string{"review"})
+			},
+			sha:       "abc",
+			customCtx: newCancelAfterN(2),
 			wantErr:   "context canceled",
 		},
 	}
@@ -306,10 +281,14 @@ func TestAutoPackage(t *testing.T) {
 			var ctx context.Context
 			var cancel context.CancelFunc
 
-			if tt.cancelCtx {
+			switch {
+			case tt.customCtx != nil:
+				ctx = tt.customCtx
+				cancel = func() {}
+			case tt.cancelCtx:
 				ctx, cancel = context.WithCancel(context.Background())
 				cancel()
-			} else {
+			default:
 				ctx = context.Background()
 				cancel = func() {}
 			}
@@ -319,28 +298,18 @@ func TestAutoPackage(t *testing.T) {
 			archivePath, err := install.AutoPackage(ctx, dir, "test-pkg", tt.sha, tt.skillFilter, tt.agentFilter)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			defer func() { _ = os.Remove(archivePath) }()
 
-			if archivePath == "" {
-				t.Fatal("archivePath is empty")
-			}
+			assert.NotEmpty(t, archivePath)
 
-			if _, statErr := os.Stat(archivePath); statErr != nil {
-				t.Fatalf("archive not on disk: %v", statErr)
-			}
+			_, statErr := os.Stat(archivePath)
+			require.NoError(t, statErr)
 
 			if tt.checkEntries != nil {
 				entries := listArchiveEntries(t, archivePath)
@@ -389,15 +358,27 @@ func TestFilteredSubdirs(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 				skillsDir := filepath.Join(dir, "skills")
-				if err := os.MkdirAll(skillsDir, 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-				if err := os.WriteFile(filepath.Join(skillsDir, "flat.md"), []byte("x"), 0o644); err != nil {
-					t.Fatalf("write: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(skillsDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(skillsDir, "flat.md"), []byte("x"), 0o644))
 				return dir
 			},
 			filter:    []string{"anything"},
+			wantNames: []string{"skills"},
+		},
+		{
+			name: "returns content dir itself when ReadDir fails (unreadable dir)",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				skillsDir := filepath.Join(dir, "skills")
+
+				require.NoError(t, os.MkdirAll(skillsDir, 0o000))
+
+				t.Cleanup(func() { _ = os.Chmod(skillsDir, 0o755) })
+
+				return dir
+			},
+			filter:    nil,
 			wantNames: []string{"skills"},
 		},
 	}
@@ -420,17 +401,13 @@ func TestFilteredSubdirs(t *testing.T) {
 						break
 					}
 				}
-				if !found {
-					t.Errorf("want subdir %q in roots %v", want, roots)
-				}
+				assert.True(t, found)
 			}
 
 			// Verify missing names do not appear.
 			for _, missing := range tt.wantMissing {
 				for _, root := range roots {
-					if filepath.Base(root) == missing {
-						t.Errorf("subdir %q should be absent but found in roots %v", missing, roots)
-					}
+					assert.NotEqual(t, missing, filepath.Base(root))
 				}
 			}
 		})
@@ -458,13 +435,9 @@ func TestStoreArchive(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 				src := filepath.Join(dir, "src.agentpack")
-				if err := os.WriteFile(src, []byte("agentpack data"), 0o644); err != nil {
-					t.Fatalf("write src: %v", err)
-				}
+				require.NoError(t, os.WriteFile(src, []byte("agentpack data"), 0o644))
 				storeDir := filepath.Join(dir, "archives")
-				if err := os.MkdirAll(storeDir, 0o700); err != nil {
-					t.Fatalf("mkdir store: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(storeDir, 0o700))
 				return src, storeDir
 			},
 			pkgName: "my-plugin",
@@ -472,16 +445,10 @@ func TestStoreArchive(t *testing.T) {
 			check: func(t *testing.T, dstPath string) {
 				t.Helper()
 				data, err := os.ReadFile(dstPath)
-				if err != nil {
-					t.Fatalf("read dst: %v", err)
-				}
-				if string(data) != "agentpack data" {
-					t.Errorf("content = %q, want %q", string(data), "agentpack data")
-				}
+				require.NoError(t, err)
+				assert.Equal(t, "agentpack data", string(data))
 				base := filepath.Base(dstPath)
-				if !strings.HasPrefix(base, "my-plugin@") || !strings.HasSuffix(base, ".agentpack") {
-					t.Errorf("unexpected archive name %q", base)
-				}
+				assert.True(t, strings.HasPrefix(base, "my-plugin@") && strings.HasSuffix(base, ".agentpack"))
 			},
 		},
 		{
@@ -490,9 +457,7 @@ func TestStoreArchive(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 				storeDir := filepath.Join(dir, "archives")
-				if err := os.MkdirAll(storeDir, 0o700); err != nil {
-					t.Fatalf("mkdir store: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(storeDir, 0o700))
 				return filepath.Join(dir, "nonexistent.agentpack"), storeDir
 			},
 			pkgName: "fail-plugin",
@@ -514,18 +479,11 @@ func TestStoreArchive(t *testing.T) {
 			dstPath, err := install.StoreArchive(srcPath, tt.pkgName, tt.sha)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.check != nil {
 				tt.check(t, dstPath)
@@ -553,15 +511,9 @@ func TestArchivesDir(t *testing.T) {
 			check: func(t *testing.T, dir string) {
 				t.Helper()
 				info, err := os.Stat(dir)
-				if err != nil {
-					t.Fatalf("stat dir: %v", err)
-				}
-				if !info.IsDir() {
-					t.Error("expected directory")
-				}
-				if !strings.HasSuffix(dir, filepath.Join(".config", "agentpack", "archives")) {
-					t.Errorf("unexpected path %q", dir)
-				}
+				require.NoError(t, err)
+				assert.True(t, info.IsDir())
+				assert.True(t, strings.HasSuffix(dir, filepath.Join(".config", "agentpack", "archives")))
 			},
 		},
 		{
@@ -589,18 +541,11 @@ func TestArchivesDir(t *testing.T) {
 			dir, err := install.ArchivesDir()
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.check != nil {
 				tt.check(t, dir)

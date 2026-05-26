@@ -35,6 +35,8 @@ import (
 	"time"
 
 	"github.com/avfs/avfs/vfs/osfs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/pkg/archive"
 	"github.com/retr0h/agentpack/pkg/verify"
@@ -51,7 +53,7 @@ type cancelAfterN struct {
 func newCancelAfterN(n int) *cancelAfterN { return &cancelAfterN{n: n} }
 
 func (c *cancelAfterN) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterN) Done() <-chan struct{}       { return nil }
+func (c *cancelAfterN) Done() <-chan struct{}        { return nil }
 func (c *cancelAfterN) Value(_ any) any             { return nil }
 func (c *cancelAfterN) Err() error {
 	c.call++
@@ -80,23 +82,17 @@ func TestFindChecksums(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 				agentpackDir := filepath.Join(dir, "marketplaces", "my-plugin", ".agentpack")
-				if err := os.MkdirAll(agentpackDir, 0o755); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
-				if err := os.WriteFile(
+				require.NoError(t, os.MkdirAll(agentpackDir, 0o755))
+				require.NoError(t, os.WriteFile(
 					filepath.Join(agentpackDir, "checksums.txt"),
 					[]byte("hash  file.txt\n"),
 					0o644,
-				); err != nil {
-					t.Fatalf("write: %v", err)
-				}
+				))
 				return dir
 			},
 			check: func(t *testing.T, path string) {
 				t.Helper()
-				if !strings.HasSuffix(path, "checksums.txt") {
-					t.Errorf("path %q does not end in checksums.txt", path)
-				}
+				assert.True(t, strings.HasSuffix(path, "checksums.txt"))
 			},
 		},
 		{
@@ -114,9 +110,7 @@ func TestFindChecksums(t *testing.T) {
 				dir := t.TempDir()
 				// Create a subdirectory we cannot read (permission denied).
 				subdir := filepath.Join(dir, "locked")
-				if err := os.MkdirAll(subdir, 0o000); err != nil {
-					t.Fatalf("mkdir: %v", err)
-				}
+				require.NoError(t, os.MkdirAll(subdir, 0o000))
 				t.Cleanup(func() { _ = os.Chmod(subdir, 0o755) })
 				return dir
 			},
@@ -132,18 +126,11 @@ func TestFindChecksums(t *testing.T) {
 			path, err := verify.FindChecksums(dir)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.check != nil {
 				tt.check(t, path)
@@ -184,12 +171,10 @@ func buildValidArchive(t *testing.T) string {
 	checksumContent := checksumLine
 
 	outPath := filepath.Join(dir, "test.agentpack")
-	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+	require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: filePath, Content: content},
 		{ArchivePath: checksumPath, Content: []byte(checksumContent)},
-	}); err != nil {
-		t.Fatalf("create archive: %v", err)
-	}
+	}))
 
 	return outPath
 }
@@ -211,12 +196,10 @@ func buildArchiveWithTamperedFile(t *testing.T) string {
 	checksumContent := fmt.Sprintf("%s  %s\n", badHash, filePath)
 
 	outPath := filepath.Join(dir, "tampered.agentpack")
-	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+	require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: filePath, Content: content},
 		{ArchivePath: checksumPath, Content: []byte(checksumContent)},
-	}); err != nil {
-		t.Fatalf("create archive: %v", err)
-	}
+	}))
 
 	return outPath
 }
@@ -229,11 +212,9 @@ func buildArchiveWithoutChecksums(t *testing.T) string {
 	vfs := osfs.NewWithNoIdm()
 
 	outPath := filepath.Join(dir, "nochecksum.agentpack")
-	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+	require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{ArchivePath: "marketplaces/my-plugin/skills/intro.md", Content: []byte("content")},
-	}); err != nil {
-		t.Fatalf("create archive: %v", err)
-	}
+	}))
 
 	return outPath
 }
@@ -247,14 +228,12 @@ func buildArchiveWithBadChecksumsFormat(t *testing.T) string {
 	vfs := osfs.NewWithNoIdm()
 
 	outPath := filepath.Join(dir, "badformat.agentpack")
-	if err := archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+	require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
 		{
 			ArchivePath: "marketplaces/my-plugin/.agentpack/checksums.txt",
 			Content:     []byte("badhash file.txt\n"), // missing double-space separator
 		},
-	}); err != nil {
-		t.Fatalf("create archive: %v", err)
-	}
+	}))
 
 	return outPath
 }
@@ -267,7 +246,7 @@ func buildTarWithSymlink(t *testing.T) string {
 	outPath := filepath.Join(t.TempDir(), "symlink.agentpack")
 	f, err := os.Create(outPath)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defer func() { _ = f.Close() }()
 
@@ -282,7 +261,7 @@ func buildTarWithSymlink(t *testing.T) string {
 		Typeflag: tar.TypeSymlink,
 		Linkname: "/etc/passwd",
 	}); err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 
 	return outPath
@@ -310,16 +289,10 @@ func TestRun(t *testing.T) {
 			ctx:         func() context.Context { return context.Background() },
 			checkResult: func(t *testing.T, r *verify.Result) {
 				t.Helper()
-				if r == nil {
-					t.Fatal("result is nil")
-				}
-				if r.ArchiveName == "" {
-					t.Error("ArchiveName is empty")
-				}
+				require.NotNil(t, r)
+				assert.NotEmpty(t, r.ArchiveName)
 				for _, f := range r.Files {
-					if !f.OK {
-						t.Errorf("file %q failed: %s", f.Path, f.Err)
-					}
+					assert.True(t, f.OK)
 				}
 			},
 		},
@@ -329,18 +302,14 @@ func TestRun(t *testing.T) {
 			ctx:         func() context.Context { return context.Background() },
 			checkResult: func(t *testing.T, r *verify.Result) {
 				t.Helper()
-				if r == nil {
-					t.Fatal("result is nil")
-				}
+				require.NotNil(t, r)
 				failed := 0
 				for _, f := range r.Files {
 					if !f.OK {
 						failed++
 					}
 				}
-				if failed == 0 {
-					t.Error("expected at least one failed file, got none")
-				}
+				assert.NotZero(t, failed)
 			},
 		},
 		{
@@ -452,18 +421,11 @@ func TestRun(t *testing.T) {
 			result, err := verify.Run(ctx, archivePath)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.checkResult != nil {
 				tt.checkResult(t, result)

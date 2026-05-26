@@ -29,6 +29,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/retr0h/agentpack/internal/metadata"
 )
 
@@ -50,17 +53,14 @@ func initGitRepo(t *testing.T, dir, branch string) {
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), gitEnv...)
 		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		require.NoError(t, err, "git %v\n%s", args, out)
 	}
 
 	run("init")
 	run("checkout", "-b", branch)
 
-	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
+	err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0o644)
+	require.NoError(t, err)
 
 	run("add", ".")
 	run("commit", "-m", "init")
@@ -76,17 +76,14 @@ func initDetachedRepo(t *testing.T, dir string) {
 	cmd := exec.Command("git", "rev-parse", "HEAD")
 	cmd.Dir = dir
 	shaBytes, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("rev-parse HEAD: %v", err)
-	}
+	require.NoError(t, err)
 	sha := strings.TrimSpace(string(shaBytes))
 
 	detach := exec.Command("git", "checkout", "--detach", sha)
 	detach.Dir = dir
 	detach.Env = append(os.Environ(), gitEnv...)
-	if out, err := detach.CombinedOutput(); err != nil {
-		t.Fatalf("git checkout --detach: %v\n%s", err, out)
-	}
+	out, err := detach.CombinedOutput()
+	require.NoError(t, err, "git checkout --detach\n%s", out)
 }
 
 // initEmptyGitRepo creates a git repo with no commits (so rev-parse HEAD
@@ -98,9 +95,7 @@ func initEmptyGitRepo(t *testing.T, dir string) {
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), gitEnv...)
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git init: %v\n%s", err, out)
-	}
+	require.NoError(t, err, "git init\n%s", out)
 }
 
 // makeFakeGitDir creates a temporary directory containing a fake "git" script
@@ -124,9 +119,8 @@ done
 echo "aabbccddaabbccddaabbccddaabbccddaabbccdd"
 exit 0
 `
-	if err := os.WriteFile(fakeGit, []byte(script), 0o755); err != nil {
-		t.Fatalf("write fake git: %v", err)
-	}
+	err := os.WriteFile(fakeGit, []byte(script), 0o755)
+	require.NoError(t, err)
 	return fakeGitDir
 }
 
@@ -155,32 +149,15 @@ func TestCapture(t *testing.T) {
 			checkResult: func(t *testing.T, m *metadata.Metadata) {
 				t.Helper()
 
-				if m.Name != "my-plugin" {
-					t.Errorf("Name = %q, want %q", m.Name, "my-plugin")
-				}
-				if m.Version != "1.0.0" {
-					t.Errorf("Version = %q, want %q", m.Version, "1.0.0")
-				}
-				if len(m.GitCommitSHA) != 40 {
-					t.Errorf(
-						"GitCommitSHA length = %d, want 40; got %q",
-						len(m.GitCommitSHA),
-						m.GitCommitSHA,
-					)
-				}
-				if m.GitBranch != "main" {
-					t.Errorf("GitBranch = %q, want %q", m.GitBranch, "main")
-				}
-				if m.BuildTimestamp == "" {
-					t.Error("BuildTimestamp is empty")
-				}
-				if m.BuilderVersion != "dev" {
-					t.Errorf("BuilderVersion = %q, want %q", m.BuilderVersion, "dev")
-				}
+				assert.Equal(t, "my-plugin", m.Name)
+				assert.Equal(t, "1.0.0", m.Version)
+				assert.Len(t, m.GitCommitSHA, 40)
+				assert.Equal(t, "main", m.GitBranch)
+				assert.NotEmpty(t, m.BuildTimestamp)
+				assert.Equal(t, "dev", m.BuilderVersion)
+
 				want := runtime.GOOS + "-" + runtime.GOARCH
-				if m.Platform != want {
-					t.Errorf("Platform = %q, want %q", m.Platform, want)
-				}
+				assert.Equal(t, want, m.Platform)
 			},
 		},
 		{
@@ -196,12 +173,8 @@ func TestCapture(t *testing.T) {
 			},
 			checkResult: func(t *testing.T, m *metadata.Metadata) {
 				t.Helper()
-				if m.GitBranch != "HEAD" {
-					t.Errorf("GitBranch = %q, want %q", m.GitBranch, "HEAD")
-				}
-				if len(m.GitCommitSHA) != 40 {
-					t.Errorf("GitCommitSHA length = %d, want 40", len(m.GitCommitSHA))
-				}
+				assert.Equal(t, "HEAD", m.GitBranch)
+				assert.Len(t, m.GitCommitSHA, 40)
 			},
 		},
 		{
@@ -238,18 +211,11 @@ func TestCapture(t *testing.T) {
 			m, err := metadata.Capture(ctx, dir, "my-plugin", "1.0.0")
 
 			if tc.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tc.wantErr)
-				}
-				if !strings.Contains(err.Error(), tc.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tc.wantErr)
-				}
+				require.ErrorContains(t, err, tc.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tc.checkResult != nil {
 				tc.checkResult(t, m)

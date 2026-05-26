@@ -21,6 +21,7 @@
 package fetcher
 
 import (
+	"context"
 	"io"
 )
 
@@ -73,6 +74,16 @@ func ExtractHost(gitURL string) string {
 }
 
 // NetrcAuth exposes netrcAuth for testing.
-func NetrcAuth(gitURL string) interface{} {
+func NetrcAuth(gitURL string) any {
 	return netrcAuth(gitURL)
+}
+
+// CopyWorktree exposes copyWorktree for testing.
+func CopyWorktree(ctx context.Context, src string, dst string) error {
+	return copyWorktree(ctx, src, dst)
+}
+
+// CopyFileGit exposes copyFileGit for testing.
+func CopyFileGit(src string, dst string) error {
+	return copyFileGit(src, dst)
 }

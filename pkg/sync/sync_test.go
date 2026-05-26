@@ -25,10 +25,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/retr0h/agentpack/pkg/build"
@@ -50,7 +51,7 @@ func newCancelAfterFirstErrCtx() *cancelAfterFirstErrCtx {
 }
 
 func (c *cancelAfterFirstErrCtx) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterFirstErrCtx) Done() <-chan struct{}       { return nil }
+func (c *cancelAfterFirstErrCtx) Done() <-chan struct{}        { return nil }
 func (c *cancelAfterFirstErrCtx) Value(_ any) any             { return nil }
 
 func (c *cancelAfterFirstErrCtx) Err() error {
@@ -66,9 +67,7 @@ func writePackagesFile(t *testing.T, dir, content string) string {
 	t.Helper()
 
 	path := filepath.Join(dir, "agentpack-packages.yaml")
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write agentpack-packages.yaml: %v", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 
 	return path
 }
@@ -101,21 +100,10 @@ func TestRun(t *testing.T) {
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
 
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-
-				if results[0].Status != "installed" {
-					t.Errorf("Status = %q, want %q", results[0].Status, "installed")
-				}
-
-				if results[0].Name != "my-plugin" {
-					t.Errorf("Name = %q, want %q", results[0].Name, "my-plugin")
-				}
-
-				if results[0].Version != "1.0.0" {
-					t.Errorf("Version = %q, want %q", results[0].Version, "1.0.0")
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "installed", results[0].Status)
+				assert.Equal(t, "my-plugin", results[0].Name)
+				assert.Equal(t, "1.0.0", results[0].Version)
 			},
 		},
 		{
@@ -134,17 +122,9 @@ func TestRun(t *testing.T) {
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
 
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-
-				if results[0].Status != "failed" {
-					t.Errorf("Status = %q, want %q", results[0].Status, "failed")
-				}
-
-				if results[0].Err == nil {
-					t.Error("Err is nil, want non-nil")
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "failed", results[0].Status)
+				assert.NotNil(t, results[0].Err)
 			},
 		},
 		{
@@ -176,17 +156,9 @@ func TestRun(t *testing.T) {
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
 
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-
-				if results[0].Status != "installed" {
-					t.Errorf("Status = %q, want %q", results[0].Status, "installed")
-				}
-
-				if results[0].Name != "git-plugin" {
-					t.Errorf("Name = %q, want %q", results[0].Name, "git-plugin")
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "installed", results[0].Status)
+				assert.Equal(t, "git-plugin", results[0].Name)
 			},
 		},
 		{
@@ -210,17 +182,9 @@ func TestRun(t *testing.T) {
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
 
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-
-				if results[0].Status != "failed" {
-					t.Errorf("Status = %q, want %q", results[0].Status, "failed")
-				}
-
-				if results[0].Err == nil {
-					t.Error("Err is nil, want non-nil")
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "failed", results[0].Status)
+				assert.NotNil(t, results[0].Err)
 			},
 		},
 		{
@@ -248,17 +212,9 @@ func TestRun(t *testing.T) {
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
 
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-
-				if results[0].Status != "failed" {
-					t.Errorf("Status = %q, want %q", results[0].Status, "failed")
-				}
-
-				if results[0].Err == nil {
-					t.Error("Err is nil, want non-nil")
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "failed", results[0].Status)
+				assert.NotNil(t, results[0].Err)
 			},
 		},
 		{
@@ -297,21 +253,10 @@ func TestRun(t *testing.T) {
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
 
-				if len(results) != 2 {
-					t.Fatalf("result count = %d, want 2", len(results))
-				}
-
-				if results[0].Status != "installed" {
-					t.Errorf("results[0].Status = %q, want %q", results[0].Status, "installed")
-				}
-
-				if results[1].Status != "failed" {
-					t.Errorf("results[1].Status = %q, want %q", results[1].Status, "failed")
-				}
-
-				if results[1].Err == nil {
-					t.Error("results[1].Err is nil, want non-nil")
-				}
+				require.Len(t, results, 2)
+				assert.Equal(t, "installed", results[0].Status)
+				assert.Equal(t, "failed", results[1].Status)
+				assert.NotNil(t, results[1].Err)
 			},
 		},
 		{
@@ -372,17 +317,9 @@ func TestRun(t *testing.T) {
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
 
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-
-				if results[0].Status != "failed" {
-					t.Errorf("Status = %q, want %q", results[0].Status, "failed")
-				}
-
-				if results[0].Err == nil {
-					t.Error("Err is nil, want non-nil")
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "failed", results[0].Status)
+				assert.NotNil(t, results[0].Err)
 			},
 		},
 		{
@@ -405,13 +342,8 @@ func TestRun(t *testing.T) {
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
 
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
-
-				if results[0].Status != "installed" {
-					t.Errorf("Status = %q, want %q", results[0].Status, "installed")
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "installed", results[0].Status)
 			},
 		},
 		{
@@ -433,17 +365,56 @@ func TestRun(t *testing.T) {
 			checkResult: func(t *testing.T, results []pkgsync.Result) {
 				t.Helper()
 
-				if len(results) != 1 {
-					t.Fatalf("result count = %d, want 1", len(results))
-				}
+				require.Len(t, results, 1)
+				assert.Equal(t, "failed", results[0].Status)
+				assert.NotNil(t, results[0].Err)
+			},
+		},
+		{
+			name: "no installer configured for git package after successful build",
+			yaml: "packages:\n  - name: git-no-installer\n    git: github.com/org/repo\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockFetcher := fetcherMocks.NewMockFetcher(ctrl)
+				mockBuilder := syncMocks.NewMockBuilder(ctrl)
 
-				if results[0].Status != "failed" {
-					t.Errorf("Status = %q, want %q", results[0].Status, "failed")
-				}
+				mockFetcher.EXPECT().
+					Fetch(gomock.Any(), "github.com/org/repo", gomock.Any()).
+					Return(nil)
 
-				if results[0].Err == nil {
-					t.Error("Err is nil, want non-nil")
-				}
+				mockBuilder.EXPECT().
+					Build(gomock.Any(), gomock.Any()).
+					Return([]build.Result{{Name: "git-no-installer", ArchivePath: "/tmp/git-no-installer.agentpack"}}, nil)
+
+				return pkgsync.Options{
+					Fetcher:   mockFetcher,
+					Builder:   mockBuilder,
+					Installer: nil,
+				}, func() {}
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+
+				require.Len(t, results, 1)
+				assert.Equal(t, "failed", results[0].Status)
+				assert.NotNil(t, results[0].Err)
+			},
+		},
+		{
+			name: "nil fetcher falls back to GitFetcher which fails on bad source",
+			yaml: "packages:\n  - name: nil-fetcher-pkg\n    git: /nonexistent/path/to/repo\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				return pkgsync.Options{
+					Fetcher:   nil,
+					Builder:   syncMocks.NewMockBuilder(ctrl),
+					Installer: syncMocks.NewMockInstaller(ctrl),
+				}, func() {}
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+
+				require.Len(t, results, 1)
+				assert.Equal(t, "failed", results[0].Status)
+				assert.NotNil(t, results[0].Err)
 			},
 		},
 	}
@@ -490,20 +461,11 @@ func TestRun(t *testing.T) {
 			results, err := pkgsync.Run(ctx, opts)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.checkResult != nil {
 				tt.checkResult(t, results)

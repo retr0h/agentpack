@@ -18,36 +18,16 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package claudecode
+package universal
 
-import "os"
+import "context"
 
-// SetUserHome replaces userHomeFunc for testing.
-func SetUserHome(cc *ClaudeCode, fn func() (string, error)) {
-	cc.userHomeFunc = fn
-}
-
-// SetOsMkdirAll replaces mkdirAllFunc for testing.
-func SetOsMkdirAll(cc *ClaudeCode, fn func(string, os.FileMode) error) {
-	cc.mkdirAllFunc = fn
+// CopyTreeIfExists exposes copyTreeIfExists for testing.
+func CopyTreeIfExists(ctx context.Context, src, dst string) error {
+	return copyTreeIfExists(ctx, src, dst)
 }
 
 // CopyFile exposes copyFile for testing.
 func CopyFile(src, dst string) error {
 	return copyFile(src, dst)
-}
-
-// CopyTree exposes copyTree for testing.
-func CopyTree(mkdirAll func(string, os.FileMode) error, src, dst string) error {
-	return copyTree(mkdirAll, src, dst)
-}
-
-// ShortSHA exposes shortSHA for testing.
-func ShortSHA(sha string) string {
-	return shortSHA(sha)
-}
-
-// FormatDate exposes formatDate for testing.
-func FormatDate(ts string) string {
-	return formatDate(ts)
 }

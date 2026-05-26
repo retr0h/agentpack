@@ -28,6 +28,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/registry"
+	"github.com/retr0h/agentpack/pkg/target"
 )
 
 // AutoPackage exposes autoPackage for testing.
@@ -151,4 +152,29 @@ func SetRegistrySave(fn func(*registry.PackageManifest) error) func() {
 	registrySave = fn
 
 	return func() { registrySave = orig }
+}
+
+// NameFromSource exposes nameFromSource for testing.
+func NameFromSource(source string) string {
+	return nameFromSource(source)
+}
+
+// HumanSize exposes humanSize for testing.
+func HumanSize(bytes int64) string {
+	return humanSize(bytes)
+}
+
+// CollectTargetFiles exposes collectTargetFiles for testing.
+func CollectTargetFiles(installDir string, tgt target.Target, srcDir string) ([]registry.InstalledFile, error) {
+	return collectTargetFiles(installDir, tgt, srcDir)
+}
+
+// CopyFileAtomic exposes copyFileAtomic for testing.
+func CopyFileAtomic(src, dst string) error {
+	return copyFileAtomic(src, dst)
+}
+
+// RegistrySource exposes registrySource for testing.
+func RegistrySource(opts Options) string {
+	return registrySource(opts)
 }

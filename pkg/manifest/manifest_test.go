@@ -24,11 +24,12 @@ import (
 	"context"
 	"errors"
 	"io/fs"
-	"strings"
 	"testing"
 
 	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/memfs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/pkg/manifest"
@@ -43,12 +44,8 @@ import (
 func memfsWithYAML(t *testing.T, content string) (avfs.VFS, string) {
 	t.Helper()
 	vfs := memfs.New()
-	if err := vfs.MkdirAll("/dir", 0o755); err != nil {
-		t.Fatalf("MkdirAll /dir: %v", err)
-	}
-	if err := vfs.WriteFile("/dir/agentpack.yaml", []byte(content), fs.FileMode(0o644)); err != nil {
-		t.Fatalf("WriteFile agentpack.yaml: %v", err)
-	}
+	require.NoError(t, vfs.MkdirAll("/dir", 0o755))
+	require.NoError(t, vfs.WriteFile("/dir/agentpack.yaml", []byte(content), fs.FileMode(0o644)))
 	return vfs, "/dir"
 }
 
@@ -210,7 +207,7 @@ plugins:
 				// Return an empty memfs with no agentpack.yaml — triggers IsNotExist.
 				vfs := memfs.New()
 				if err := vfs.MkdirAll("/dir", 0o755); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return vfs, "/dir"
 			},
@@ -245,24 +242,17 @@ plugins:
 			m, err := manifest.Load(ctx, vfs, dir)
 
 			if tc.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tc.wantErr)
-				}
-				if got := err.Error(); !strings.Contains(got, tc.wantErr) {
-					t.Fatalf("error %q does not contain %q", got, tc.wantErr)
-				}
+				require.ErrorContains(t, err, tc.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
-			if tc.wantName != "" && m.Name != tc.wantName {
-				t.Errorf("Name = %q, want %q", m.Name, tc.wantName)
+			if tc.wantName != "" {
+				assert.Equal(t, tc.wantName, m.Name)
 			}
-			if tc.wantPlugs > 0 && len(m.Plugins) != tc.wantPlugs {
-				t.Errorf("len(Plugins) = %d, want %d", len(m.Plugins), tc.wantPlugs)
+			if tc.wantPlugs > 0 {
+				assert.Len(t, m.Plugins, tc.wantPlugs)
 			}
 		})
 	}
@@ -299,27 +289,13 @@ func TestNormalize(t *testing.T) {
 			check: func(t *testing.T, plugins []manifest.Plugin) {
 				t.Helper()
 				p := plugins[0]
-				if p.Name != "solo" {
-					t.Errorf("Name = %q, want %q", p.Name, "solo")
-				}
-				if p.Version != "1.0.0" {
-					t.Errorf("Version = %q, want %q", p.Version, "1.0.0")
-				}
-				if p.Author != sharedAuthor {
-					t.Errorf("Author = %+v, want %+v", p.Author, sharedAuthor)
-				}
-				if p.License != "MIT" {
-					t.Errorf("License = %q, want %q", p.License, "MIT")
-				}
-				if p.Homepage != "https://example.com" {
-					t.Errorf("Homepage = %q, want %q", p.Homepage, "https://example.com")
-				}
-				if len(p.Keywords) != 1 || p.Keywords[0] != "foo" {
-					t.Errorf("Keywords = %v, want [foo]", p.Keywords)
-				}
-				if p.Category != "tools" {
-					t.Errorf("Category = %q, want %q", p.Category, "tools")
-				}
+				assert.Equal(t, "solo", p.Name)
+				assert.Equal(t, "1.0.0", p.Version)
+				assert.Equal(t, sharedAuthor, p.Author)
+				assert.Equal(t, "MIT", p.License)
+				assert.Equal(t, "https://example.com", p.Homepage)
+				assert.Equal(t, []string{"foo"}, p.Keywords)
+				assert.Equal(t, "tools", p.Category)
 			},
 		},
 		{
@@ -333,12 +309,8 @@ func TestNormalize(t *testing.T) {
 			wantLen: 2,
 			check: func(t *testing.T, plugins []manifest.Plugin) {
 				t.Helper()
-				if plugins[0].Name != "a" {
-					t.Errorf("plugins[0].Name = %q, want %q", plugins[0].Name, "a")
-				}
-				if plugins[1].Name != "b" {
-					t.Errorf("plugins[1].Name = %q, want %q", plugins[1].Name, "b")
-				}
+				assert.Equal(t, "a", plugins[0].Name)
+				assert.Equal(t, "b", plugins[1].Name)
 			},
 		},
 		{
@@ -355,15 +327,9 @@ func TestNormalize(t *testing.T) {
 			check: func(t *testing.T, plugins []manifest.Plugin) {
 				t.Helper()
 				p := plugins[0]
-				if p.Author != sharedAuthor {
-					t.Errorf("Author = %+v, want %+v", p.Author, sharedAuthor)
-				}
-				if p.License != "Apache-2.0" {
-					t.Errorf("License = %q, want %q", p.License, "Apache-2.0")
-				}
-				if p.Homepage != "https://shared.example.com" {
-					t.Errorf("Homepage = %q, want %q", p.Homepage, "https://shared.example.com")
-				}
+				assert.Equal(t, sharedAuthor, p.Author)
+				assert.Equal(t, "Apache-2.0", p.License)
+				assert.Equal(t, "https://shared.example.com", p.Homepage)
 			},
 		},
 		{
@@ -394,15 +360,9 @@ func TestNormalize(t *testing.T) {
 					Name:  "Override Author",
 					Email: "override@example.com",
 				}
-				if p.Author != wantAuthor {
-					t.Errorf("Author = %+v, want %+v", p.Author, wantAuthor)
-				}
-				if p.License != "GPL-3.0" {
-					t.Errorf("License = %q, want %q", p.License, "GPL-3.0")
-				}
-				if p.Homepage != "https://override.example.com" {
-					t.Errorf("Homepage = %q, want %q", p.Homepage, "https://override.example.com")
-				}
+				assert.Equal(t, wantAuthor, p.Author)
+				assert.Equal(t, "GPL-3.0", p.License)
+				assert.Equal(t, "https://override.example.com", p.Homepage)
 			},
 		},
 	}
@@ -413,9 +373,7 @@ func TestNormalize(t *testing.T) {
 
 			got := manifest.Normalize(tc.input)
 
-			if len(got) != tc.wantLen {
-				t.Fatalf("len(Normalize(...)) = %d, want %d", len(got), tc.wantLen)
-			}
+			require.Len(t, got, tc.wantLen)
 
 			if tc.check != nil {
 				tc.check(t, got)
@@ -461,19 +419,12 @@ func TestEntryUnmarshalYAML(t *testing.T) {
 			t.Parallel()
 
 			var e manifest.Entry
-			if err := yaml.Unmarshal([]byte(tc.input), &e); err != nil {
-				t.Fatalf("UnmarshalYAML error: %v", err)
-			}
+			err := yaml.Unmarshal([]byte(tc.input), &e)
+			require.NoError(t, err)
 
-			if e.Glob != tc.wantGlob {
-				t.Errorf("Glob = %q, want %q", e.Glob, tc.wantGlob)
-			}
-			if e.Src != tc.wantSrc {
-				t.Errorf("Src = %q, want %q", e.Src, tc.wantSrc)
-			}
-			if e.Dest != tc.wantDest {
-				t.Errorf("Dest = %q, want %q", e.Dest, tc.wantDest)
-			}
+			assert.Equal(t, tc.wantGlob, e.Glob)
+			assert.Equal(t, tc.wantSrc, e.Src)
+			assert.Equal(t, tc.wantDest, e.Dest)
 		})
 	}
 }

@@ -30,13 +30,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/pkg/archive"
 )
@@ -219,10 +220,10 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				vfs := memfs.New()
 				if err := vfs.MkdirAll("/src", 0o755); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				if err := vfs.WriteFile("/src/hello.txt", []byte("hello world"), fs.FileMode(0o644)); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return vfs, "/out"
 			},
@@ -237,7 +238,7 @@ func TestCreate(t *testing.T) {
 			checkTar: func(t *testing.T, archivePath string) {
 				t.Helper()
 				entries := listTarEntries(t, archivePath)
-				assertContains(t, entries, "marketplaces/test/hello.txt")
+				assert.Contains(t, entries, "marketplaces/test/hello.txt")
 			},
 		},
 		{
@@ -257,9 +258,7 @@ func TestCreate(t *testing.T) {
 			checkTar: func(t *testing.T, archivePath string) {
 				t.Helper()
 				content := readTarFile(t, archivePath, "marketplaces/test/generated.json")
-				if string(content) != `{"key":"value"}` {
-					t.Errorf("content = %q, want %q", content, `{"key":"value"}`)
-				}
+				assert.Equal(t, `{"key":"value"}`, string(content))
 			},
 		},
 		{
@@ -268,7 +267,7 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				vfs := memfs.New()
 				if err := vfs.WriteFile("/skill.md", []byte("# My Skill"), fs.FileMode(0o644)); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return vfs, "/out"
 			},
@@ -281,8 +280,8 @@ func TestCreate(t *testing.T) {
 			checkTar: func(t *testing.T, archivePath string) {
 				t.Helper()
 				entries := listTarEntries(t, archivePath)
-				assertContains(t, entries, "marketplaces/p/skills/skill.md")
-				assertContains(t, entries, "marketplaces/p/.agentpack/metadata.json")
+				assert.Contains(t, entries, "marketplaces/p/skills/skill.md")
+				assert.Contains(t, entries, "marketplaces/p/.agentpack/metadata.json")
 			},
 		},
 		{
@@ -299,9 +298,9 @@ func TestCreate(t *testing.T) {
 			checkTar: func(t *testing.T, archivePath string) {
 				t.Helper()
 				entries := listTarEntries(t, archivePath)
-				assertContains(t, entries, "a/")
-				assertContains(t, entries, "a/b/")
-				assertContains(t, entries, "a/b/c/")
+				assert.Contains(t, entries, "a/")
+				assert.Contains(t, entries, "a/b/")
+				assert.Contains(t, entries, "a/b/c/")
 			},
 		},
 		{
@@ -351,10 +350,10 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				base := memfs.New()
 				if err := base.MkdirAll("/src", 0o755); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				if err := base.WriteFile("/src/file.txt", []byte("data"), fs.FileMode(0o644)); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return openErrorVFS{VFS: base}, "/out"
 			},
@@ -372,10 +371,10 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				base := memfs.New()
 				if err := base.MkdirAll("/src", 0o755); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				if err := base.WriteFile("/src/file.txt", []byte("data"), fs.FileMode(0o644)); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return readErrorVFS{VFS: base}, "/out"
 			},
@@ -406,18 +405,13 @@ func TestCreate(t *testing.T) {
 			checkTar: func(t *testing.T, archivePath string) {
 				t.Helper()
 				destDir := t.TempDir()
-				if err := archive.Extract(context.Background(), archivePath, destDir); err != nil {
-					t.Fatalf("extract: %v", err)
-				}
+				err := archive.Extract(context.Background(), archivePath, destDir)
+				require.NoError(t, err)
 				info, err := os.Stat(
 					filepath.Join(destDir, "marketplaces", "p", "mcp", "my-server"),
 				)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if info.Mode()&0o111 == 0 {
-					t.Errorf("expected executable bit, got %v", info.Mode())
-				}
+				require.NoError(t, err)
+				assert.NotEqual(t, fs.FileMode(0), info.Mode()&0o111)
 			},
 		},
 		{
@@ -471,10 +465,10 @@ func TestCreate(t *testing.T) {
 				// addFileFromDisk's tw.WriteHeader call, which then fails.
 				base := memfs.New()
 				if err := base.MkdirAll("/src", 0o755); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				if err := base.WriteFile("/src/real.txt", []byte("data"), fs.FileMode(0o644)); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return writeErrorVFS{VFS: base}, "/out"
 			},
@@ -561,30 +555,23 @@ func TestCreate(t *testing.T) {
 			err := archive.Create(testCtx, vfs, outPath, tt.entries(vfs, outDir))
 
 			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if tt.wantErrStr != "" && !strings.Contains(err.Error(), tt.wantErrStr) {
-					t.Errorf("error %q does not contain %q", err.Error(), tt.wantErrStr)
+				require.Error(t, err)
+				if tt.wantErrStr != "" {
+					require.ErrorContains(t, err, tt.wantErrStr)
 				}
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			// For checkTar, we need to read the archive from the VFS and
 			// write it to a real temp dir so the tar reader can open it.
 			if tt.checkTar != nil {
 				data, err := vfs.ReadFile(outPath)
-				if err != nil {
-					t.Fatalf("read archive from vfs: %v", err)
-				}
+				require.NoError(t, err)
 				realPath := filepath.Join(t.TempDir(), "test.agentpack")
-				if err := os.WriteFile(realPath, data, 0o644); err != nil {
-					t.Fatalf("write archive to real fs: %v", err)
-				}
+				err = os.WriteFile(realPath, data, 0o644)
+				require.NoError(t, err)
 				tt.checkTar(t, realPath)
 			}
 		})
@@ -609,35 +596,27 @@ func TestExtract(t *testing.T) {
 				vfs := osfs.NewWithNoIdm()
 				srcDir := t.TempDir()
 				if err := os.WriteFile(filepath.Join(srcDir, "data.txt"), []byte("content"), 0o644); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				outPath := filepath.Join(t.TempDir(), "rt.agentpack")
 				if err := archive.Create(ctx, vfs, outPath, []archive.FileEntry{
 					{Src: filepath.Join(srcDir, "data.txt"), ArchivePath: "marketplaces/pkg/data.txt"},
 					{ArchivePath: "marketplaces/pkg/.agentpack/meta.json", Content: []byte(`{"v":1}`)},
 				}); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return outPath
 			},
 			checkFiles: func(t *testing.T, destDir string) {
 				t.Helper()
 				got, err := os.ReadFile(filepath.Join(destDir, "marketplaces", "pkg", "data.txt"))
-				if err != nil {
-					t.Fatalf("read data.txt: %v", err)
-				}
-				if string(got) != "content" {
-					t.Errorf("data.txt = %q, want %q", got, "content")
-				}
+				require.NoError(t, err)
+				assert.Equal(t, "content", string(got))
 				got2, err := os.ReadFile(
 					filepath.Join(destDir, "marketplaces", "pkg", ".agentpack", "meta.json"),
 				)
-				if err != nil {
-					t.Fatalf("read meta.json: %v", err)
-				}
-				if string(got2) != `{"v":1}` {
-					t.Errorf("meta.json = %q", got2)
-				}
+				require.NoError(t, err)
+				assert.Equal(t, `{"v":1}`, string(got2))
 			},
 		},
 		{
@@ -649,12 +628,8 @@ func TestExtract(t *testing.T) {
 			checkFiles: func(t *testing.T, destDir string) {
 				t.Helper()
 				info, err := os.Stat(filepath.Join(destDir, "mydir"))
-				if err != nil {
-					t.Fatalf("stat mydir: %v", err)
-				}
-				if !info.IsDir() {
-					t.Errorf("expected mydir to be a directory")
-				}
+				require.NoError(t, err)
+				assert.True(t, info.IsDir())
 			},
 		},
 		{
@@ -689,7 +664,7 @@ func TestExtract(t *testing.T) {
 				outPath := filepath.Join(t.TempDir(), "withdir.agentpack")
 				f, err := os.Create(outPath)
 				if err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				defer func() { _ = f.Close() }()
 				gw := gzip.NewWriter(f)
@@ -701,7 +676,7 @@ func TestExtract(t *testing.T) {
 					Mode:     0o755,
 					Typeflag: tar.TypeDir,
 				}); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return outPath
 			},
@@ -709,9 +684,7 @@ func TestExtract(t *testing.T) {
 				t.Helper()
 				// Create a regular file at the path where the directory "conflict"
 				// would land. MkdirAll cannot replace a file with a directory.
-				if err := os.WriteFile(filepath.Join(destDir, "conflict"), []byte("file"), 0o644); err != nil {
-					t.Fatalf("write conflict file: %v", err)
-				}
+				require.NoError(t, os.WriteFile(filepath.Join(destDir, "conflict"), []byte("file"), 0o644))
 			},
 			wantErr: "mkdir",
 		},
@@ -725,14 +698,14 @@ func TestExtract(t *testing.T) {
 				if err := archive.Create(ctx, vfs, outPath, []archive.FileEntry{
 					{ArchivePath: "file.txt", Content: []byte("data")},
 				}); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return outPath
 			},
 			setupDest: func(t *testing.T, destDir string) {
 				t.Helper()
 				if err := os.Chmod(destDir, 0o555); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				t.Cleanup(func() { _ = os.Chmod(destDir, 0o755) })
 			},
@@ -744,7 +717,7 @@ func TestExtract(t *testing.T) {
 				t.Helper()
 				outPath := filepath.Join(t.TempDir(), "notgzip.agentpack")
 				if err := os.WriteFile(outPath, []byte("this is not gzip data"), 0o644); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return outPath
 			},
@@ -761,7 +734,7 @@ func TestExtract(t *testing.T) {
 				_, _ = gw.Write([]byte("this is garbage tar data that will fail to parse"))
 				_ = gw.Close()
 				if err := os.WriteFile(outPath, buf.Bytes(), 0o644); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return outPath
 			},
@@ -777,7 +750,7 @@ func TestExtract(t *testing.T) {
 				if err := archive.Create(ctx, vfs, outPath, []archive.FileEntry{
 					{ArchivePath: "file.txt", Content: []byte("data")},
 				}); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return outPath
 			},
@@ -794,7 +767,7 @@ func TestExtract(t *testing.T) {
 				outPath := filepath.Join(t.TempDir(), "truncated-content.agentpack")
 				f, err := os.Create(outPath)
 				if err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				defer func() { _ = f.Close() }()
 
@@ -807,15 +780,15 @@ func TestExtract(t *testing.T) {
 					Mode:     0o644,
 					Typeflag: tar.TypeReg,
 				}); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				// Write only 10 bytes — less than the 1000 promised.
 				if _, err := tw.Write([]byte("0123456789")); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				// Close only gzip, not tar — leaves the content truncated.
 				if err := gw.Close(); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 
 				return outPath
@@ -830,7 +803,7 @@ func TestExtract(t *testing.T) {
 				outPath := filepath.Join(t.TempDir(), "regdir.agentpack")
 				f, err := os.Create(outPath)
 				if err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				defer func() { _ = f.Close() }()
 				gw := gzip.NewWriter(f)
@@ -844,10 +817,10 @@ func TestExtract(t *testing.T) {
 					Mode:     0o644,
 					Typeflag: tar.TypeReg,
 				}); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				if _, err := tw.Write(content); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				return outPath
 			},
@@ -855,11 +828,9 @@ func TestExtract(t *testing.T) {
 				t.Helper()
 				// Create a regular file where "conflict" directory should go.
 				// os.MkdirAll("conflict") will fail because "conflict" is a file.
-				if err := os.WriteFile(
+				require.NoError(t, os.WriteFile(
 					filepath.Join(destDir, "conflict"), []byte("file"), 0o644,
-				); err != nil {
-					t.Fatalf("write conflict file: %v", err)
-				}
+				))
 			},
 			wantErr: "mkdir for",
 		},
@@ -870,7 +841,7 @@ func TestExtract(t *testing.T) {
 				outPath := filepath.Join(t.TempDir(), "zeromode.agentpack")
 				f, err := os.Create(outPath)
 				if err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				defer func() { _ = f.Close() }()
 
@@ -887,10 +858,10 @@ func TestExtract(t *testing.T) {
 					Mode:     0, // zero mode triggers the default 0644 path
 					Typeflag: tar.TypeReg,
 				}); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 				if _, err := tw.Write(content); err != nil {
-					t.Fatal(err)
+					require.NoError(t, err)
 				}
 
 				return outPath
@@ -898,13 +869,8 @@ func TestExtract(t *testing.T) {
 			checkFiles: func(t *testing.T, destDir string) {
 				t.Helper()
 				info, err := os.Stat(filepath.Join(destDir, "zero-mode.txt"))
-				if err != nil {
-					t.Fatalf("stat zero-mode.txt: %v", err)
-				}
-				// Mode should be 0644 (default).
-				if info.Mode()&0o777 != 0o644 {
-					t.Errorf("mode = %o, want %o", info.Mode()&0o777, 0o644)
-				}
+				require.NoError(t, err)
+				assert.Equal(t, fs.FileMode(0o644), info.Mode()&0o777)
 			},
 		},
 	}
@@ -930,18 +896,11 @@ func TestExtract(t *testing.T) {
 			err := archive.Extract(testCtx, archivePath, destDir)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.checkFiles != nil {
 				tt.checkFiles(t, destDir)
@@ -959,13 +918,13 @@ func listTarEntries(t *testing.T, archivePath string) []string {
 
 	f, err := os.Open(archivePath)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defer func() { _ = f.Close() }()
 
 	gr, err := gzip.NewReader(f)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defer func() { _ = gr.Close() }()
 
@@ -988,13 +947,13 @@ func readTarFile(t *testing.T, archivePath, name string) []byte {
 
 	f, err := os.Open(archivePath)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defer func() { _ = f.Close() }()
 
 	gr, err := gzip.NewReader(f)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defer func() { _ = gr.Close() }()
 
@@ -1003,23 +962,16 @@ func readTarFile(t *testing.T, archivePath, name string) []byte {
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
-			t.Fatalf("file %q not found in archive", name)
+			require.FailNow(t, "file not found in archive", name)
 		}
 		if hdr.Name == name {
 			buf := make([]byte, hdr.Size)
-			if _, err := tr.Read(buf); err != nil && !errors.Is(err, io.EOF) {
-				t.Fatalf("read %s: %v", name, err)
+			_, readErr := tr.Read(buf)
+			if readErr != nil && !errors.Is(readErr, io.EOF) {
+				require.NoError(t, readErr)
 			}
 			return buf
 		}
-	}
-}
-
-func assertContains(t *testing.T, entries []string, want string) {
-	t.Helper()
-
-	if !slices.Contains(entries, want) {
-		t.Errorf("entries %v does not contain %q", entries, want)
 	}
 }
 
@@ -1029,7 +981,7 @@ func buildTarWithSymlink(t *testing.T) string {
 	outPath := filepath.Join(t.TempDir(), "symlink.agentpack")
 	f, err := os.Create(outPath)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defer func() { _ = f.Close() }()
 
@@ -1044,7 +996,7 @@ func buildTarWithSymlink(t *testing.T) string {
 		Typeflag: tar.TypeSymlink,
 		Linkname: "/etc/passwd",
 	}); err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 
 	return outPath
@@ -1056,7 +1008,7 @@ func buildTarWithTraversal(t *testing.T) string {
 	outPath := filepath.Join(t.TempDir(), "traversal.agentpack")
 	f, err := os.Create(outPath)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defer func() { _ = f.Close() }()
 
@@ -1073,10 +1025,10 @@ func buildTarWithTraversal(t *testing.T) string {
 		Mode:     0o644,
 		Typeflag: tar.TypeReg,
 	}); err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	if _, err := tw.Write(content); err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 
 	return outPath
@@ -1162,18 +1114,14 @@ func TestAddVirtualFile(t *testing.T) {
 			err := archive.AddVirtualFile(tw, tt.entry)
 
 			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if tt.wantErrStr != "" && !strings.Contains(err.Error(), tt.wantErrStr) {
-					t.Errorf("error %q does not contain %q", err.Error(), tt.wantErrStr)
+				require.Error(t, err)
+				if tt.wantErrStr != "" {
+					require.ErrorContains(t, err, tt.wantErrStr)
 				}
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
@@ -1185,7 +1133,7 @@ func buildTarWithDir(t *testing.T) string {
 	outPath := filepath.Join(t.TempDir(), "withdir.agentpack")
 	f, err := os.Create(outPath)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defer func() { _ = f.Close() }()
 
@@ -1200,7 +1148,7 @@ func buildTarWithDir(t *testing.T) string {
 		Typeflag: tar.TypeDir,
 		Mode:     0o755,
 	}); err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 
 	return outPath

@@ -28,6 +28,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/retr0h/agentpack/pkg/fetcher"
 )
 
@@ -53,9 +56,7 @@ func initBareRepo(t *testing.T) (bareDir string) {
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), gitEnvVars...)
 		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		require.NoError(t, err, "git %v\n%s", args, out)
 	}
 
 	// Working repo.
@@ -63,13 +64,11 @@ func initBareRepo(t *testing.T) (bareDir string) {
 	run(workDir, "init")
 	run(workDir, "checkout", "-b", "main")
 
-	if err := os.WriteFile(
+	require.NoError(t, os.WriteFile(
 		filepath.Join(workDir, "README.md"),
 		[]byte("# test repo\n"),
 		0o644,
-	); err != nil {
-		t.Fatalf("WriteFile README.md: %v", err)
-	}
+	))
 
 	run(workDir, "add", ".")
 	run(workDir, "commit", "-m", "init")
@@ -91,22 +90,18 @@ func initBareRepoWithTag(t *testing.T, tag string) (bareDir string) {
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), gitEnvVars...)
 		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		require.NoError(t, err, "git %v\n%s", args, out)
 	}
 
 	workDir := t.TempDir()
 	run(workDir, "init")
 	run(workDir, "checkout", "-b", "main")
 
-	if err := os.WriteFile(
+	require.NoError(t, os.WriteFile(
 		filepath.Join(workDir, "README.md"),
 		[]byte("# test repo\n"),
 		0o644,
-	); err != nil {
-		t.Fatalf("WriteFile README.md: %v", err)
-	}
+	))
 
 	run(workDir, "add", ".")
 	run(workDir, "commit", "-m", "init")
@@ -143,12 +138,10 @@ func TestGitFetcher_Fetch(t *testing.T) {
 			check: func(t *testing.T, dest string) {
 				t.Helper()
 				// README.md should be present; .git/ should not.
-				if _, err := os.Stat(filepath.Join(dest, "README.md")); err != nil {
-					t.Errorf("README.md not found: %v", err)
-				}
-				if _, err := os.Stat(filepath.Join(dest, ".git")); err == nil {
-					t.Error(".git directory should not be present in dest")
-				}
+				_, err := os.Stat(filepath.Join(dest, "README.md"))
+				assert.NoError(t, err)
+				_, err = os.Stat(filepath.Join(dest, ".git"))
+				assert.Error(t, err)
 			},
 		},
 		{
@@ -161,9 +154,8 @@ func TestGitFetcher_Fetch(t *testing.T) {
 			},
 			check: func(t *testing.T, dest string) {
 				t.Helper()
-				if _, err := os.Stat(filepath.Join(dest, "README.md")); err != nil {
-					t.Errorf("README.md not found after tag clone: %v", err)
-				}
+				_, err := os.Stat(filepath.Join(dest, "README.md"))
+				assert.NoError(t, err)
 			},
 		},
 		{
@@ -225,21 +217,220 @@ func TestGitFetcher_Fetch(t *testing.T) {
 			err := f.Fetch(ctx, source, dest)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			if tt.check != nil {
 				tt.check(t, dest)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestCopyWorktree
+// --------------------------------------------------------------------------
+
+func TestCopyWorktree(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		setup     func(t *testing.T) (src string, dst string)
+		customCtx context.Context
+		wantErr   string
+		check     func(t *testing.T, dst string)
+	}{
+		{
+			name: "copies files skipping .git directory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(src, "file.txt"), []byte("hello"), 0o644))
+				require.NoError(t, os.MkdirAll(filepath.Join(src, ".git"), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(src, ".git", "HEAD"), []byte("ref: refs/heads/main"), 0o644))
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dst string) {
+				t.Helper()
+				_, err := os.Stat(filepath.Join(dst, "file.txt"))
+				assert.NoError(t, err)
+				_, err = os.Stat(filepath.Join(dst, ".git"))
+				assert.Error(t, err)
+			},
+		},
+		{
+			name: "copies files in subdirectories",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "subdir"), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(src, "subdir", "nested.txt"), []byte("nested"), 0o644))
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dst string) {
+				t.Helper()
+				_, err := os.Stat(filepath.Join(dst, "subdir", "nested.txt"))
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "walk error when src does not exist",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return "/nonexistent/src/dir", t.TempDir()
+			},
+			wantErr: "lstat",
+		},
+		{
+			name: "context cancelled returns error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(src, "file.txt"), []byte("data"), 0o644))
+				return src, t.TempDir()
+			},
+			customCtx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			}(),
+			wantErr: "context canceled",
+		},
+		{
+			name: "skips file named .git at root",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(src, ".git"), []byte("worktree: something"), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(src, "README.md"), []byte("readme"), 0o644))
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dst string) {
+				t.Helper()
+				_, err := os.Stat(filepath.Join(dst, ".git"))
+				assert.Error(t, err)
+				_, err = os.Stat(filepath.Join(dst, "README.md"))
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "returns error when dst is read-only and src has subdirectory",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				if os.Getuid() == 0 {
+					t.Skip("root bypasses permission checks")
+				}
+				src := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "subdir"), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(src, "subdir", "f.txt"), []byte("x"), 0o644))
+				dst := t.TempDir()
+				require.NoError(t, os.Chmod(dst, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(dst, 0o755) })
+				return src, dst
+			},
+			wantErr: "mkdir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			src, dst := tt.setup(t)
+
+			var ctx context.Context
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
+			} else {
+				ctx = context.Background()
+			}
+
+			err := fetcher.CopyWorktree(ctx, src, dst)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, dst)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestCopyFileGit
+// --------------------------------------------------------------------------
+
+func TestCopyFileGit(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (src string, dst string)
+		wantErr string
+		check   func(t *testing.T, dst string)
+	}{
+		{
+			name: "copies file preserving permissions",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				src := filepath.Join(dir, "source.txt")
+				require.NoError(t, os.WriteFile(src, []byte("content"), 0o755))
+				return src, filepath.Join(dir, "dest.txt")
+			},
+			check: func(t *testing.T, dst string) {
+				t.Helper()
+				data, err := os.ReadFile(dst)
+				require.NoError(t, err)
+				assert.Equal(t, "content", string(data))
+			},
+		},
+		{
+			name: "returns error when src does not exist",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return "/nonexistent/src.txt", filepath.Join(t.TempDir(), "dst.txt")
+			},
+			wantErr: "read",
+		},
+		{
+			name: "returns error when dst dir does not exist",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				src := filepath.Join(dir, "source.txt")
+				require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
+				return src, filepath.Join(dir, "nonexistent", "dst.txt")
+			},
+			wantErr: "write",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			src, dst := tt.setup(t)
+			err := fetcher.CopyFileGit(src, dst)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, dst)
 			}
 		})
 	}
@@ -302,26 +493,13 @@ func TestParseGitSource(t *testing.T) {
 			rawURL, ref, err := fetcher.ParseGitSource(tt.source)
 
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if rawURL != tt.wantRawURL {
-				t.Errorf("rawURL = %q, want %q", rawURL, tt.wantRawURL)
-			}
-
-			if ref != tt.wantRef {
-				t.Errorf("ref = %q, want %q", ref, tt.wantRef)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantRawURL, rawURL)
+			assert.Equal(t, tt.wantRef, ref)
 		})
 	}
 }
@@ -375,8 +553,199 @@ func TestToGitURL(t *testing.T) {
 			t.Parallel()
 
 			got := fetcher.ToGitURL(tt.rawURL)
-			if got != tt.wantURL {
-				t.Errorf("ToGitURL(%q) = %q, want %q", tt.rawURL, got, tt.wantURL)
+			assert.Equal(t, tt.wantURL, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestLsRemote
+// --------------------------------------------------------------------------
+
+func TestLsRemote(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string // returns rawURL
+		wantErr string
+		check   func(t *testing.T, refs map[string]string)
+	}{
+		{
+			name: "lists refs from local bare repo",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return initBareRepo(t)
+			},
+			check: func(t *testing.T, refs map[string]string) {
+				t.Helper()
+				assert.NotEmpty(t, refs)
+			},
+		},
+		{
+			name: "nonexistent repo returns error",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return "/nonexistent/path/to/repo"
+			},
+			wantErr: "ls-remote",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rawURL := tt.setup(t)
+			refs, err := fetcher.LsRemote(context.Background(), rawURL)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, refs)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestGitFetcher_FetchWithResult
+// --------------------------------------------------------------------------
+
+// getSHA returns the HEAD SHA of a bare repo by running git rev-parse.
+func getSHA(t *testing.T, bareDir string) string {
+	t.Helper()
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = bareDir
+	cmd.Env = append(os.Environ(), gitEnvVars...)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "git rev-parse HEAD\n%s", out)
+	return strings.TrimSpace(string(out))
+}
+
+func TestGitFetcher_FetchWithResult(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		setup    func(t *testing.T) (source string, dest string)
+		wantErr  string
+		checkSHA func(t *testing.T, sha string, bareDir string)
+	}{
+		{
+			name: "returns resolved SHA for HEAD clone",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				bareDir := initBareRepo(t)
+				return bareDir, t.TempDir()
+			},
+			checkSHA: func(t *testing.T, sha string, bareDir string) {
+				t.Helper()
+				assert.Len(t, sha, 40)
+				expected := getSHA(t, bareDir)
+				assert.Equal(t, expected, sha)
+			},
+		},
+		{
+			name: "SHA ref checkout returns that SHA",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				bareDir := initBareRepo(t)
+				sha := getSHA(t, bareDir)
+				return bareDir + "#" + sha, t.TempDir()
+			},
+			checkSHA: func(t *testing.T, sha string, _ string) {
+				t.Helper()
+				assert.Len(t, sha, 40)
+			},
+		},
+		{
+			name: "branch ref checkout succeeds",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				bareDir := initBareRepo(t)
+				return bareDir + "#main", t.TempDir()
+			},
+			checkSHA: func(t *testing.T, sha string, bareDir string) {
+				t.Helper()
+				expected := getSHA(t, bareDir)
+				assert.Equal(t, expected, sha)
+			},
+		},
+		{
+			name: "second fetch hits cached repo path",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				bareDir := initBareRepo(t)
+				// First fetch populates the cache.
+				dest1 := t.TempDir()
+				f := &fetcher.GitFetcher{}
+				require.NoError(t, f.Fetch(context.Background(), bareDir, dest1))
+				// Return same source for second fetch.
+				return bareDir, t.TempDir()
+			},
+			checkSHA: func(t *testing.T, sha string, _ string) {
+				t.Helper()
+				assert.Len(t, sha, 40)
+			},
+		},
+		{
+			name: "nonexistent tag on cached repo returns resolve error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				bareDir := initBareRepo(t)
+				// First: clone with HEAD to populate the cache.
+				f := &fetcher.GitFetcher{}
+				require.NoError(t, f.Fetch(context.Background(), bareDir, t.TempDir()))
+				// Second: try to checkout a tag that doesn't exist in the cached repo.
+				return bareDir + "#v99.0.0", t.TempDir()
+			},
+			wantErr: "resolve tag v99.0.0",
+		},
+		{
+			name: "nonexistent branch on cached repo returns resolve error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				bareDir := initBareRepo(t)
+				// First: clone with HEAD to populate the cache.
+				f := &fetcher.GitFetcher{}
+				require.NoError(t, f.Fetch(context.Background(), bareDir, t.TempDir()))
+				// Second: try to checkout a branch that doesn't exist in the cached repo.
+				return bareDir + "#nonexistent-branch", t.TempDir()
+			},
+			wantErr: "resolve branch nonexistent-branch",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			source, dest := tt.setup(t)
+
+			// Extract bare dir from source (strip any #ref).
+			bareDir := source
+			if idx := strings.LastIndex(source, "#"); idx >= 0 {
+				bareDir = source[:idx]
+			}
+
+			f := &fetcher.GitFetcher{}
+			sha, err := f.FetchWithResult(context.Background(), source, dest)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.checkSHA != nil {
+				tt.checkSHA(t, sha, bareDir)
 			}
 		})
 	}
@@ -409,9 +778,7 @@ func TestIsSHA(t *testing.T) {
 			t.Parallel()
 
 			got := fetcher.IsSHA(tt.ref)
-			if got != tt.want {
-				t.Errorf("IsSHA(%q) = %v, want %v", tt.ref, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
