@@ -141,7 +141,7 @@ func filterPlugins(plugins []manifest.Plugin, names []string) ([]manifest.Plugin
 // buildPlugin produces a single .agentpack archive in the generic format:
 //
 //	.agentpack/
-//	  manifest.yaml     (serialised plugin manifest)
+//	  agentpack.yaml    (serialised plugin manifest)
 //	  metadata.json     (build metadata)
 //	  checksums.txt     (SHA256 of every file in the archive)
 //	skills/

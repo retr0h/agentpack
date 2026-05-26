@@ -18,12 +18,11 @@ agentpack add github.com/org/repo#main             # branch
 agentpack add github.com/org/repo#abc1234          # commit SHA
 ```
 
-### Filtering specific skills or agents
+### Filtering specific skills
 
 ```bash
 agentpack add github.com/org/repo --skill review
 agentpack add github.com/org/repo --skill review --skill deploy
-agentpack add github.com/org/repo --agent security-reviewer
 ```
 
 ### From a local archive
@@ -135,16 +134,6 @@ Build specific plugins:
 agentpack build k8s-helpers
 ```
 
-### Initializing a repo as a Claude Code marketplace
-
-```bash
-agentpack init
-```
-
-Generates `.claude-plugin/marketplace.json` and `plugin.json` from
-`agentpack.yaml` so the repo works as a native Claude Code marketplace via
-`git clone`.
-
 ## Installing from a manifest
 
 Create `agentpack-packages.yaml` for reproducible installs:
@@ -203,14 +192,11 @@ file is auto-detected — no `--sha256` flag needed.
 Project-local installs write to the current directory:
 
 ```
-.claude/skills/          Claude Code
-.claude/commands/        Claude Code
-.claude/agents/          Claude Code
-.cursor/rules/{name}/    Cursor
-.windsurf/rules/{name}/  Windsurf
-.github/copilot/{name}/  GitHub Copilot
-.gemini/skills/{name}/   Gemini CLI
-.agents/skills/{name}/   Universal
+.claude/skills/           Claude Code
+.claude/commands/         Claude Code
+.claude/agents/           Claude Code
+.windsurf/skills/{name}/  Windsurf
+.agents/skills/{name}/    All other agents (Cursor, Copilot, Gemini CLI, Universal, etc.)
 ```
 
 ## Inspecting packages

@@ -437,59 +437,50 @@ func installFromDir(
 	}, nil
 }
 
-// collectInstalledFiles walks dir and returns an InstalledFile record for
-// every regular file it contains. The SHA256 is computed from the file content.
-// collectTargetFiles scans only the content dirs that exist in the source
-// (skills/, commands/, agents/) and records what was copied to the install dir.
+// collectTargetFiles walks srcDir to enumerate the files that were installed,
+// then reads their installed copies from installDir to compute checksums.
+// This scopes the collection to only the current plugin's files, avoiding
+// cross-contamination when multiple plugins share a target directory.
 func collectTargetFiles(
 	installDir string,
 	tgt target.Target,
-	_ string,
+	srcDir string,
 ) ([]registry.InstalledFile, error) {
-	// Map target names to their install prefix dirs.
-	prefixes := map[string][]string{
-		"claude-code": {".claude/skills", ".claude/commands", ".claude/agents"},
-		"cursor":      {".cursor/rules"},
-		"universal":   {".agents/skills"},
-	}
-
-	dirs, ok := prefixes[tgt.Name()]
-	if !ok {
-		dirs = []string{".agents/skills"}
-	}
-
 	var allFiles []registry.InstalledFile
 
-	for _, prefix := range dirs {
-		destDir := filepath.Join(installDir, prefix)
-		if _, err := os.Stat(destDir); os.IsNotExist(err) {
-			continue
+	err := filepath.WalkDir(srcDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return walkErr
 		}
 
-		err := filepath.WalkDir(destDir, func(path string, d os.DirEntry, walkErr error) error {
-			if walkErr != nil || d.IsDir() {
-				return walkErr
+		rel, relErr := filepath.Rel(srcDir, path)
+		if relErr != nil {
+			return relErr
+		}
+
+		installedPath := filepath.Join(installDir, rel)
+
+		data, readErr := os.ReadFile(installedPath)
+		if readErr != nil {
+			if os.IsNotExist(readErr) {
+				return nil
 			}
 
-			rel, _ := filepath.Rel(installDir, path)
-			data, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
+			return readErr
+		}
 
-			h := sha256.Sum256(data)
-			allFiles = append(allFiles, registry.InstalledFile{
-				Path:   rel,
-				SHA256: hex.EncodeToString(h[:]),
-				Target: tgt.Name(),
-				Dir:    installDir,
-			})
-
-			return nil
+		h := sha256.Sum256(data)
+		allFiles = append(allFiles, registry.InstalledFile{
+			Path:   rel,
+			SHA256: hex.EncodeToString(h[:]),
+			Target: tgt.Name(),
+			Dir:    installDir,
 		})
-		if err != nil {
-			return nil, err
-		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return allFiles, nil

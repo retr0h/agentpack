@@ -1414,68 +1414,36 @@ func TestCollectTargetFiles(t *testing.T) {
 		checkFiles func(t *testing.T, files []registry.InstalledFile)
 	}{
 		{
-			name: "collects claude-code target files from .claude dirs",
+			name: "collects files present in both srcDir and installDir",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
+				srcDir := t.TempDir()
 				installDir := t.TempDir()
 
-				skillDir := filepath.Join(installDir, ".claude", "skills")
-				require.NoError(t, os.MkdirAll(skillDir, 0o755))
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(skillDir, "skill.md"), []byte("# skill"), 0o644),
-				)
+				require.NoError(t, os.WriteFile(filepath.Join(srcDir, "skill.md"), []byte("# skill"), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(installDir, "skill.md"), []byte("# skill"), 0o644))
 
-				cmdDir := filepath.Join(installDir, ".claude", "commands")
-				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(cmdDir, "cmd.md"), []byte("# cmd"), 0o644),
-				)
-
-				return installDir, t.TempDir()
+				return installDir, srcDir
 			},
 			targetName: "claude-code",
-			wantLen:    2,
-		},
-		{
-			name: "collects cursor target files from .cursor/rules",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				installDir := t.TempDir()
-
-				rulesDir := filepath.Join(installDir, ".cursor", "rules")
-				require.NoError(t, os.MkdirAll(rulesDir, 0o755))
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(rulesDir, "rule.md"), []byte("# rule"), 0o644),
-				)
-
-				return installDir, t.TempDir()
-			},
-			targetName: "cursor",
 			wantLen:    1,
 		},
 		{
-			name: "collects universal target files from .agents/skills",
+			name: "skips srcDir files not present in installDir",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
+				srcDir := t.TempDir()
 				installDir := t.TempDir()
 
-				agentsDir := filepath.Join(installDir, ".agents", "skills")
-				require.NoError(t, os.MkdirAll(agentsDir, 0o755))
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(agentsDir, "skill.md"), []byte("# skill"), 0o644),
-				)
+				require.NoError(t, os.WriteFile(filepath.Join(srcDir, "missing.md"), []byte("# missing"), 0o644))
 
-				return installDir, t.TempDir()
+				return installDir, srcDir
 			},
 			targetName: "universal",
-			wantLen:    1,
+			wantLen:    0,
 		},
 		{
-			name: "returns empty slice when target dirs do not exist",
+			name: "empty srcDir returns empty slice",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				return t.TempDir(), t.TempDir()
@@ -1484,60 +1452,42 @@ func TestCollectTargetFiles(t *testing.T) {
 			wantLen:    0,
 		},
 		{
-			name: "uses .agents/skills fallback for unknown target name",
+			name: "returns error when installDir file cannot be read",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
+				srcDir := t.TempDir()
 				installDir := t.TempDir()
 
-				agentsDir := filepath.Join(installDir, ".agents", "skills")
-				require.NoError(t, os.MkdirAll(agentsDir, 0o755))
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(agentsDir, "skill.md"), []byte("# skill"), 0o644),
-				)
+				require.NoError(t, os.WriteFile(filepath.Join(srcDir, "secret.md"), []byte("x"), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(installDir, "secret.md"), []byte("x"), 0o000))
 
-				return installDir, t.TempDir()
+				t.Cleanup(func() { _ = os.Chmod(filepath.Join(installDir, "secret.md"), 0o644) })
+
+				return installDir, srcDir
 			},
-			targetName: "unknown-target-xyz",
+			targetName: "claude-code",
+			wantErr:    "permission denied",
+		},
+		{
+			name: "walks subdirectories in srcDir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				srcDir := t.TempDir()
+				installDir := t.TempDir()
+
+				require.NoError(t, os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(srcDir, "sub", "deep.md"), []byte("# deep"), 0o644))
+				require.NoError(t, os.MkdirAll(filepath.Join(installDir, "sub"), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(installDir, "sub", "deep.md"), []byte("# deep"), 0o644))
+
+				return installDir, srcDir
+			},
+			targetName: "universal",
 			wantLen:    1,
-		},
-		{
-			name: "returns error when WalkDir encounters unreadable directory",
-			setup: func(t *testing.T) (string, string) {
+			checkFiles: func(t *testing.T, files []registry.InstalledFile) {
 				t.Helper()
-				installDir := t.TempDir()
-
-				skillDir := filepath.Join(installDir, ".claude", "skills")
-				require.NoError(t, os.MkdirAll(skillDir, 0o755))
-
-				locked := filepath.Join(skillDir, "locked")
-				require.NoError(t, os.MkdirAll(locked, 0o000))
-
-				t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
-
-				return installDir, t.TempDir()
+				assert.Equal(t, "sub/deep.md", files[0].Path)
 			},
-			targetName: "claude-code",
-			wantErr:    "permission denied",
-		},
-		{
-			name: "returns error when file inside target dir cannot be read",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				installDir := t.TempDir()
-
-				skillDir := filepath.Join(installDir, ".claude", "skills")
-				require.NoError(t, os.MkdirAll(skillDir, 0o755))
-
-				unreadable := filepath.Join(skillDir, "secret.md")
-				require.NoError(t, os.WriteFile(unreadable, []byte("secret"), 0o000))
-
-				t.Cleanup(func() { _ = os.Chmod(unreadable, 0o644) })
-
-				return installDir, t.TempDir()
-			},
-			targetName: "claude-code",
-			wantErr:    "permission denied",
 		},
 	}
 
