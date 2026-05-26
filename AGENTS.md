@@ -103,7 +103,8 @@ No binary executables in archives — security policy. MCP remote/ux only.
 - Filesystem I/O via `avfs.VFS` (production: `osfs`, tests: `memfs`)
 - `context.Context` threads from CLI through cancellable operations
 
-Architecture decisions are recorded as ADRs in `docs/adr/`. Write a new
+Architecture decisions are recorded as ADRs in `docs/adr/`. Check there
+for context on any design question before proposing changes. Write a new
 ADR when changing archive format, adding a target, or altering the
 security model.
 
