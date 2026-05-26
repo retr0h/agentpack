@@ -25,7 +25,7 @@ go test ./...
 go test ./...              # run tests
 go vet ./...               # vet
 gofmt -l .                 # find unformatted files
-go build -o agentpack .      # build
+go build -o agentpack .    # build
 ```
 
 Or via just:
@@ -36,41 +36,6 @@ just test           # run tests
 just ready          # fmt + vet + lint (pre-commit gate)
 just run            # build and run
 just clean          # remove binary
-```
-
-## Layout
-
-```
-cmd/                          Cobra CLI shim
-internal/archive/             Tarball creation and extraction (internal)
-internal/checksum/            SHA256 hashing (internal)
-internal/cli/                 Themed output helpers (internal)
-internal/fetcher/             Fetch drivers (file, http, git) (internal)
-internal/fetcher/mocks/       Generated MockFetcher (internal)
-internal/lockfile/            Lockfile I/O (internal)
-internal/manifest/            agentpack.yaml parsing and validation (internal)
-internal/metadata/            Git metadata capture (internal)
-internal/plugin/              Plugin descriptor generation (internal)
-pkg/build/                    Build pipeline orchestration
-pkg/inspect/                  Archive inspection
-pkg/install/                  Install pipeline orchestration
-pkg/list/                     List installed plugins
-pkg/list/mocks/               Generated MockRegistry
-pkg/outdated/                 Outdated detection
-pkg/outdated/mocks/           Generated MockRegistry, MockRemoteChecker
-pkg/registry/                 Installed package tracking
-pkg/remove/                   Safe package removal
-pkg/remove/mocks/             Generated MockRegistry
-pkg/sync/                     Declarative sync with injectable interfaces
-pkg/sync/mocks/               Generated MockBuilder, MockInstaller
-pkg/target/                   Target interface + registry
-pkg/target/mocks/             Generated MockTarget
-pkg/target/claudecode/        Claude Code target implementation
-pkg/target/cursor/            Cursor target implementation
-pkg/target/universal/         Universal target implementation
-pkg/update/                   Update pipeline
-pkg/update/mocks/             Generated MockRegistryLoader, MockInstaller
-pkg/verify/                   Archive verification
 ```
 
 ## Testing conventions
@@ -132,25 +97,19 @@ needs. The interface is defined in the CONSUMING package, not the producing
 package. The consuming code accepts the interface (nil defaults to the real
 implementation) and calls through it.
 
-This applies to `cmd/` too — each cmd file defines an unexported interface for
-the pkg/ function it calls:
+This applies to `cmd/` too — each cmd file defines an unexported interface
+for the `pkg/` type it uses:
 
 ```go
-// cmd/install.go
+// cmd/add.go
 type installer interface {
     Run(ctx context.Context, opts install.Options) (*install.Result, error)
 }
 
-type defaultInstaller struct{}
-
-func (defaultInstaller) Run(ctx context.Context, opts install.Options) (*install.Result, error) {
-    return install.Run(ctx, opts)
-}
-
-var pkgInstaller installer = defaultInstaller{}
+var pkgInstaller installer = install.New()
 ```
 
-Then `RunE` calls `pkgInstaller.Run(...)` instead of `install.Run(...)`.
+Then `RunE` calls `pkgInstaller.Run(...)`.
 
 ## Brand and theming
 
@@ -158,7 +117,7 @@ Two themes in `internal/cli/theme.go` — auto-detected via
 `termenv.HasDarkBackground()`:
 
 | Role   | Dark (`ThemeDark`) | Light (`ThemeLight`)   |
-| ------ | ------------------ | ---------------------- |
+|--------|--------------------|-----------------------|
 | Accent | `#c678dd` magenta  | `#9b59b6` purple       |
 | OK     | `#50fa7b` green    | `#27ae60` forest green |
 | Err    | `#ff6ec7` pink     | `#e74c3c` red          |
@@ -180,9 +139,7 @@ Color roles across CLI output:
 
 ## Architecture Decision Records
 
-Significant design decisions are recorded as ADRs in `docs/adr/`. Write a new
-ADR when changing the archive format, adding a target, or altering the security
-model.
+See [docs/adr/README.md](adr/README.md) for format, conventions, and index.
 
 ## Commit messages
 
@@ -192,6 +149,4 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - **Subject**: max 50 chars, imperative mood, no period
 - **Body**: wrap at 72 chars, blank line after subject
 - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
-- **Scopes**: `cli`, `archive`, `build`, `checksum`, `fetcher`, `inspect`,
-  `install`, `list`, `lockfile`, `manifest`, `metadata`, `outdated`, `plugin`,
-  `registry`, `remove`, `sync`, `target`, `update`, `verify`
+- **Scopes**: match package names (e.g. `cli`, `install`, `target`, `registry`)

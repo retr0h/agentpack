@@ -51,107 +51,21 @@ Skunkworks workflow — commits land directly on `main`.
 
 ## Architecture
 
-```
-cmd/                          Cobra CLI shim
-internal/archive/             Tarball creation and extraction (internal)
-internal/checksum/            SHA256 hashing (internal)
-internal/cli/                 Themed output helpers (internal)
-internal/fetcher/             Fetch drivers (file, http, git) (internal)
-internal/fetcher/mocks/       Generated MockFetcher (internal)
-internal/lockfile/            Lockfile I/O (internal)
-internal/manifest/            agentpack.yaml parsing and validation (internal)
-internal/metadata/            Git metadata capture (internal)
-internal/plugin/              Plugin descriptor generation (internal)
-pkg/build/                    Build pipeline orchestration
-pkg/inspect/                  Archive inspection
-pkg/install/                  Install pipeline orchestration
-pkg/list/                     List installed plugins
-pkg/list/mocks/               Generated MockRegistry
-pkg/outdated/                 Outdated detection
-pkg/outdated/mocks/           Generated MockRegistry, MockRemoteChecker
-pkg/registry/                 Installed package tracking
-pkg/remove/                   Safe package removal
-pkg/remove/mocks/             Generated MockRegistry
-pkg/sync/                     Declarative sync with injectable interfaces
-pkg/sync/mocks/               Generated MockBuilder, MockInstaller
-pkg/target/                   Target interface + registry
-pkg/target/mocks/             Generated MockTarget
-pkg/target/claudecode/        Claude Code target implementation
-pkg/target/cursor/            Cursor target implementation
-pkg/target/universal/         Universal target implementation
-pkg/update/                   Update pipeline
-pkg/update/mocks/             Generated MockRegistryLoader, MockInstaller
-pkg/verify/                   Archive verification
-```
-
-Interfaces are defined WHERE CONSUMED (accept interfaces, return structs).
-Each consuming package owns its interface definitions and generated mocks in a
-`mocks/` subdirectory alongside it. Implementation-detail packages (cli,
-checksum, metadata, plugin, lockfile) live under `internal/` and are not
-importable outside this module.
-
-Three primary driver interfaces: `Fetcher` (how to get content), `Target`
-(where to install), and sync's `Builder`/`Installer` (testable pipeline
-stages).
-
-No binary executables in archives — security policy. MCP remote/ux only.
-
-- `cmd/` — thin shim: parse flags, create context + VFS, call `pkg/`
-- `pkg/` — public library API, consumable without the CLI
-- `internal/` — implementation details, not importable outside the module
-- `docs/adr/` — Architecture Decision Records for significant design choices
-- Filesystem I/O via `avfs.VFS` (production: `osfs`, tests: `memfs`)
-- `context.Context` threads from CLI through cancellable operations
-
-Architecture decisions are recorded as ADRs in
-[docs/adr/](docs/adr/README.md). Check there for context on any design
-question before proposing changes.
+See [docs/architecture.md](docs/architecture.md) for pipelines, driver
+interfaces, and data flows. See [docs/adr/](docs/adr/README.md) for
+design decisions.
 
 Key deps: cobra, yaml.v3, lipgloss, avfs, go-git, mockgen, testify.
 
 ## Testing
 
-Tests use [testify](https://github.com/stretchr/testify) for assertions and
-[AVFS](https://github.com/avfs/avfs) for virtual filesystem mocking. Error
-injection: wrap `memfs` with a custom struct overriding methods to return errors.
-
-Assertions: use `assert` for non-fatal checks, `require` for fatal ones. Never
-pass custom messages — the default output is sufficient. Never write custom
-assertion helpers.
-
-```go
-func TestFunctionName(t *testing.T) {
-    t.Parallel()
-    tests := []struct {
-        name    string
-        input   string
-        want    string
-        wantErr string
-    }{
-        {name: "happy path", input: "good", want: "good"},
-        {name: "failure case", input: "", wantErr: "empty"},
-    }
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            t.Parallel()
-            got, err := DoThing(tt.input)
-            if tt.wantErr != "" {
-                require.ErrorContains(t, err, tt.wantErr)
-                return
-            }
-            require.NoError(t, err)
-            assert.Equal(t, tt.want, got)
-        })
-    }
-}
-```
+See [docs/development.md](docs/development.md) for conventions, mock
+generation, VFS patterns, and the test example template.
 
 ## Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/). Scopes match
-package names: `cli`, `archive`, `build`, `checksum`, `fetcher`, `inspect`,
-`install`, `list`, `lockfile`, `manifest`, `metadata`, `outdated`, `plugin`,
-`registry`, `remove`, `sync`, `target`, `update`, `verify`.
+package names.
 
 When the agent is Claude, end every commit with:
 
@@ -161,5 +75,5 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## Brand
 
-Theme colors and palette details are in [Development](docs/development.md).
+Theme colors and palette details are in [docs/development.md](docs/development.md).
 CLI colors auto-detect dark/light terminal backgrounds.
