@@ -38,6 +38,11 @@ Skunkworks workflow — commits land directly on `main`.
 8. **All output through `pkg/cli/`.** No raw `fmt.Fprintf` in `cmd/`.
 9. **No hand-rolled mocks.** Use `go.uber.org/mock/mockgen` for interface
    mocks. VFS error-injecting wrappers are decorators, not mocks.
+10. **Interfaces where consumed.** Every package that calls another package
+    defines a small interface for what it needs, accepts it (nil = default),
+    and calls through it. This includes `cmd/` — each cmd file defines an
+    unexported interface for the `pkg/` function it calls, with a package-level
+    var defaulting to the real implementation.
 
 ## Architecture
 

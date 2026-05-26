@@ -21,6 +21,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -32,6 +33,18 @@ import (
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/pkg/verify"
 )
+
+type verifier interface {
+	Run(ctx context.Context, archivePath string) (*verify.Result, error)
+}
+
+type defaultVerifier struct{}
+
+func (defaultVerifier) Run(ctx context.Context, archivePath string) (*verify.Result, error) {
+	return verify.Run(ctx, archivePath)
+}
+
+var pkgVerifier verifier = defaultVerifier{}
 
 var verifySHA256 string
 
@@ -79,7 +92,7 @@ publishes the SHA256 alongside the archive (like goreleaser checksums.txt).`,
 		}
 
 		// Internal checksum verification (corruption detection).
-		result, err := verify.Run(ctx, archivePath)
+		result, err := pkgVerifier.Run(ctx, archivePath)
 		if err != nil {
 			return err
 		}

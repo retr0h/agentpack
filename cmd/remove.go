@@ -21,11 +21,25 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
 	pkgremove "github.com/retr0h/agentpack/pkg/remove"
 )
+
+type remover interface {
+	Run(ctx context.Context, opts pkgremove.Options) (*pkgremove.Result, error)
+}
+
+type defaultRemover struct{}
+
+func (defaultRemover) Run(ctx context.Context, opts pkgremove.Options) (*pkgremove.Result, error) {
+	return pkgremove.Run(ctx, opts)
+}
+
+var pkgRemover remover = defaultRemover{}
 
 var removeCmd = &cobra.Command{
 	Use:   "remove <name>",
@@ -42,7 +56,7 @@ directory is never touched.`,
 
 		cli.Header(out, "removing", name)
 
-		result, err := pkgremove.Run(ctx, pkgremove.Options{
+		result, err := pkgRemover.Run(ctx, pkgremove.Options{
 			Name: name,
 			OnStep: func(s pkgremove.Step) {
 				if s.Skipped {

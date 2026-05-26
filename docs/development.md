@@ -100,6 +100,33 @@ Regenerate all mocks:
 VFS error-injecting wrappers (wrapping `avfs.VFS` to return errors)
 are NOT mocks — they are test decorators and are fine hand-rolled.
 
+### Interfaces where consumed
+
+Every package that calls another package defines a small interface for
+what it needs. The interface is defined in the CONSUMING package, not
+the producing package. The consuming code accepts the interface (nil
+defaults to the real implementation) and calls through it.
+
+This applies to `cmd/` too — each cmd file defines an unexported
+interface for the pkg/ function it calls:
+
+```go
+// cmd/install.go
+type installer interface {
+    Run(ctx context.Context, opts install.Options) (*install.Result, error)
+}
+
+type defaultInstaller struct{}
+
+func (defaultInstaller) Run(ctx context.Context, opts install.Options) (*install.Result, error) {
+    return install.Run(ctx, opts)
+}
+
+var pkgInstaller installer = defaultInstaller{}
+```
+
+Then `RunE` calls `pkgInstaller.Run(...)` instead of `install.Run(...)`.
+
 ## Commit messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):

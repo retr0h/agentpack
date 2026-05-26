@@ -21,11 +21,25 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
 	pkgoutdated "github.com/retr0h/agentpack/pkg/outdated"
 )
+
+type outdatedChecker interface {
+	RunWithOptions(ctx context.Context, opts pkgoutdated.Options) ([]pkgoutdated.Entry, error)
+}
+
+type defaultOutdatedChecker struct{}
+
+func (defaultOutdatedChecker) RunWithOptions(ctx context.Context, opts pkgoutdated.Options) ([]pkgoutdated.Entry, error) {
+	return pkgoutdated.RunWithOptions(ctx, opts)
+}
+
+var pkgOutdatedChecker outdatedChecker = defaultOutdatedChecker{}
 
 var outdatedCmd = &cobra.Command{
 	Use:   "outdated [names...]",
@@ -37,7 +51,7 @@ var outdatedCmd = &cobra.Command{
 
 		cli.Printf(out, "%s\n\n", cli.Mute(out, "agentpack: checking for updates"))
 
-		entries, err := pkgoutdated.RunWithOptions(ctx, pkgoutdated.Options{
+		entries, err := pkgOutdatedChecker.RunWithOptions(ctx, pkgoutdated.Options{
 			Names: args,
 			OnStep: func(name string) {
 				cli.Printf(out, "  %s %s\n",

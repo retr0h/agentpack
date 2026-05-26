@@ -21,6 +21,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -28,6 +29,18 @@ import (
 	"github.com/retr0h/agentpack/internal/cli"
 	pkgsync "github.com/retr0h/agentpack/pkg/sync"
 )
+
+type syncer interface {
+	Run(ctx context.Context, opts pkgsync.Options) ([]pkgsync.Result, error)
+}
+
+type defaultSyncer struct{}
+
+func (defaultSyncer) Run(ctx context.Context, opts pkgsync.Options) ([]pkgsync.Result, error) {
+	return pkgsync.Run(ctx, opts)
+}
+
+var pkgSyncer syncer = defaultSyncer{}
 
 var syncConfigFlag string
 
@@ -47,7 +60,7 @@ plugin into the Claude Code plugin directory.`,
 			cli.Mute(out, "agentpack: syncing"),
 		)
 
-		results, err := pkgsync.Run(ctx, pkgsync.Options{
+		results, err := pkgSyncer.Run(ctx, pkgsync.Options{
 			ConfigPath: syncConfigFlag,
 			Builder:    pkgsync.DefaultBuilder{},
 			Installer:  pkgsync.DefaultInstaller{},

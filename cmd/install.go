@@ -21,6 +21,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -28,6 +29,18 @@ import (
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/pkg/install"
 )
+
+type installer interface {
+	Run(ctx context.Context, opts install.Options) (*install.Result, error)
+}
+
+type defaultInstaller struct{}
+
+func (defaultInstaller) Run(ctx context.Context, opts install.Options) (*install.Result, error) {
+	return install.Run(ctx, opts)
+}
+
+var pkgInstaller installer = defaultInstaller{}
 
 var (
 	installSkills []string
@@ -49,7 +62,7 @@ Source may be a local file path or an HTTP/HTTPS URL.`,
 
 		cli.Header(out, "installing", displayName)
 
-		result, err := install.Run(ctx, install.Options{
+		result, err := pkgInstaller.Run(ctx, install.Options{
 			Source: source,
 			Skills: installSkills,
 			Agents: installAgents,

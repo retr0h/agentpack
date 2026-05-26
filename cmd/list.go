@@ -27,6 +27,18 @@ import (
 	"github.com/retr0h/agentpack/pkg/list"
 )
 
+type lister interface {
+	Run() ([]list.Entry, error)
+}
+
+type defaultLister struct{}
+
+func (defaultLister) Run() ([]list.Entry, error) {
+	return list.Run()
+}
+
+var pkgLister lister = defaultLister{}
+
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List installed agentpack plugins",
@@ -34,7 +46,7 @@ var listCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		out := cmd.OutOrStdout()
 
-		entries, err := list.Run()
+		entries, err := pkgLister.Run()
 		if err != nil {
 			return err
 		}

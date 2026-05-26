@@ -21,16 +21,30 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/pkg/build"
 )
+
+type builder interface {
+	Run(ctx context.Context, vfs avfs.VFS, opts build.Options) ([]build.Result, error)
+}
+
+type defaultBuilder struct{}
+
+func (defaultBuilder) Run(ctx context.Context, vfs avfs.VFS, opts build.Options) ([]build.Result, error) {
+	return build.Run(ctx, vfs, opts)
+}
+
+var pkgBuilder builder = defaultBuilder{}
 
 var buildCmd = &cobra.Command{
 	Use:   "build [plugin-names...]",
@@ -49,7 +63,7 @@ are built. Otherwise all plugins in the manifest are built.`,
 		vfs := osfs.NewWithNoIdm()
 		out := cmd.OutOrStdout()
 
-		results, err := build.Run(ctx, vfs, build.Options{Dir: dir, Names: args})
+		results, err := pkgBuilder.Run(ctx, vfs, build.Options{Dir: dir, Names: args})
 		if err != nil {
 			return err
 		}

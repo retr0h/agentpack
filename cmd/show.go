@@ -30,6 +30,18 @@ import (
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
+type registryLoader interface {
+	Load(name string) (*registry.PackageManifest, error)
+}
+
+type defaultRegistryLoader struct{}
+
+func (defaultRegistryLoader) Load(name string) (*registry.PackageManifest, error) {
+	return registry.Load(name)
+}
+
+var pkgRegistryLoader registryLoader = defaultRegistryLoader{}
+
 var showCmd = &cobra.Command{
 	Use:   "show <name>",
 	Short: "Show details of an installed package",
@@ -38,7 +50,7 @@ var showCmd = &cobra.Command{
 		out := cmd.OutOrStdout()
 		name := args[0]
 
-		m, err := registry.Load(name)
+		m, err := pkgRegistryLoader.Load(name)
 		if err != nil {
 			return err
 		}
