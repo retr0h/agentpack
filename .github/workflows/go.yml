@@ -18,6 +18,8 @@ jobs:
           go-version: stable
       - name: Install just
         uses: extractions/setup-just@v4
+      - name: Fetch justfiles
+        run: just fetch
       - name: Build
         run: go build ./...
       - name: Test
