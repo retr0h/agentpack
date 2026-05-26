@@ -74,6 +74,12 @@ type Options struct {
 	Builder    Builder         // for building from cloned repos; nil skips build
 	Installer  Installer       // for installing archives; nil skips install
 
+	// LockedSHAs maps package name to the exact git commit SHA recorded in
+	// agentpack.lock. When a package name is present, its SHA overrides the
+	// ref declared in agentpack-packages.yaml, ensuring reproducible installs.
+	// When nil or the package name is absent, the yaml ref is used as-is.
+	LockedSHAs map[string]string
+
 	// OnStep is called in real-time as each package is processed.
 	// The name argument is the package name being synced.
 	// When nil, no progress is reported.
@@ -144,7 +150,10 @@ func syncSourcePackage(ctx context.Context, pkg Package, opts Options) []Result 
 
 func syncGitPackage(ctx context.Context, pkg Package, opts Options) []Result {
 	source := pkg.Git
-	if pkg.Ref != "" {
+
+	if sha, ok := opts.LockedSHAs[pkg.Name]; ok && sha != "" {
+		source = source + "#" + sha
+	} else if pkg.Ref != "" {
 		source = source + "#" + pkg.Ref
 	}
 

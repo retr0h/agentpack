@@ -22,10 +22,15 @@ package cmd
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/retr0h/agentpack/internal/configmerge"
+	"github.com/retr0h/agentpack/internal/lock"
+	"github.com/retr0h/agentpack/internal/packages"
 	pkgremove "github.com/retr0h/agentpack/pkg/remove"
 )
 
@@ -68,6 +73,8 @@ directory is never touched.`,
 			return err
 		}
 
+		removeManifests(name)
+
 		if outputFormat == "json" {
 			return jsonOutput(out, result)
 		}
@@ -82,6 +89,32 @@ directory is never touched.`,
 
 		return nil
 	},
+}
+
+// removeManifests removes the named package from agentpack-packages.yaml,
+// agentpack.lock, and the hooks section of .claude/settings.json. All
+// operations are best-effort: a missing file or missing entry is not an error,
+// because users may have installed a package without a managed yaml/lock.
+func removeManifests(name string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	pkgPath := filepath.Join(cwd, "agentpack-packages.yaml")
+	if cfg, err := packages.Load(pkgPath); err == nil {
+		cfg.Remove(name)
+		_ = packages.Save(pkgPath, cfg)
+	}
+
+	lockPath := filepath.Join(cwd, "agentpack.lock")
+	if lf, err := lock.Load(lockPath); err == nil {
+		lf.Remove(name)
+		_ = lock.Save(lockPath, lf)
+	}
+
+	settingsPath := filepath.Join(cwd, ".claude", "settings.json")
+	_ = configmerge.RemoveHooks(settingsPath, name)
 }
 
 func init() {

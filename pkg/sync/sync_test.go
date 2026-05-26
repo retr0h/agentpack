@@ -162,6 +162,76 @@ func TestRun(t *testing.T) {
 			},
 		},
 		{
+			name: "git package uses locked SHA when available",
+			yaml: "packages:\n  - name: locked-plugin\n    git: github.com/org/repo\n    ref: main\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockFetcher := fetcherMocks.NewMockFetcher(ctrl)
+				mockBuilder := syncMocks.NewMockBuilder(ctrl)
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+
+				mockFetcher.EXPECT().
+					Fetch(gomock.Any(), "github.com/org/repo#abc1234567890abcdef", gomock.Any()).
+					Return(nil)
+
+				mockBuilder.EXPECT().
+					Build(gomock.Any(), gomock.Any()).
+					Return([]build.Result{{Name: "locked-plugin", ArchivePath: "/tmp/locked-plugin-1.0.0.agentpack"}}, nil)
+
+				mockInstaller.EXPECT().
+					Install(gomock.Any(), "/tmp/locked-plugin-1.0.0.agentpack").
+					Return(&install.Result{Name: "locked-plugin", Version: "1.0.0"}, nil)
+
+				return pkgsync.Options{
+					Fetcher:    mockFetcher,
+					Builder:    mockBuilder,
+					Installer:  mockInstaller,
+					LockedSHAs: map[string]string{"locked-plugin": "abc1234567890abcdef"},
+				}, func() {}
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+
+				require.Len(t, results, 1)
+				assert.Equal(t, "installed", results[0].Status)
+				assert.Equal(t, "locked-plugin", results[0].Name)
+			},
+		},
+		{
+			name: "git package ignores lock when no entry exists",
+			yaml: "packages:\n  - name: unlocked-plugin\n    git: github.com/org/repo\n    ref: v1.2.3\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockFetcher := fetcherMocks.NewMockFetcher(ctrl)
+				mockBuilder := syncMocks.NewMockBuilder(ctrl)
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+
+				mockFetcher.EXPECT().
+					Fetch(gomock.Any(), "github.com/org/repo#v1.2.3", gomock.Any()).
+					Return(nil)
+
+				mockBuilder.EXPECT().
+					Build(gomock.Any(), gomock.Any()).
+					Return([]build.Result{{Name: "unlocked-plugin", ArchivePath: "/tmp/unlocked-plugin-1.2.3.agentpack"}}, nil)
+
+				mockInstaller.EXPECT().
+					Install(gomock.Any(), "/tmp/unlocked-plugin-1.2.3.agentpack").
+					Return(&install.Result{Name: "unlocked-plugin", Version: "1.2.3"}, nil)
+
+				return pkgsync.Options{
+					Fetcher:    mockFetcher,
+					Builder:    mockBuilder,
+					Installer:  mockInstaller,
+					LockedSHAs: map[string]string{"other-plugin": "deadbeef"},
+				}, func() {}
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+
+				require.Len(t, results, 1)
+				assert.Equal(t, "installed", results[0].Status)
+				assert.Equal(t, "unlocked-plugin", results[0].Name)
+			},
+		},
+		{
 			name: "git package fetch fails",
 			yaml: "packages:\n  - name: fetch-fail\n    git: github.com/org/missing\n",
 			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {

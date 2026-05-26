@@ -2,7 +2,22 @@
 
 ## Status
 
-Proposed
+Accepted
+
+## Decision Drivers
+
+- Plugins declare MCP servers, hooks, and settings that must be active
+- Config files (`.claude/settings.json`) are shared — can't overwrite
+- Merges must be reversible so `del` can undo them cleanly
+- Only Claude Code has structured config — other targets just copy files
+
+## Considered Alternatives
+
+- **Copy-only (no merging)** — simple but MCP/hooks would be silently
+  ignored, plugins couldn't fully configure agents
+- **Separate config file per plugin** — avoids merge conflicts but
+  Claude Code reads one `settings.json`, not per-plugin files
+- **Full settings.json replacement** — destructive, loses user settings
 
 ## Context
 

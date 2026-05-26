@@ -5,15 +5,18 @@ capture significant design decisions along with their context and consequences.
 
 ## Format
 
-ADRs follow [Michael Nygard's format](https://adr.github.io/):
+ADRs follow [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records),
+an extension of Michael Nygard's original format:
 
-| Section          | Purpose                                                                |
-| ---------------- | ---------------------------------------------------------------------- |
-| **Title**        | Short noun phrase: ADR-NNN: Decision Title                             |
-| **Status**       | Proposed, Accepted, Deprecated, or Superseded by ADR-NNN               |
-| **Context**      | Forces at play, including technical, political, and project-local      |
-| **Decision**     | The change being made                                                  |
-| **Consequences** | What happens after applying the decision — positive, negative, neutral |
+| Section                    | Purpose                                                                | Required |
+| -------------------------- | ---------------------------------------------------------------------- | -------- |
+| **Title**                  | Short noun phrase: ADR-NNN: Decision Title                             | yes      |
+| **Status**                 | Proposed, Accepted, Deprecated, or Superseded by ADR-NNN               | yes      |
+| **Decision Drivers**       | Constraints and requirements that shaped the decision                  | yes      |
+| **Considered Alternatives** | What else was evaluated and why it was rejected                       | yes      |
+| **Context**                | Forces at play, including technical, political, and project-local      | yes      |
+| **Decision**               | The change being made                                                  | yes      |
+| **Consequences**           | What happens after applying the decision — positive, negative, neutral | yes      |
 
 Additional sections (e.g. **Influences**) are permitted when they add clarity.
 
@@ -33,5 +36,5 @@ Additional sections (e.g. **Influences**) are permitted when they add clarity.
 | ----------------------------------- | --------------------------------------- | -------------------------------------- |
 | [001](001-agentpack-format.md)      | .agentpack Package Format               | Accepted                               |
 | [002](002-cli-vocabulary.md)        | CLI Command Vocabulary                  | Accepted (partially superseded by 003) |
-| [003](003-dependency-management.md) | Dependency Management Architecture      | Proposed                               |
-| [004](004-config-merging.md)        | Config Merging for MCP, Hooks, Settings | Proposed                               |
+| [003](003-dependency-management.md) | Dependency Management Architecture      | Accepted                               |
+| [004](004-config-merging.md)        | Config Merging for MCP, Hooks, Settings | Accepted                               |
