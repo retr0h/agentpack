@@ -59,19 +59,15 @@ See [Usage][] for full details.
 
 ## ✨ Features
 
-| Feature | Description |
-|---------|-------------|
-| Add from git | Any GitHub/GitLab/Bitbucket repo, with `--skill` and `--target` filters |
-| Add from archive | `.agentpack` files via local path, URL, or offline transfer |
-| Build | `agentpack build` from `agentpack.yaml` manifest |
-| Info | Show details of installed packages or peek inside archives |
-| Verify | SHA256 checksum verification — internal + external (`--sha256`) |
-| List | See what's installed; `--outdated` checks for updates |
-| Del | Safe uninstall — only deletes files agentpack added |
-| Install | Install from `agentpack-packages.yaml` with lockfile reproducibility |
-| Multi-agent | 50+ agents — Claude Code, Cursor, Copilot, Codex, Gemini CLI, Windsurf, and more |
-| Offline | `.agentpack` archives work without git, npm, or any toolchain |
-| Netrc | Private repo support via `~/.netrc` credentials |
+- 📦 **[.agentpack format](docs/adr/001-agentpack-format.md)** — checksummed archives with skills, commands, hooks, MCP, agents, and settings
+- 🤖 **50+ agents** — Claude Code, Cursor, Copilot, Codex, Gemini CLI, Windsurf, Goose, Roo, and more
+- 🔒 **Content safety** — binary detection at build time, executable prompts at install
+- 🔄 **Reproducible installs** — lockfile pins exact SHAs, `install` from manifest
+- 🌐 **Global + local** — project-level or user-level installs (`-g`)
+- ⚙️ **Config merging** — MCP servers, hooks, and settings merge into `.claude/settings.json`
+- ✈️ **Offline** — `.agentpack` archives work without git, npm, or any toolchain
+- 🔑 **Private repos** — `~/.netrc` and SSH key support
+- 📋 **JSON everywhere** — `-o json` on every command for scripting
 
 ## 📖 Documentation
 
