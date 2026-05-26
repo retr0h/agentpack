@@ -18,16 +18,32 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package gemini
+package agents
 
-import "context"
+import "os"
 
-// CopyTreeIfExists exposes copyTreeIfExists for testing.
-func CopyTreeIfExists(ctx context.Context, src, dst string) error {
-	return copyTreeIfExists(ctx, src, dst)
+// NewAgentWithFuncs exposes newAgent for testing with injectable home and cwd
+// functions.
+func NewAgentWithFuncs(
+	def AgentDef,
+	homeFunc func() (string, error),
+	cwdFunc func() (string, error),
+) *agent {
+	return newAgent(def, homeFunc, cwdFunc)
 }
 
-// CopyFile exposes copyFile for testing.
-func CopyFile(src, dst string) error {
-	return copyFile(src, dst)
+// NewAgentWithGetenv returns an agent with an injectable getenv function so
+// tests can exercise EnvOverride without t.Setenv (which is incompatible with
+// t.Parallel).
+func NewAgentWithGetenv(
+	def AgentDef,
+	homeFunc func() (string, error),
+	getenvFunc func(string) string,
+) *agent {
+	a := newAgent(def, homeFunc, os.Getwd)
+	a.getenvFunc = getenvFunc
+	return a
 }
+
+// Registry exposes the package-level registry slice for inspection in tests.
+var Registry = registry

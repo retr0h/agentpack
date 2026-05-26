@@ -83,17 +83,17 @@ func TestWindsurf_Detect(t *testing.T) {
 		wantDetected bool
 	}{
 		{
-			name: "detects when ~/.windsurf exists",
+			name: "detects when ~/.codeium/windsurf exists",
 			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
 				home := t.TempDir()
-				require.NoError(t, os.MkdirAll(filepath.Join(home, ".windsurf"), 0o755))
+				require.NoError(t, os.MkdirAll(filepath.Join(home, ".codeium", "windsurf"), 0o755))
 				return func() (string, error) { return home, nil }
 			},
 			wantDetected: true,
 		},
 		{
-			name: "not detected when ~/.windsurf absent",
+			name: "not detected when ~/.codeium/windsurf absent",
 			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
 				home := t.TempDir()
@@ -132,7 +132,7 @@ func TestWindsurf_Install(t *testing.T) {
 		check     func(t *testing.T, destBase string, pluginName string)
 	}{
 		{
-			name: "copies skills into .windsurf/rules/{name}/",
+			name: "copies skills into .windsurf/skills/{name}/",
 			setupSrc: func(t *testing.T) string {
 				t.Helper()
 				src := t.TempDir()
@@ -149,7 +149,7 @@ func TestWindsurf_Install(t *testing.T) {
 			},
 			check: func(t *testing.T, destBase string, pluginName string) {
 				t.Helper()
-				tgt := filepath.Join(destBase, ".windsurf", "rules", pluginName, "my-skill.md")
+				tgt := filepath.Join(destBase, ".windsurf", "skills", pluginName, "my-skill.md")
 				_, err := os.Stat(tgt)
 				assert.NoError(t, err)
 			},
@@ -184,7 +184,7 @@ func TestWindsurf_Install(t *testing.T) {
 				t.Helper()
 				return t.TempDir()
 			},
-			wantErr: "mkdir windsurf rules dir",
+			wantErr: "mkdir windsurf skills dir",
 		},
 		{
 			name: "copyTreeIfExists error propagates from Install",
@@ -220,7 +220,7 @@ func TestWindsurf_Install(t *testing.T) {
 			if tt.wantErr == "getwd" {
 				cwdFunc = func() (string, error) { return "", errors.New("getwd failed") }
 			}
-			if tt.wantErr == "mkdir windsurf rules dir" {
+			if tt.wantErr == "mkdir windsurf skills dir" {
 				roDir := t.TempDir()
 				require.NoError(t, os.Chmod(roDir, 0o555))
 				t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })

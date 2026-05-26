@@ -74,11 +74,17 @@ See [Usage][] for full details.
 
 ## 📖 Documentation
 
-- [Usage][] — install, build, sync, verify, inspect, examples
+- [Usage][] — add, install, build, verify, info, examples
 - [Package Format (ADR-001)][] — archive schema, content types
 - [Architecture][] — driver design, install flow
 - [Development][] — dev setup, testing conventions
 - [Contributing][] — commit style, PR checklist
+
+## 🙏 Acknowledgments
+
+Agent detection paths and skill directory conventions inspired by
+[vercel-labs/skills](https://github.com/vercel-labs/skills) and the
+[agentskills.io](https://agentskills.io) ecosystem.
 
 ## 📄 License
 

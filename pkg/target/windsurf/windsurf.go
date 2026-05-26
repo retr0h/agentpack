@@ -19,7 +19,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package windsurf is the agentpack target driver for Windsurf. It installs
-// plugin skills into .windsurf/rules/{name}/ in the project directory.
+// plugin skills into .windsurf/skills/{name}/ in the project directory.
 package windsurf
 
 import (
@@ -73,19 +73,19 @@ func (w *Windsurf) Name() string { return "windsurf" }
 // DisplayName returns the human-readable agent name.
 func (w *Windsurf) DisplayName() string { return "Windsurf" }
 
-// Detect returns true when ~/.windsurf/ exists, indicating Windsurf is installed.
+// Detect returns true when ~/.codeium/windsurf exists, indicating Windsurf is installed.
 func (w *Windsurf) Detect() bool {
 	home, err := w.userHomeFunc()
 	if err != nil {
 		return false
 	}
 
-	_, err = os.Stat(filepath.Join(home, ".windsurf"))
+	_, err = os.Stat(filepath.Join(home, ".codeium", "windsurf"))
 
 	return err == nil
 }
 
-// Install places the plugin's skills into .windsurf/rules/{name}/ under the
+// Install places the plugin's skills into .windsurf/skills/{name}/ under the
 // project directory (current working directory).
 func (w *Windsurf) Install(ctx context.Context, opts target.InstallOpts) error {
 	if err := ctx.Err(); err != nil {
@@ -97,10 +97,10 @@ func (w *Windsurf) Install(ctx context.Context, opts target.InstallOpts) error {
 		return fmt.Errorf("getwd: %w", err)
 	}
 
-	destDir := filepath.Join(cwd, ".windsurf", "rules", opts.Name)
+	destDir := filepath.Join(cwd, ".windsurf", "skills", opts.Name)
 
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir windsurf rules dir: %w", err)
+		return fmt.Errorf("mkdir windsurf skills dir: %w", err)
 	}
 
 	skillsSrc := filepath.Join(opts.SourceDir, "skills")

@@ -39,3 +39,4 @@ Additional sections (e.g. **Influences**) are permitted when they add clarity.
 | [003](003-dependency-management.md) | Dependency Management Architecture      | Accepted                               |
 | [004](004-config-merging.md)        | Config Merging for MCP, Hooks, Settings | Accepted                               |
 | [005](005-content-safety.md)        | Content Safety and Executable Prompts   | Proposed                               |
+| [006](006-agent-registry-alignment.md) | Agent Registry Alignment             | Proposed                               |
