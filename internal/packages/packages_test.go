@@ -518,3 +518,148 @@ func TestConfig_Find(t *testing.T) {
 		})
 	}
 }
+
+// --------------------------------------------------------------------------
+// TestConfig_AddMergeSkillsTargets
+// --------------------------------------------------------------------------
+
+func TestConfig_AddMergeSkillsTargets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		first       packages.Package
+		second      packages.Package
+		wantSkills  []string
+		wantTargets []string
+	}{
+		{
+			name: "add same package with different skills and targets merges both",
+			first: packages.Package{
+				Name:    "multi-pkg",
+				Git:     "github.com/org/multi",
+				Skills:  []string{"k8s"},
+				Targets: []string{"claude-code"},
+			},
+			second: packages.Package{
+				Name:    "multi-pkg",
+				Git:     "github.com/org/multi",
+				Skills:  []string{"react"},
+				Targets: []string{"cursor"},
+			},
+			wantSkills:  []string{"k8s", "react"},
+			wantTargets: []string{"claude-code", "cursor"},
+		},
+		{
+			name: "add same package with overlapping skills deduplicates",
+			first: packages.Package{
+				Name:    "dedup-pkg",
+				Git:     "github.com/org/dedup",
+				Skills:  []string{"k8s", "react"},
+				Targets: []string{"claude-code"},
+			},
+			second: packages.Package{
+				Name:    "dedup-pkg",
+				Git:     "github.com/org/dedup",
+				Skills:  []string{"react"},
+				Targets: []string{"claude-code", "cursor"},
+			},
+			wantSkills:  []string{"k8s", "react"},
+			wantTargets: []string{"claude-code", "cursor"},
+		},
+		{
+			name: "add same package with nil skills preserves existing",
+			first: packages.Package{
+				Name:    "nil-skills-pkg",
+				Git:     "github.com/org/nil-skills",
+				Skills:  []string{"k8s"},
+				Targets: []string{"claude-code"},
+			},
+			second: packages.Package{
+				Name:    "nil-skills-pkg",
+				Git:     "github.com/org/nil-skills",
+				Skills:  nil,
+				Targets: []string{"cursor"},
+			},
+			wantSkills:  []string{"k8s"},
+			wantTargets: []string{"claude-code", "cursor"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &packages.Config{}
+			cfg.Add(tt.first)
+			cfg.Add(tt.second)
+
+			require.Len(t, cfg.Packages, 1)
+
+			got := cfg.Find(tt.first.Name)
+			require.NotNil(t, got)
+
+			assert.ElementsMatch(t, tt.wantSkills, got.Skills)
+			assert.ElementsMatch(t, tt.wantTargets, got.Targets)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestConfig_AddMergeRoundTrip
+// --------------------------------------------------------------------------
+
+func TestConfig_AddMergeRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		packages    []packages.Package
+		wantSkills  []string
+		wantTargets []string
+	}{
+		{
+			name: "merged skills and targets survive save and load round-trip",
+			packages: []packages.Package{
+				{
+					Name:    "round-trip-pkg",
+					Git:     "github.com/org/round-trip",
+					Skills:  []string{"k8s"},
+					Targets: []string{"claude-code"},
+				},
+				{
+					Name:    "round-trip-pkg",
+					Git:     "github.com/org/round-trip",
+					Skills:  []string{"react"},
+					Targets: []string{"cursor"},
+				},
+			},
+			wantSkills:  []string{"k8s", "react"},
+			wantTargets: []string{"claude-code", "cursor"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), "agentpack-packages.yaml")
+			cfg := &packages.Config{}
+
+			for _, p := range tt.packages {
+				cfg.Add(p)
+			}
+
+			require.NoError(t, packages.Save(path, cfg))
+
+			loaded, err := packages.Load(path)
+			require.NoError(t, err)
+
+			got := loaded.Find(tt.packages[0].Name)
+			require.NotNil(t, got)
+
+			assert.ElementsMatch(t, tt.wantSkills, got.Skills)
+			assert.ElementsMatch(t, tt.wantTargets, got.Targets)
+		})
+	}
+}

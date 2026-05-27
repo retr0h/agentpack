@@ -453,3 +453,275 @@ func TestLockfile_Find(t *testing.T) {
 		})
 	}
 }
+
+// --------------------------------------------------------------------------
+// TestLockfile_SetMergeSkillsTargetsFiles
+// --------------------------------------------------------------------------
+
+func TestLockfile_SetMergeSkillsTargetsFiles(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		first         lock.LockedPackage
+		second        lock.LockedPackage
+		wantSkills    []string
+		wantTargets   []string
+		wantFilePaths []string
+	}{
+		{
+			name: "set same package twice merges skills targets and files",
+			first: lock.LockedPackage{
+				Name:    "multi-pkg",
+				Source:  "github.com/org/multi",
+				SHA:     "sha1",
+				Skills:  []string{"k8s"},
+				Targets: []string{"claude-code"},
+				Files: []lock.LockedFile{
+					{Path: "skills/k8s/SKILL.md", SHA256: "aaa", Target: "claude-code"},
+				},
+			},
+			second: lock.LockedPackage{
+				Name:    "multi-pkg",
+				Source:  "github.com/org/multi",
+				SHA:     "sha2",
+				Skills:  []string{"react"},
+				Targets: []string{"cursor"},
+				Files: []lock.LockedFile{
+					{Path: "skills/react/SKILL.md", SHA256: "bbb", Target: "cursor"},
+				},
+			},
+			wantSkills:    []string{"k8s", "react"},
+			wantTargets:   []string{"claude-code", "cursor"},
+			wantFilePaths: []string{"skills/k8s/SKILL.md", "skills/react/SKILL.md"},
+		},
+		{
+			name: "set same package twice with overlapping file replaces existing entry",
+			first: lock.LockedPackage{
+				Name:    "overlap-pkg",
+				Source:  "github.com/org/overlap",
+				SHA:     "sha1",
+				Skills:  []string{"k8s"},
+				Targets: []string{"claude-code"},
+				Files: []lock.LockedFile{
+					{Path: "skills/k8s/SKILL.md", SHA256: "old-hash", Target: "claude-code"},
+				},
+			},
+			second: lock.LockedPackage{
+				Name:    "overlap-pkg",
+				Source:  "github.com/org/overlap",
+				SHA:     "sha2",
+				Skills:  []string{"k8s"},
+				Targets: []string{"claude-code"},
+				Files: []lock.LockedFile{
+					{Path: "skills/k8s/SKILL.md", SHA256: "new-hash", Target: "claude-code"},
+				},
+			},
+			wantSkills:    []string{"k8s"},
+			wantTargets:   []string{"claude-code"},
+			wantFilePaths: []string{"skills/k8s/SKILL.md"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			lf := &lock.Lockfile{LockVersion: 2}
+			lf.Set(tt.first)
+			lf.Set(tt.second)
+
+			require.Len(t, lf.Packages, 1)
+
+			got := lf.Find(tt.first.Name)
+			require.NotNil(t, got)
+
+			assert.ElementsMatch(t, tt.wantSkills, got.Skills)
+			assert.ElementsMatch(t, tt.wantTargets, got.Targets)
+
+			gotPaths := make([]string, len(got.Files))
+			for i, f := range got.Files {
+				gotPaths[i] = f.Path
+			}
+
+			assert.ElementsMatch(t, tt.wantFilePaths, gotPaths)
+
+			// Verify overlapping file is updated (last write wins for same path+target).
+			if tt.name == "set same package twice with overlapping file replaces existing entry" {
+				require.Len(t, got.Files, 1)
+				assert.Equal(t, "new-hash", got.Files[0].SHA256)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestLockfile_RemoveSkill
+// --------------------------------------------------------------------------
+
+func TestLockfile_RemoveSkill(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		initial         lock.LockedPackage
+		removeSkill     string
+		wantSkills      []string
+		wantFilePaths   []string
+		wantAbsentPaths []string
+	}{
+		{
+			// fileMatchesSkill checks for /skills/<skill>/ with a leading slash,
+			// matching paths as they appear when installed into a target directory
+			// (e.g. ".claude/skills/react/SKILL.md").
+			name: "removes named skill and prunes matching files",
+			initial: lock.LockedPackage{
+				Name:    "prune-pkg",
+				Source:  "github.com/org/prune",
+				SHA:     "sha1",
+				Skills:  []string{"k8s", "react"},
+				Targets: []string{"claude-code"},
+				Files: []lock.LockedFile{
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "aaa", Target: "claude-code"},
+					{Path: ".claude/skills/react/SKILL.md", SHA256: "bbb", Target: "claude-code"},
+					{Path: "commands/scan.md", SHA256: "ccc", Target: "claude-code"},
+				},
+			},
+			removeSkill:     "react",
+			wantSkills:      []string{"k8s"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md", "commands/scan.md"},
+			wantAbsentPaths: []string{".claude/skills/react/SKILL.md"},
+		},
+		{
+			name: "remove skill not in list is a no-op",
+			initial: lock.LockedPackage{
+				Name:    "noop-pkg",
+				Source:  "github.com/org/noop",
+				SHA:     "sha1",
+				Skills:  []string{"k8s"},
+				Targets: []string{"claude-code"},
+				Files: []lock.LockedFile{
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "aaa", Target: "claude-code"},
+				},
+			},
+			removeSkill:     "nonexistent",
+			wantSkills:      []string{"k8s"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md"},
+			wantAbsentPaths: nil,
+		},
+		{
+			name: "remove skill from nonexistent package is a no-op",
+			initial: lock.LockedPackage{
+				Name: "other-pkg",
+			},
+			removeSkill:     "k8s",
+			wantSkills:      nil,
+			wantFilePaths:   nil,
+			wantAbsentPaths: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			lf := &lock.Lockfile{LockVersion: 2}
+			lf.Set(tt.initial)
+
+			targetName := tt.initial.Name
+			if tt.name == "remove skill from nonexistent package is a no-op" {
+				targetName = "does-not-exist"
+			}
+
+			lf.RemoveSkill(targetName, tt.removeSkill)
+
+			got := lf.Find(tt.initial.Name)
+			if tt.name == "remove skill from nonexistent package is a no-op" {
+				// The entry still exists under the original name.
+				require.NotNil(t, lf.Find(tt.initial.Name))
+				return
+			}
+
+			require.NotNil(t, got)
+
+			if tt.wantSkills == nil {
+				assert.Empty(t, got.Skills)
+			} else {
+				assert.ElementsMatch(t, tt.wantSkills, got.Skills)
+			}
+
+			gotPaths := make([]string, len(got.Files))
+			for i, f := range got.Files {
+				gotPaths[i] = f.Path
+			}
+
+			if tt.wantFilePaths != nil {
+				assert.ElementsMatch(t, tt.wantFilePaths, gotPaths)
+			}
+
+			for _, absent := range tt.wantAbsentPaths {
+				assert.NotContains(t, gotPaths, absent)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestLockfile_RemoveEntry
+// --------------------------------------------------------------------------
+
+func TestLockfile_RemoveEntry(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		initial []lock.LockedPackage
+		remove  string
+		wantLen int
+		wantNil bool
+	}{
+		{
+			name: "remove existing package deletes entry entirely",
+			initial: []lock.LockedPackage{
+				{
+					Name:    "gone-pkg",
+					Source:  "github.com/org/gone",
+					SHA:     "sha1",
+					Skills:  []string{"k8s"},
+					Targets: []string{"claude-code"},
+					Files: []lock.LockedFile{
+						{Path: "skills/k8s/SKILL.md", SHA256: "aaa", Target: "claude-code"},
+					},
+				},
+				{Name: "stays", Source: "github.com/org/stays", SHA: "sha2"},
+			},
+			remove:  "gone-pkg",
+			wantLen: 1,
+			wantNil: true,
+		},
+		{
+			name: "remove nonexistent package leaves others intact",
+			initial: []lock.LockedPackage{
+				{Name: "keeper", Source: "github.com/org/keeper", SHA: "sha1"},
+			},
+			remove:  "ghost",
+			wantLen: 1,
+			wantNil: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			lf := &lock.Lockfile{LockVersion: 2, Packages: tt.initial}
+			lf.Remove(tt.remove)
+
+			assert.Len(t, lf.Packages, tt.wantLen)
+
+			if tt.wantNil {
+				assert.Nil(t, lf.Find(tt.remove))
+			}
+		})
+	}
+}

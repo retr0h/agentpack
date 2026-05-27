@@ -293,6 +293,21 @@ func TestLifecycleFullAddListDelete(t *testing.T) {
 			noParallel: true,
 			run:        testLifecycleNoTargets,
 		},
+		{
+			name:       "@skill filter: only skills content installed, commands and hooks absent",
+			noParallel: true,
+			run:        testLifecycleSkillFilter,
+		},
+		{
+			name:       "whole repo: all content types present in registry",
+			noParallel: true,
+			run:        testLifecycleWholeRepoAllContent,
+		},
+		{
+			name:       "@skill then whole repo: registry merges selected skills and all content",
+			noParallel: true,
+			run:        testLifecycleSkillThenWholeRepo,
+		},
 	}
 
 	for _, tt := range tests {
@@ -538,4 +553,245 @@ func testLifecycleNoTargets(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "install to fail-target")
+}
+
+// testLifecycleSkillFilter exercises ADR-008: when Skills=["kubernetes-specialist"]
+// is set, only skills/ content is recorded in the registry (the mock target
+// installs everything from the archive, but SelectedSkills signals intent and
+// the registry manifest reflects what was tracked). This test verifies that
+// registry.SelectedSkills is set correctly and that only the requested skill
+// appears in SelectedSkills while unfiltered commands/hooks remain absent from
+// that field.
+func testLifecycleSkillFilter(t *testing.T) {
+	t.Helper()
+
+	archivePath := lifecycleArchive(t, "skill-filter-pkg", "1.0.0")
+	installDir := t.TempDir()
+
+	reg, restoreHome := withTempRegistry(t)
+	defer restoreHome()
+
+	restoreSave := install.SetRegistrySave(reg.Save)
+	defer restoreSave()
+
+	restoreLoad := install.SetRegistryLoad(reg.Load)
+	defer restoreLoad()
+
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	// skillTarget only writes files whose path contains "kubernetes-specialist"
+	// to simulate the ADR-008 server-side filtering that a real target would do.
+	m := mocks.NewMockTarget(ctrl)
+	m.EXPECT().Name().Return("claude-code").AnyTimes()
+	m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
+	m.EXPECT().
+		Install(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
+			var installed []target.InstalledFile
+
+			err := filepath.WalkDir(opts.SourceDir, func(path string, d os.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+
+				if d.IsDir() {
+					return nil
+				}
+
+				rel, relErr := filepath.Rel(opts.SourceDir, path)
+				if relErr != nil {
+					return relErr
+				}
+
+				// Skip .agentpack metadata files.
+				if len(rel) >= len(".agentpack") && rel[:len(".agentpack")] == ".agentpack" {
+					return nil
+				}
+
+				// Only install files that belong to the requested skill.
+				normalized := filepath.ToSlash(rel)
+				if !strings.Contains(normalized, "kubernetes-specialist") {
+					return nil
+				}
+
+				dst := filepath.Join(installDir, rel)
+				if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+					return mkErr
+				}
+
+				data, readErr := os.ReadFile(path)
+				if readErr != nil {
+					return readErr
+				}
+
+				if writeErr := os.WriteFile(dst, data, 0o644); writeErr != nil {
+					return writeErr
+				}
+
+				h := sha256.Sum256(data)
+				installed = append(installed, target.InstalledFile{
+					Path:   rel,
+					SHA256: hex.EncodeToString(h[:]),
+				})
+
+				return nil
+			})
+
+			return installed, err
+		}).AnyTimes()
+
+	_, err := install.New().Run(ctx, install.Options{
+		Source:  archivePath,
+		Skills:  []string{"kubernetes-specialist"},
+		Targets: []target.Target{m},
+		Dir:     installDir,
+	})
+	require.NoError(t, err)
+
+	manifest, loadErr := reg.Load("skill-filter-pkg")
+	require.NoError(t, loadErr)
+	require.NotNil(t, manifest)
+
+	// SelectedSkills must record the user's intent.
+	assert.Equal(t, []string{"kubernetes-specialist"}, manifest.SelectedSkills)
+
+	// Only the kubernetes-specialist skill file must appear in the registry
+	// — the skill-filtering mock target only installed that file.
+	assertFilePath(t, manifest.Files, "skills/kubernetes-specialist/SKILL.md")
+	assertNoFilePath(t, manifest.Files, "skills/react-expert/SKILL.md")
+	assertNoFilePath(t, manifest.Files, "commands/scan.md")
+	assertNoFilePath(t, manifest.Files, "hooks/hooks.json")
+}
+
+// testLifecycleWholeRepoAllContent installs without a Skills filter and
+// verifies that skills, commands, and hooks all appear in the registry manifest.
+func testLifecycleWholeRepoAllContent(t *testing.T) {
+	t.Helper()
+
+	archivePath := lifecycleArchive(t, "all-content-pkg", "1.0.0")
+	installDir := t.TempDir()
+
+	reg, restoreHome := withTempRegistry(t)
+	defer restoreHome()
+
+	restoreSave := install.SetRegistrySave(reg.Save)
+	defer restoreSave()
+
+	restoreLoad := install.SetRegistryLoad(reg.Load)
+	defer restoreLoad()
+
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	tgt := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDir)
+
+	_, err := install.New().Run(ctx, install.Options{
+		Source:  archivePath,
+		Skills:  nil, // whole repo — no filter
+		Targets: []target.Target{tgt},
+		Dir:     installDir,
+	})
+	require.NoError(t, err)
+
+	manifest, loadErr := reg.Load("all-content-pkg")
+	require.NoError(t, loadErr)
+	require.NotNil(t, manifest)
+
+	// No explicit skill filter → SelectedSkills must be nil/empty.
+	assert.Empty(t, manifest.SelectedSkills)
+
+	// All content types from the archive must appear in the registry.
+	assertFilePath(t, manifest.Files, "skills/kubernetes-specialist/SKILL.md")
+	assertFilePath(t, manifest.Files, "skills/react-expert/SKILL.md")
+	assertFilePath(t, manifest.Files, "commands/scan.md")
+	assertFilePath(t, manifest.Files, "hooks/hooks.json")
+}
+
+// testLifecycleSkillThenWholeRepo installs a single skill to target A, then
+// installs the whole repo to target B. It verifies that SelectedSkills merges
+// correctly and that each target's files appear in the registry.
+func testLifecycleSkillThenWholeRepo(t *testing.T) {
+	t.Helper()
+
+	archivePath := lifecycleArchive(t, "merge-pkg", "1.0.0")
+	installDirA := t.TempDir()
+	installDirB := t.TempDir()
+
+	reg, restoreHome := withTempRegistry(t)
+	defer restoreHome()
+
+	restoreSave := install.SetRegistrySave(reg.Save)
+	defer restoreSave()
+
+	restoreLoad := install.SetRegistryLoad(reg.Load)
+	defer restoreLoad()
+
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	// -------------------------------------------------------------------------
+	// Step 1: Install @kubernetes-specialist to target A.
+	// -------------------------------------------------------------------------
+	targetA := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDirA)
+
+	_, err := install.New().Run(ctx, install.Options{
+		Source:  archivePath,
+		Skills:  []string{"kubernetes-specialist"},
+		Targets: []target.Target{targetA},
+		Dir:     installDirA,
+	})
+	require.NoError(t, err)
+
+	// -------------------------------------------------------------------------
+	// Step 2: Install whole repo to target B.
+	// -------------------------------------------------------------------------
+	targetB := mockTargetThatInstalls(t, ctrl, "cursor", "Cursor", installDirB)
+
+	_, err = install.New().Run(ctx, install.Options{
+		Source:  archivePath,
+		Skills:  nil, // no filter
+		Targets: []target.Target{targetB},
+		Dir:     installDirB,
+	})
+	require.NoError(t, err)
+
+	// -------------------------------------------------------------------------
+	// Step 3: Assert merged registry.
+	// -------------------------------------------------------------------------
+	manifest, loadErr := reg.Load("merge-pkg")
+	require.NoError(t, loadErr)
+	require.NotNil(t, manifest)
+
+	// SelectedSkills must contain the skill from the first install; the second
+	// install (nil Skills) contributes no additional entries.
+	assert.Contains(t, manifest.SelectedSkills, "kubernetes-specialist")
+
+	// Both targets must appear in the file list.
+	targetNames := collectTargetNames(manifest.Files)
+	assert.Contains(t, targetNames, "claude-code")
+	assert.Contains(t, targetNames, "cursor")
+
+	// Target A (claude-code) files: mock installs all archive content.
+	var ccFiles []registry.InstalledFile
+	for _, f := range manifest.Files {
+		if f.Target == "claude-code" {
+			ccFiles = append(ccFiles, f)
+		}
+	}
+
+	assertFilePath(t, ccFiles, "skills/kubernetes-specialist/SKILL.md")
+
+	// Target B (cursor) files: whole-repo install includes all content.
+	var cursorFiles []registry.InstalledFile
+	for _, f := range manifest.Files {
+		if f.Target == "cursor" {
+			cursorFiles = append(cursorFiles, f)
+		}
+	}
+
+	assertFilePath(t, cursorFiles, "skills/kubernetes-specialist/SKILL.md")
+	assertFilePath(t, cursorFiles, "skills/react-expert/SKILL.md")
+	assertFilePath(t, cursorFiles, "commands/scan.md")
+	assertFilePath(t, cursorFiles, "hooks/hooks.json")
 }
