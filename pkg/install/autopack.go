@@ -88,7 +88,12 @@ func autoPackageWithVersion(
 
 	var files []archive.FileEntry
 
-	for _, content := range contentDirs {
+	dirs := contentDirs
+	if len(skillFilter) > 0 {
+		dirs = []string{"skills"}
+	}
+
+	for _, content := range dirs {
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
