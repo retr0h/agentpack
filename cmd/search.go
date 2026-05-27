@@ -74,7 +74,7 @@ var searchCmd = &cobra.Command{
 			}
 		}
 
-		cli.Printf(out, "%s\n\n", cli.Mute(out, "Install with agentpack add <source@skill>"))
+		cli.Printf(out, "\n%s\n\n", cli.Mute(out, "Install with agentpack add <source@skill>"))
 		for _, r := range results {
 			installCmd := r.Source + "@" + r.Name
 			installs := cli.Mute(out, formatInstalls(r.Installs))

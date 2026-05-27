@@ -32,7 +32,7 @@ import (
 // DefaultRegistryURL is the base URL for the skills.sh registry.
 const DefaultRegistryURL = "https://skills.sh"
 
-const defaultLimit = 20
+const defaultLimit = 10
 
 // Result is a single skill returned from the registry search.
 type Result struct {
