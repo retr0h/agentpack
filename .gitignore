@@ -12,3 +12,5 @@ coverage.out
 examples/*/.git/
 .agents/
 .claude/skills/
+agentpack-packages.yaml
+agentpack.lock
