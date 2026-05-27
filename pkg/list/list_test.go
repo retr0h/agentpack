@@ -387,7 +387,7 @@ func TestRunWithRegistry(t *testing.T) {
 					assert.Equal(t, "local", entries[0].Scope)
 				case "nofiles-pkg":
 					assert.Equal(t, "local", entries[0].Scope)
-					assert.Equal(t, "ok", entries[0].Status)
+					assert.Equal(t, "empty", entries[0].Status)
 				}
 			}
 

@@ -103,8 +103,10 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 	for _, m := range manifests {
 		targets := collectTargets(m)
 
-		status := "ok"
-		if len(m.Files) > 0 {
+		var status string
+		if len(m.Files) == 0 {
+			status = "empty"
+		} else {
 			found := false
 			for _, f := range m.Files {
 				path := filepath.Join(f.Dir, f.Path)
@@ -115,7 +117,9 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 				}
 			}
 
-			if !found {
+			if found {
+				status = "ok"
+			} else {
 				status = "missing"
 			}
 		}
