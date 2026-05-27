@@ -192,7 +192,9 @@ func syncGitPackage(ctx context.Context, pkg Package, opts Options) []Result {
 	defer func() { _ = os.RemoveAll(cloneDir) }()
 
 	if err := f.Fetch(ctx, source, cloneDir); err != nil {
-		return []Result{{Name: pkg.Name, Status: StatusFailed, Err: fmt.Errorf("git fetch: %w", err)}}
+		return []Result{
+			{Name: pkg.Name, Status: StatusFailed, Err: fmt.Errorf("git fetch: %w", err)},
+		}
 	}
 
 	if opts.Builder == nil {

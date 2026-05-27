@@ -234,7 +234,11 @@ func TestRunWithRegistry(t *testing.T) {
 			name: "SHA is shortened to 7 characters",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "sha-pkg", SHA: "abcdef1234567890", Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}}},
+					{
+						Name:  "sha-pkg",
+						SHA:   "abcdef1234567890",
+						Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
+					},
 				}, nil)
 			},
 			wantCount: 1,
@@ -243,7 +247,11 @@ func TestRunWithRegistry(t *testing.T) {
 			name: "SHA shorter than 7 chars is returned as-is",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "short-sha-pkg", SHA: "abc", Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}}},
+					{
+						Name:  "short-sha-pkg",
+						SHA:   "abc",
+						Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
+					},
 				}, nil)
 			},
 			wantCount: 1,
@@ -265,7 +273,11 @@ func TestRunWithRegistry(t *testing.T) {
 			name: "installed timestamp without T is returned as-is",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "no-t-pkg", Installed: "2026-01-15", Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}}},
+					{
+						Name:      "no-t-pkg",
+						Installed: "2026-01-15",
+						Files:     []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
+					},
 				}, nil)
 			},
 			wantCount: 1,
@@ -274,7 +286,11 @@ func TestRunWithRegistry(t *testing.T) {
 			name: "empty installed timestamp is returned as empty string",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "empty-ts-pkg", Installed: "", Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}}},
+					{
+						Name:      "empty-ts-pkg",
+						Installed: "",
+						Files:     []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
+					},
 				}, nil)
 			},
 			wantCount: 1,
@@ -440,7 +456,11 @@ func TestRunWithRegistryFormatDate(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			reg := listmocks.NewMockRegistry(ctrl)
 			reg.EXPECT().List().Return([]*registry.PackageManifest{
-				{Name: "fmt-pkg", Installed: tt.installed, Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}}},
+				{
+					Name:      "fmt-pkg",
+					Installed: tt.installed,
+					Files:     []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
+				},
 			}, nil)
 
 			l := list.New()
@@ -471,7 +491,9 @@ func TestRun(t *testing.T) {
 				t.Helper()
 				require.NoError(t, os.WriteFile(
 					filepath.Join(pkgDir, "run-pkg.yaml"),
-					[]byte("name: run-pkg\nsource: github.com/org/run\nfiles:\n  - path: skills/x.md\n    sha256: abc\n    target: claude-code\n    dir: /tmp\n"),
+					[]byte(
+						"name: run-pkg\nsource: github.com/org/run\nfiles:\n  - path: skills/x.md\n    sha256: abc\n    target: claude-code\n    dir: /tmp\n",
+					),
 					0o644,
 				))
 			},
