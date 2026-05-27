@@ -23,6 +23,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -95,6 +96,7 @@ func listInstalled(cmd *cobra.Command) error {
 	names := make([]string, len(entries))
 	versions := make([]string, len(entries))
 	shas := make([]string, len(entries))
+	targets := make([]string, len(entries))
 	scopes := make([]string, len(entries))
 	statuses := make([]string, len(entries))
 	sources := make([]string, len(entries))
@@ -103,6 +105,11 @@ func listInstalled(cmd *cobra.Command) error {
 		names[i] = e.Name
 		versions[i] = e.Version
 		shas[i] = e.SHA
+		tgtNames := make([]string, len(e.Targets))
+		for j, ti := range e.Targets {
+			tgtNames[j] = ti.Name
+		}
+		targets[i] = strings.Join(tgtNames, ", ")
 		scopes[i] = string(e.Scope)
 		statuses[i] = string(e.Status)
 		sources[i] = e.Source
@@ -112,13 +119,14 @@ func listInstalled(cmd *cobra.Command) error {
 		{Header: "NAME", Values: names, Accent: true},
 		{Header: "VERSION", Values: versions},
 		{Header: "SHA", Values: shas, Muted: true},
+		{Header: "TARGETS", Values: targets, Tag: true},
 		{Header: "SCOPE", Values: scopes, Muted: true},
 		{Header: "STATUS", Values: statuses},
 		{Header: "SOURCE", Values: sources, Muted: true},
 	})
 
 	for i, e := range entries {
-		cli.Printf(out, "\n%s\n", cli.Accent(out, e.Name))
+		cli.Print(out, "")
 
 		// Skills — one per line with tree connectors (white, no accent).
 		totalRows := len(e.Skills) + len(e.Targets)
