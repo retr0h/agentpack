@@ -79,7 +79,10 @@ func (c *ClaudeCode) Detect() bool {
 // commands/ → .claude/commands/
 // agents/ → .claude/agents/
 // Returns the list of files written.
-func (c *ClaudeCode) Install(ctx context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
+func (c *ClaudeCode) Install(
+	ctx context.Context,
+	opts target.InstallOpts,
+) ([]target.InstalledFile, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

@@ -159,6 +159,7 @@ packages:
 ```
 
 Fields:
+
 - `git` / `source` — where to fetch from (mutually exclusive)
 - `ref` — git tag, branch, or SHA to pin (optional)
 - `skills` — only install named skills (optional, all if omitted)

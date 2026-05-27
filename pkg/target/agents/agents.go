@@ -360,7 +360,10 @@ func (a *agent) Detect() bool {
 // When opts.Global is true it installs into the agent's global skills directory
 // under the user's home. Otherwise it installs into the project-local directory.
 // Returns the list of files written.
-func (a *agent) Install(ctx context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
+func (a *agent) Install(
+	ctx context.Context,
+	opts target.InstallOpts,
+) ([]target.InstalledFile, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -403,7 +406,7 @@ func (a *agent) Install(ctx context.Context, opts target.InstallOpts) ([]target.
 
 	var files []target.InstalledFile
 
-	_ = filepath.WalkDir(destDir, func(path string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir(destDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -425,7 +428,9 @@ func (a *agent) Install(ctx context.Context, opts target.InstallOpts) ([]target.
 		})
 
 		return nil
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("enumerate installed files: %w", err)
+	}
 
 	return files, nil
 }

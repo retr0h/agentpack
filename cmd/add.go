@@ -291,6 +291,9 @@ func buildContentCheck(cmd *cobra.Command, trust bool) func(*safety.Classificati
 
 		scanner := bufio.NewScanner(os.Stdin)
 		scanner.Scan()
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("read input: %w", err)
+		}
 		answer := strings.TrimSpace(scanner.Text())
 
 		if answer == "2" {
