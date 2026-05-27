@@ -67,6 +67,8 @@ var gitHosts = []string{
 //   - unknown scheme → error
 //   - local path (absolute, relative, or home-relative) → FileFetcher
 func New(source string) (Fetcher, error) {
+	source = ExpandShorthand(source)
+
 	// Strip a leading fragment-only source for scheme detection.
 	bare := source
 	if idx := strings.LastIndex(source, "#"); idx >= 0 {
@@ -88,6 +90,27 @@ func New(source string) (Fetcher, error) {
 		// local path: absolute (/), relative (./), home-relative (~/), or bare name
 		return &FileFetcher{}, nil
 	}
+}
+
+// ExpandShorthand converts owner/repo shorthand to github.com/owner/repo.
+// A source is shorthand when it has exactly one slash, no dots, no scheme,
+// and no path separators that suggest a local path.
+func ExpandShorthand(source string) string {
+	bare := source
+	if idx := strings.LastIndex(source, "#"); idx >= 0 {
+		bare = source[:idx]
+	}
+
+	if strings.Contains(bare, "://") ||
+		strings.Contains(bare, ".") ||
+		strings.HasPrefix(bare, "/") ||
+		strings.HasPrefix(bare, "~") ||
+		strings.HasPrefix(bare, ".") ||
+		strings.Count(bare, "/") != 1 {
+		return source
+	}
+
+	return "github.com/" + source
 }
 
 // isGitSource returns true when bare (URL without fragment) looks like a git

@@ -141,6 +141,8 @@ func (i *Installer) Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 
+	opts.Source = fetcher.ExpandShorthand(opts.Source)
+
 	f, err := fetcher.New(opts.Source)
 	if err != nil {
 		return nil, fmt.Errorf("fetcher: %w", err)
