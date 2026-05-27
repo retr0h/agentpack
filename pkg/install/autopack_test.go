@@ -647,7 +647,7 @@ func extractMetadataFromArchive(t *testing.T, archivePath string) *metadata.Meta
 		}
 	}
 
-	t.Fatal("metadata.json not found in archive")
+	require.FailNow(t, "metadata.json not found in archive")
 	return nil
 }
 

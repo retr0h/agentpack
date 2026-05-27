@@ -366,7 +366,11 @@ func installFromDir(
 
 	dir := opts.Dir
 	if dir == "" {
-		dir, _ = os.Getwd()
+		var err error
+		dir, err = os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("getwd: %w", err)
+		}
 	}
 
 	installOpts := target.InstallOpts{
