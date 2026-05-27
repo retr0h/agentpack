@@ -70,11 +70,12 @@ func (mr *MockTargetMockRecorder) DisplayName() *gomock.Call {
 }
 
 // Install mocks base method.
-func (m *MockTarget) Install(ctx context.Context, opts target.InstallOpts) error {
+func (m *MockTarget) Install(ctx context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Install", ctx, opts)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].([]target.InstalledFile)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Install indicates an expected call of Install.

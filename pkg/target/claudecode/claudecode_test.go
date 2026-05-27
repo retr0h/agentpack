@@ -324,9 +324,10 @@ func TestInstall(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			err := cc.Install(ctx, target.InstallOpts{
+			files, err := cc.Install(ctx, target.InstallOpts{
 				Name: "test", SourceDir: srcDir, Dir: installDir,
 			})
+			_ = files
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return

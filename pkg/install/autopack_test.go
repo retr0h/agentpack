@@ -887,7 +887,7 @@ func TestContentCheckCallback(t *testing.T) {
 			mockTarget := mocks.NewMockTarget(ctrl)
 			mockTarget.EXPECT().Name().Return("test-target").AnyTimes()
 			mockTarget.EXPECT().DisplayName().Return("Test Target").AnyTimes()
-			mockTarget.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockTarget.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 			r, err := install.New().Run(context.Background(), install.Options{
 				Source:       archivePath,

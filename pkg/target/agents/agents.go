@@ -25,6 +25,8 @@ package agents
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -357,26 +359,30 @@ func (a *agent) Detect() bool {
 // Install copies skills into the appropriate skills directory for this agent.
 // When opts.Global is true it installs into the agent's global skills directory
 // under the user's home. Otherwise it installs into the project-local directory.
-func (a *agent) Install(ctx context.Context, opts target.InstallOpts) error {
+// Returns the list of files written.
+func (a *agent) Install(ctx context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return nil, err
 	}
 
 	var destDir string
+	var baseDir string
 
 	if opts.Global {
 		home, err := a.userHomeFunc()
 		if err != nil {
-			return fmt.Errorf("home dir: %w", err)
+			return nil, fmt.Errorf("home dir: %w", err)
 		}
 
+		baseDir = home
 		destDir = filepath.Join(home, a.def.GlobalSkillsDir, opts.Name)
 	} else {
 		cwd, err := a.cwdFunc()
 		if err != nil {
-			return fmt.Errorf("getwd: %w", err)
+			return nil, fmt.Errorf("getwd: %w", err)
 		}
 
+		baseDir = cwd
 		localDir := ".agents/skills"
 		if a.def.LocalSkillsDir != "" {
 			localDir = a.def.LocalSkillsDir
@@ -386,16 +392,42 @@ func (a *agent) Install(ctx context.Context, opts target.InstallOpts) error {
 	}
 
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir agents skills dir: %w", err)
+		return nil, fmt.Errorf("mkdir agents skills dir: %w", err)
 	}
 
 	skillsSrc := filepath.Join(opts.SourceDir, "skills")
 
 	if err := copyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
-		return fmt.Errorf("copy skills: %w", err)
+		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
-	return nil
+	var files []target.InstalledFile
+
+	_ = filepath.WalkDir(destDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+
+		rel, relErr := filepath.Rel(baseDir, path)
+		if relErr != nil {
+			return relErr
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+
+		h := sha256.Sum256(data)
+		files = append(files, target.InstalledFile{
+			Path:   rel,
+			SHA256: hex.EncodeToString(h[:]),
+		})
+
+		return nil
+	})
+
+	return files, nil
 }
 
 // List returns nil; data-driven agents do not store managed-plugin metadata.

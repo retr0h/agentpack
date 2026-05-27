@@ -37,8 +37,6 @@ package install
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -398,21 +396,22 @@ func installFromDir(
 
 		emitStep(opts, Step{Name: "installing to", Detail: tgt.DisplayName()})
 
-		if installErr := tgt.Install(ctx, installOpts); installErr != nil {
+		installed, installErr := tgt.Install(ctx, installOpts)
+		if installErr != nil {
 			_ = os.RemoveAll(srcDir)
 
 			return nil, fmt.Errorf("install to %s: %w", tgt.Name(), installErr)
 		}
 
-		// Collect installed files by scanning the target's install dirs.
-		installed, collectErr := collectTargetFiles(dir, tgt, srcDir)
-		if collectErr != nil {
-			_ = os.RemoveAll(srcDir)
-
-			return nil, fmt.Errorf("collect files for %s: %w", tgt.Name(), collectErr)
+		for _, f := range installed {
+			allFiles = append(allFiles, registry.InstalledFile{
+				Path:   f.Path,
+				SHA256: f.SHA256,
+				Target: tgt.Name(),
+				Dir:    dir,
+			})
 		}
 
-		allFiles = append(allFiles, installed...)
 		fileCounts[tgt.DisplayName()] = len(installed)
 
 		_ = os.RemoveAll(srcDir)
@@ -456,47 +455,6 @@ func installFromDir(
 		FileCounts:            fileCounts,
 		ContentClassification: meta.Content,
 	}, nil
-}
-
-// collectTargetFiles scans the installDir for files written by the current
-// install. It walks the entire installDir and records every regular file.
-func collectTargetFiles(
-	installDir string,
-	tgt target.Target,
-	_ string,
-) ([]registry.InstalledFile, error) {
-	var allFiles []registry.InstalledFile
-
-	err := filepath.WalkDir(installDir, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil || d.IsDir() {
-			return walkErr
-		}
-
-		rel, relErr := filepath.Rel(installDir, path)
-		if relErr != nil {
-			return relErr
-		}
-
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
-
-		h := sha256.Sum256(data)
-		allFiles = append(allFiles, registry.InstalledFile{
-			Path:   rel,
-			SHA256: hex.EncodeToString(h[:]),
-			Target: tgt.Name(),
-			Dir:    installDir,
-		})
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return allFiles, nil
 }
 
 // copyToTemp makes a fresh copy of src into a new temp directory and returns

@@ -58,8 +58,8 @@ type Target interface {
 	Detect() bool
 
 	// Install places the unpacked archive content into the correct locations
-	// for this agent.
-	Install(ctx context.Context, opts InstallOpts) error
+	// for this agent. Returns the list of files written.
+	Install(ctx context.Context, opts InstallOpts) ([]InstalledFile, error)
 
 	// List returns all agentpack-managed plugins installed for this agent.
 	List() ([]InstalledPlugin, error)
@@ -85,6 +85,15 @@ type InstallOpts struct {
 
 	// Meta is the build metadata read from the extracted archive.
 	Meta *metadata.Metadata
+}
+
+// InstalledFile represents a single file written by a target's Install method.
+type InstalledFile struct {
+	// Path is the file path relative to the install base directory.
+	Path string
+
+	// SHA256 is the hex-encoded SHA-256 digest of the file content.
+	SHA256 string
 }
 
 // InstalledPlugin represents a single installed plugin found by a target.

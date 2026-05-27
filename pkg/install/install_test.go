@@ -305,7 +305,7 @@ description: A test plugin
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("test").AnyTimes()
 				m.EXPECT().DisplayName().Return("Test").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 				return archivePath, []target.Target{m}
 			},
@@ -338,12 +338,12 @@ description: Multi-target plugin
 				m1 := mocks.NewMockTarget(ctrl)
 				m1.EXPECT().Name().Return("alpha").AnyTimes()
 				m1.EXPECT().DisplayName().Return("Alpha").AnyTimes()
-				m1.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
+				m1.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 				m2 := mocks.NewMockTarget(ctrl)
 				m2.EXPECT().Name().Return("beta").AnyTimes()
 				m2.EXPECT().DisplayName().Return("Beta").AnyTimes()
-				m2.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
+				m2.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 				return archivePath, []target.Target{m1, m2}
 			},
@@ -385,7 +385,7 @@ description: step test
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("step-target").AnyTimes()
 				m.EXPECT().DisplayName().Return("Step Target").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 				return archivePath, []target.Target{m}
 			},
@@ -442,7 +442,7 @@ description: Plugin for cancel test
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -463,7 +463,7 @@ description: ctx after fetch
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -484,7 +484,7 @@ description: ctx after extract
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -508,7 +508,7 @@ description: ctx in verify
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -620,7 +620,7 @@ description: target fail test
 				m.EXPECT().DisplayName().Return("Fail Target").AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
-					Return(errors.New("target install error"))
+					Return(nil, errors.New("target install error"))
 
 				return archivePath, []target.Target{m}
 			},
@@ -641,7 +641,7 @@ description: test copyToTemp mkdir fail
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -668,7 +668,7 @@ description: ctx during verify
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -694,7 +694,7 @@ description: ctx after metadata
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -718,7 +718,7 @@ description: ctx inside targets loop
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -1389,147 +1389,6 @@ func TestRegistrySource(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// TestCollectTargetFiles
-// --------------------------------------------------------------------------
-
-func TestCollectTargetFiles(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name       string
-		setup      func(t *testing.T) (installDir, srcDir string)
-		targetName string
-		wantErr    string
-		wantLen    int
-		checkFiles func(t *testing.T, files []registry.InstalledFile)
-	}{
-		{
-			name: "collects files present in both srcDir and installDir",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				srcDir := t.TempDir()
-				installDir := t.TempDir()
-
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(srcDir, "skill.md"), []byte("# skill"), 0o644),
-				)
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(installDir, "skill.md"), []byte("# skill"), 0o644),
-				)
-
-				return installDir, srcDir
-			},
-			targetName: "claude-code",
-			wantLen:    1,
-		},
-		{
-			name: "skips srcDir files not present in installDir",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				srcDir := t.TempDir()
-				installDir := t.TempDir()
-
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(srcDir, "missing.md"), []byte("# missing"), 0o644),
-				)
-
-				return installDir, srcDir
-			},
-			targetName: "universal",
-			wantLen:    0,
-		},
-		{
-			name: "empty srcDir returns empty slice",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				return t.TempDir(), t.TempDir()
-			},
-			targetName: "claude-code",
-			wantLen:    0,
-		},
-		{
-			name: "returns error when installDir file cannot be read",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				srcDir := t.TempDir()
-				installDir := t.TempDir()
-
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(srcDir, "secret.md"), []byte("x"), 0o644),
-				)
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(installDir, "secret.md"), []byte("x"), 0o000),
-				)
-
-				t.Cleanup(func() { _ = os.Chmod(filepath.Join(installDir, "secret.md"), 0o644) })
-
-				return installDir, srcDir
-			},
-			targetName: "claude-code",
-			wantErr:    "permission denied",
-		},
-		{
-			name: "walks subdirectories in srcDir",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				srcDir := t.TempDir()
-				installDir := t.TempDir()
-
-				require.NoError(t, os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755))
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(srcDir, "sub", "deep.md"), []byte("# deep"), 0o644),
-				)
-				require.NoError(t, os.MkdirAll(filepath.Join(installDir, "sub"), 0o755))
-				require.NoError(
-					t,
-					os.WriteFile(
-						filepath.Join(installDir, "sub", "deep.md"),
-						[]byte("# deep"),
-						0o644,
-					),
-				)
-
-				return installDir, srcDir
-			},
-			targetName: "universal",
-			wantLen:    1,
-			checkFiles: func(t *testing.T, files []registry.InstalledFile) {
-				t.Helper()
-				assert.Equal(t, "sub/deep.md", files[0].Path)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			installDir, srcDir := tt.setup(t)
-
-			ctrl := gomock.NewController(t)
-			m := mocks.NewMockTarget(ctrl)
-			m.EXPECT().Name().Return(tt.targetName).AnyTimes()
-
-			files, err := install.CollectTargetFiles(installDir, m, srcDir)
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Len(t, files, tt.wantLen)
-		})
-	}
-}
-
-// --------------------------------------------------------------------------
 // TestCopyFileAtomic
 // --------------------------------------------------------------------------
 
@@ -1678,7 +1537,7 @@ func TestRunFromGit(t *testing.T) {
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("claude-code").AnyTimes()
 				m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 				return bareRepo, []target.Target{m}
 			},
@@ -1711,7 +1570,7 @@ func TestRunFromGit(t *testing.T) {
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("claude-code").AnyTimes()
 				m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil)
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 				return bareRepo + "#main", []target.Target{m}
 			},

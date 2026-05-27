@@ -25,6 +25,8 @@ package claudecode
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -76,16 +78,17 @@ func (c *ClaudeCode) Detect() bool {
 // skills/ → .claude/skills/ (recursive, preserves subdirs)
 // commands/ → .claude/commands/
 // agents/ → .claude/agents/
-func (c *ClaudeCode) Install(ctx context.Context, opts target.InstallOpts) error {
+// Returns the list of files written.
+func (c *ClaudeCode) Install(ctx context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return nil, err
 	}
 
 	root := opts.Dir
 	if root == "" {
 		home, err := c.userHomeFunc()
 		if err != nil {
-			return fmt.Errorf("home dir: %w", err)
+			return nil, fmt.Errorf("home dir: %w", err)
 		}
 
 		root = home
@@ -95,7 +98,7 @@ func (c *ClaudeCode) Install(ctx context.Context, opts target.InstallOpts) error
 
 	for _, content := range []string{"skills", "commands", "agents"} {
 		if err := ctx.Err(); err != nil {
-			return err
+			return nil, err
 		}
 
 		srcDir := filepath.Join(opts.SourceDir, content)
@@ -106,21 +109,70 @@ func (c *ClaudeCode) Install(ctx context.Context, opts target.InstallOpts) error
 		dstDir := filepath.Join(claudeDir, content)
 
 		if err := copyTree(c.mkdirAllFunc, srcDir, dstDir); err != nil {
-			return fmt.Errorf("install %s: %w", content, err)
+			return nil, fmt.Errorf("install %s: %w", content, err)
 		}
 	}
 
 	settingsPath := filepath.Join(root, ".claude", "settings.json")
 
 	if err := c.installMCP(ctx, opts.SourceDir, settingsPath); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := c.installHooks(ctx, opts.SourceDir, settingsPath, opts.Name); err != nil {
-		return err
+		return nil, err
 	}
 
-	return c.installSettings(ctx, opts.SourceDir, settingsPath)
+	if err := c.installSettings(ctx, opts.SourceDir, settingsPath); err != nil {
+		return nil, err
+	}
+
+	files, err := collectInstalledFiles(root, claudeDir)
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
+// collectInstalledFiles walks claudeDir and returns all regular files with
+// paths relative to root and their SHA-256 digests. Returns nil when
+// claudeDir does not exist.
+func collectInstalledFiles(root, claudeDir string) ([]target.InstalledFile, error) {
+	if _, err := os.Stat(claudeDir); os.IsNotExist(err) {
+		return nil, nil
+	}
+
+	var files []target.InstalledFile
+
+	err := filepath.WalkDir(claudeDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return walkErr
+		}
+
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+
+		h := sha256.Sum256(data)
+		files = append(files, target.InstalledFile{
+			Path:   rel,
+			SHA256: hex.EncodeToString(h[:]),
+		})
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
 }
 
 // installMCP merges all mcp/*.json files from srcDir into settingsPath.

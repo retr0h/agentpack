@@ -29,7 +29,6 @@ import (
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/registry"
-	"github.com/retr0h/agentpack/pkg/target"
 )
 
 // StoreArchive exposes storeArchive for testing.
@@ -149,15 +148,6 @@ func NameFromSource(source string) string {
 // HumanSize exposes humanSize for testing.
 func HumanSize(bytes int64) string {
 	return humanSize(bytes)
-}
-
-// CollectTargetFiles exposes collectTargetFiles for testing.
-func CollectTargetFiles(
-	installDir string,
-	tgt target.Target,
-	srcDir string,
-) ([]registry.InstalledFile, error) {
-	return collectTargetFiles(installDir, tgt, srcDir)
 }
 
 // CopyFileAtomic exposes copyFileAtomic for testing.

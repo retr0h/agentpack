@@ -643,7 +643,7 @@ func TestAgent_Install(t *testing.T) {
 				Global:    tt.global,
 			}
 
-			err := a.Install(ctx, opts)
+			files, err := a.Install(ctx, opts)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -651,6 +651,7 @@ func TestAgent_Install(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			_ = files
 
 			if tt.check != nil {
 				checkBase := destBase
