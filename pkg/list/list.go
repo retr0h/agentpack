@@ -65,13 +65,20 @@ const (
 	StatusEmpty   Status = "empty"
 )
 
+// TargetInfo holds a target name and the number of files installed for it.
+type TargetInfo struct {
+	Name      string `json:"name"`
+	FileCount int    `json:"fileCount"`
+}
+
 // Entry represents a single installed package.
 type Entry struct {
 	Name      string         `json:"name"`
 	Version   string         `json:"version"`
 	SHA       string         `json:"sha"`
 	Source    string         `json:"source"`
-	Targets   string         `json:"targets"`
+	Targets   []TargetInfo   `json:"targets"`
+	Skills    []string       `json:"skills"`
 	Installed string         `json:"installed"`
 	Scope     registry.Scope `json:"scope"`
 	Status    Status         `json:"status"`
@@ -153,7 +160,8 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 			Version:   shortVersion(m.Version),
 			SHA:       shortSHA(m.SHA),
 			Source:    shortSource(m.Source),
-			Targets:   strings.Join(targets, ", "),
+			Targets:   targets,
+			Skills:    extractSkills(m),
 			Installed: formatDate(m.Installed),
 			Scope:     scope,
 			Status:    status,
@@ -212,23 +220,56 @@ func (l *Lister) RunGlobal() ([]GlobalEntry, error) {
 	return entries, nil
 }
 
-func collectTargets(m *registry.PackageManifest) []string {
-	seen := make(map[string]bool)
+func collectTargets(m *registry.PackageManifest) []TargetInfo {
+	counts := make(map[string]int)
 
 	for _, f := range m.Files {
-		if !seen[f.Target] {
-			seen[f.Target] = true
-		}
+		counts[f.Target]++
 	}
 
-	targets := make([]string, 0, len(seen))
-	for t := range seen {
+	targets := make([]string, 0, len(counts))
+	for t := range counts {
 		targets = append(targets, t)
 	}
 
 	slices.Sort(targets)
 
-	return targets
+	infos := make([]TargetInfo, len(targets))
+	for i, t := range targets {
+		infos[i] = TargetInfo{Name: t, FileCount: counts[t]}
+	}
+
+	return infos
+}
+
+// extractSkills scans file paths for the pattern */skills/{skill-name}/* and
+// returns a sorted, deduplicated slice of skill names found across all targets.
+func extractSkills(m *registry.PackageManifest) []string {
+	seen := make(map[string]bool)
+
+	for _, f := range m.Files {
+		// Normalise separators so we can split cleanly on /.
+		normalized := filepath.ToSlash(f.Path)
+		parts := strings.Split(normalized, "/")
+
+		for i, part := range parts {
+			if part == "skills" && i+1 < len(parts) {
+				skillName := parts[i+1]
+				if skillName != "" {
+					seen[skillName] = true
+				}
+			}
+		}
+	}
+
+	skills := make([]string, 0, len(seen))
+	for s := range seen {
+		skills = append(skills, s)
+	}
+
+	slices.Sort(skills)
+
+	return skills
 }
 
 func shortSHA(sha string) string {

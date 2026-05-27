@@ -52,11 +52,12 @@ import (
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
-// Registry loads and removes package manifests from the registry store.
+// Registry loads, saves, and removes package manifests from the registry store.
 // Implement this interface to inject a test double in place of the default
-// registry.Load / registry.Remove functions.
+// registry.Load / registry.Save / registry.Remove functions.
 type Registry interface {
 	Load(name string) (*registry.PackageManifest, error)
+	Save(m *registry.PackageManifest) error
 	Remove(name string) error
 }
 
@@ -74,6 +75,11 @@ type Options struct {
 	// Name is the plugin identifier to remove.
 	Name string
 
+	// Skill, when non-empty, restricts deletion to files whose path contains
+	// the segment /skills/{Skill}/. The registry entry is updated (not
+	// deleted) so remaining skills from the package are preserved.
+	Skill string
+
 	// Global indicates the plugin was installed globally (into the agent's home
 	// directory). Reserved for future use — the registry manifest already
 	// stores the absolute install path.
@@ -84,7 +90,7 @@ type Options struct {
 	OnStep func(Step)
 
 	// Registry overrides the registry backend. When nil the default
-	// registry.Load / registry.Remove implementation is used.
+	// registry.Load / registry.Save / registry.Remove implementation is used.
 	Registry Registry
 }
 
@@ -117,6 +123,10 @@ func (defaultRegistry) Load(name string) (*registry.PackageManifest, error) {
 	return registry.New().Load(name)
 }
 
+func (defaultRegistry) Save(m *registry.PackageManifest) error {
+	return registry.New().Save(m)
+}
+
 func (defaultRegistry) Remove(name string) error {
 	return registry.New().Remove(name)
 }
@@ -129,6 +139,13 @@ func New() *Remover { return &Remover{} }
 
 // Run removes the named plugin using the registry manifest to determine
 // exactly which files to delete. It never walks directories.
+//
+// When opts.Skill is set, only files whose path contains the segment
+// /skills/{Skill}/ are deleted. The registry manifest is updated to reflect
+// the remaining files — the entry is NOT removed so other skills survive.
+//
+// When opts.Skill is empty all files are deleted and the registry entry is
+// removed entirely.
 func (r *Remover) Run(ctx context.Context, opts Options) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -147,7 +164,16 @@ func (r *Remover) Run(ctx context.Context, opts Options) (*Result, error) {
 
 	result := &Result{Name: opts.Name}
 
-	for _, f := range m.Files {
+	// When a skill filter is given, select only matching files.
+	filesToProcess := m.Files
+	if opts.Skill != "" {
+		filesToProcess = filterSkillFiles(m.Files, opts.Skill)
+	}
+
+	// Track which file paths were removed so we can update the manifest.
+	removedPaths := make(map[string]bool)
+
+	for _, f := range filesToProcess {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -176,16 +202,50 @@ func (r *Remover) Run(ctx context.Context, opts Options) (*Result, error) {
 			return nil, fmt.Errorf("remove %s: %w", absPath, removeErr)
 		}
 
+		removedPaths[absPath] = true
 		result.Removed = append(result.Removed, RemovedFile{Path: absPath})
 		emitStep(opts, Step{Path: absPath, Skipped: false})
 	}
 
-	// Remove the registry manifest.
-	if err := reg.Remove(opts.Name); err != nil {
-		return nil, fmt.Errorf("remove registry entry: %w", err)
+	if opts.Skill != "" {
+		// Partial removal: prune deleted files from the manifest and save it.
+		remaining := m.Files[:0]
+		for _, f := range m.Files {
+			absPath := filepath.Join(f.Dir, f.Path)
+			if !removedPaths[absPath] {
+				remaining = append(remaining, f)
+			}
+		}
+
+		m.Files = remaining
+
+		if saveErr := reg.Save(m); saveErr != nil {
+			return nil, fmt.Errorf("update registry manifest: %w", saveErr)
+		}
+	} else {
+		// Full removal: delete the registry entry entirely.
+		if err := reg.Remove(opts.Name); err != nil {
+			return nil, fmt.Errorf("remove registry entry: %w", err)
+		}
 	}
 
 	return result, nil
+}
+
+// filterSkillFiles returns only files whose path contains the segment
+// /skills/{skill}/ (using forward-slash normalisation).
+func filterSkillFiles(files []registry.InstalledFile, skill string) []registry.InstalledFile {
+	needle := "/skills/" + skill + "/"
+	var out []registry.InstalledFile
+
+	for _, f := range files {
+		normalized := filepath.ToSlash(f.Path)
+		if strings.Contains(normalized, needle) {
+			out = append(out, f)
+		}
+	}
+
+	return out
 }
 
 // emitStep calls opts.OnStep when the callback is set.

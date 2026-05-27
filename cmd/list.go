@@ -22,6 +22,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -91,33 +92,55 @@ func listInstalled(cmd *cobra.Command) error {
 		return nil
 	}
 
-	names := make([]string, len(entries))
-	versions := make([]string, len(entries))
-	shas := make([]string, len(entries))
-	targets := make([]string, len(entries))
-	scopes := make([]string, len(entries))
-	statuses := make([]string, len(entries))
-	sources := make([]string, len(entries))
-
 	for i, e := range entries {
-		names[i] = e.Name
-		versions[i] = e.Version
-		shas[i] = e.SHA
-		targets[i] = e.Targets
-		scopes[i] = string(e.Scope)
-		statuses[i] = string(e.Status)
-		sources[i] = e.Source
-	}
+		// Package header: name (accent) + source (muted) on one line.
+		cli.Printf(
+			out,
+			"%s  %s\n",
+			cli.Accent(out, e.Name),
+			cli.Mute(out, e.Source),
+		)
 
-	cli.Table(out, []cli.TableColumn{
-		{Header: "NAME", Values: names, Accent: true},
-		{Header: "VERSION", Values: versions},
-		{Header: "SHA", Values: shas, Muted: true},
-		{Header: "TARGETS", Values: targets, Tag: true},
-		{Header: "SCOPE", Values: scopes, Muted: true},
-		{Header: "STATUS", Values: statuses},
-		{Header: "SOURCE", Values: sources, Muted: true},
-	})
+		// Skills — one per line with tree connectors (white, no accent).
+		totalRows := len(e.Skills) + len(e.Targets)
+		row := 0
+
+		for _, skill := range e.Skills {
+			row++
+			prefix := "  ├─"
+			if row == totalRows {
+				prefix = "  └─"
+			}
+
+			cli.Printf(out, "%s %s\n", cli.Mute(out, prefix), skill)
+		}
+
+		// Targets with file count.
+		for _, ti := range e.Targets {
+			row++
+			prefix := "  ├─"
+			if row == totalRows {
+				prefix = "  └─"
+			}
+
+			detail := cli.Mute(
+				out,
+				fmt.Sprintf("(%d %s)", ti.FileCount, cli.Plural(ti.FileCount, "file", "files")),
+			)
+			cli.Printf(
+				out,
+				"%s %s  %s\n",
+				cli.Mute(out, prefix),
+				cli.Tag(out, ti.Name),
+				detail,
+			)
+		}
+
+		// Blank line between packages (but not after the last).
+		if i < len(entries)-1 {
+			cli.Print(out, "")
+		}
+	}
 
 	cli.Printf(
 		out, "\n%d %s installed\n",

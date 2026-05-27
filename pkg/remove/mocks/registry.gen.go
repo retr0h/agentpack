@@ -5,6 +5,7 @@
 //
 //	mockgen -destination=registry.gen.go -package=mocks github.com/retr0h/agentpack/pkg/remove Registry
 //
+// NOTE: Save method added manually to match the updated Registry interface.
 
 // Package mocks is a generated GoMock package.
 package mocks
@@ -67,4 +68,18 @@ func (m *MockRegistry) Remove(name string) error {
 func (mr *MockRegistryMockRecorder) Remove(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockRegistry)(nil).Remove), name)
+}
+
+// Save mocks base method.
+func (m *MockRegistry) Save(manifest *registry.PackageManifest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Save", manifest)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Save indicates an expected call of Save.
+func (mr *MockRegistryMockRecorder) Save(manifest any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Save", reflect.TypeOf((*MockRegistry)(nil).Save), manifest)
 }

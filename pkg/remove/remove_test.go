@@ -340,6 +340,126 @@ func TestRun(t *testing.T) {
 			},
 			wantErr: "remove",
 		},
+		{
+			name: "partial removal with Skill removes only matching files and saves manifest",
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
+				skillContent := []byte("# kubernetes specialist\n")
+				otherContent := []byte("# codex\n")
+
+				skillFile := filepath.Join(pluginDir, "skills", "kubernetes-specialist", "SKILL.md")
+				require.NoError(t, os.MkdirAll(filepath.Dir(skillFile), 0o755))
+				require.NoError(t, os.WriteFile(skillFile, skillContent, 0o644))
+
+				otherFile := filepath.Join(pluginDir, "skills", "codex", "SKILL.md")
+				require.NoError(t, os.MkdirAll(filepath.Dir(otherFile), 0o755))
+				require.NoError(t, os.WriteFile(otherFile, otherContent, 0o644))
+
+				m := &registry.PackageManifest{
+					Name:   "partial-plugin",
+					Source: "github.com/org/repo",
+					Files: []registry.InstalledFile{
+						{
+							Path:   "skills/kubernetes-specialist/SKILL.md",
+							SHA256: sha256Of(skillContent),
+							Target: "claude-code",
+							Dir:    pluginDir,
+						},
+						{
+							Path:   "skills/codex/SKILL.md",
+							SHA256: sha256Of(otherContent),
+							Target: "claude-code",
+							Dir:    pluginDir,
+						},
+					},
+				}
+
+				reg.EXPECT().Load("partial-plugin").Return(m, nil)
+				// Save is called (not Remove) for partial removal.
+				reg.EXPECT().Save(gomock.Any()).Return(nil)
+
+				return m
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.Name = "partial-plugin"
+				opts.Skill = "kubernetes-specialist"
+			},
+			wantRemLen: 1,
+			wantSkpLen: 0,
+			checkFiles: func(t *testing.T, pluginDir string) {
+				t.Helper()
+				// kubernetes-specialist file must be deleted.
+				_, err := os.Stat(filepath.Join(pluginDir, "skills", "kubernetes-specialist", "SKILL.md"))
+				assert.True(t, os.IsNotExist(err))
+				// codex file must remain.
+				_, err = os.Stat(filepath.Join(pluginDir, "skills", "codex", "SKILL.md"))
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "partial removal with Skill set but no matching files removes nothing and saves manifest",
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
+				content := []byte("# codex\n")
+				filePath := filepath.Join(pluginDir, "skills", "codex", "SKILL.md")
+				require.NoError(t, os.MkdirAll(filepath.Dir(filePath), 0o755))
+				require.NoError(t, os.WriteFile(filePath, content, 0o644))
+
+				m := &registry.PackageManifest{
+					Name:   "nomatch-plugin",
+					Source: "github.com/org/repo",
+					Files: []registry.InstalledFile{
+						{
+							Path:   "skills/codex/SKILL.md",
+							SHA256: sha256Of(content),
+							Target: "claude-code",
+							Dir:    pluginDir,
+						},
+					},
+				}
+
+				reg.EXPECT().Load("nomatch-plugin").Return(m, nil)
+				reg.EXPECT().Save(gomock.Any()).Return(nil)
+
+				return m
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.Name = "nomatch-plugin"
+				opts.Skill = "nonexistent-skill"
+			},
+			wantRemLen: 0,
+			wantSkpLen: 0,
+		},
+		{
+			name: "partial removal Save failure returns wrapped error",
+			setupMocks: func(reg *removemocks.MockRegistry, pluginDir string) *registry.PackageManifest {
+				content := []byte("# skill\n")
+				filePath := filepath.Join(pluginDir, "skills", "my-skill", "SKILL.md")
+				require.NoError(t, os.MkdirAll(filepath.Dir(filePath), 0o755))
+				require.NoError(t, os.WriteFile(filePath, content, 0o644))
+
+				m := &registry.PackageManifest{
+					Name:   "save-fail-plugin",
+					Source: "github.com/org/repo",
+					Files: []registry.InstalledFile{
+						{
+							Path:   "skills/my-skill/SKILL.md",
+							SHA256: sha256Of(content),
+							Target: "claude-code",
+							Dir:    pluginDir,
+						},
+					},
+				}
+
+				reg.EXPECT().Load("save-fail-plugin").Return(m, nil)
+				reg.EXPECT().Save(gomock.Any()).Return(errors.New("disk full"))
+
+				return m
+			},
+			extraOpts: func(opts *remove.Options) {
+				opts.Name = "save-fail-plugin"
+				opts.Skill = "my-skill"
+			},
+			wantErr: "update registry manifest",
+		},
 	}
 
 	for _, tt := range tests {

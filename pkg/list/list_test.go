@@ -367,6 +367,52 @@ func TestRunWithRegistry(t *testing.T) {
 			},
 			wantCount: 1,
 		},
+		{
+			name: "skills are extracted from file paths containing /skills/ segment",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{
+						Name:   "skills-pkg",
+						Source: "github.com/org/skills-pkg",
+						Files: []registry.InstalledFile{
+							{
+								Path:   ".claude/skills/kubernetes-specialist/SKILL.md",
+								Target: "claude-code",
+								Dir:    "/tmp",
+							},
+							{
+								Path:   ".agents/skills/claude-skills/kubernetes-specialist/SKILL.md",
+								Target: "agents",
+								Dir:    "/tmp",
+							},
+							{
+								Path:   ".claude/skills/codex/SKILL.md",
+								Target: "claude-code",
+								Dir:    "/tmp",
+							},
+						},
+					},
+				}, nil)
+			},
+			wantCount: 1,
+		},
+		{
+			name: "target file counts are computed per target",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{
+						Name:   "counted-targets",
+						Source: "github.com/org/counted",
+						Files: []registry.InstalledFile{
+							{Path: "a.md", Target: "claude-code", Dir: "/tmp"},
+							{Path: "b.md", Target: "claude-code", Dir: "/tmp"},
+							{Path: "c.md", Target: "cursor", Dir: "/tmp"},
+						},
+					},
+				}, nil)
+			},
+			wantCount: 1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -404,6 +450,16 @@ func TestRunWithRegistry(t *testing.T) {
 				case "nofiles-pkg":
 					assert.Equal(t, registry.ScopeLocal, entries[0].Scope)
 					assert.Equal(t, list.StatusEmpty, entries[0].Status)
+				case "skills-pkg":
+					assert.Equal(t, []string{"claude-skills", "codex", "kubernetes-specialist"}, entries[0].Skills)
+				case "counted-targets":
+					require.Len(t, entries[0].Targets, 2)
+					byName := make(map[string]int)
+					for _, ti := range entries[0].Targets {
+						byName[ti.Name] = ti.FileCount
+					}
+					assert.Equal(t, 2, byName["claude-code"])
+					assert.Equal(t, 1, byName["cursor"])
 				}
 			}
 
@@ -528,6 +584,86 @@ func TestRun(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Len(t, entries, tt.wantCount)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestExtractSkillsViaRunWithRegistry covers the skills extraction logic
+// through public API.
+// --------------------------------------------------------------------------
+
+func TestExtractSkillsViaRunWithRegistry(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		files      []registry.InstalledFile
+		wantSkills []string
+	}{
+		{
+			name: "claude path skills/name/SKILL.md extracts name",
+			files: []registry.InstalledFile{
+				{Path: ".claude/skills/kubernetes-specialist/SKILL.md", Target: "claude-code", Dir: "/tmp"},
+			},
+			wantSkills: []string{"kubernetes-specialist"},
+		},
+		{
+			name: "agents path extracts intermediate skill dir not package dir",
+			files: []registry.InstalledFile{
+				{Path: ".agents/skills/claude-skills/kubernetes-specialist/SKILL.md", Target: "agents", Dir: "/tmp"},
+			},
+			wantSkills: []string{"claude-skills"},
+		},
+		{
+			name: "multiple skills across multiple targets are deduplicated and sorted",
+			files: []registry.InstalledFile{
+				{Path: ".claude/skills/codex/SKILL.md", Target: "claude-code", Dir: "/tmp"},
+				{Path: ".claude/skills/kubernetes-specialist/SKILL.md", Target: "claude-code", Dir: "/tmp"},
+				{Path: ".cursor/skills/codex/SKILL.md", Target: "cursor", Dir: "/tmp"},
+			},
+			wantSkills: []string{"codex", "kubernetes-specialist"},
+		},
+		{
+			name: "paths without skills segment produce empty skills",
+			files: []registry.InstalledFile{
+				{Path: ".claude/CLAUDE.md", Target: "claude-code", Dir: "/tmp"},
+				{Path: "README.md", Target: "claude-code", Dir: "/tmp"},
+			},
+			wantSkills: nil,
+		},
+		{
+			name: "skills segment at last position with no following component is ignored",
+			files: []registry.InstalledFile{
+				{Path: "root/skills", Target: "claude-code", Dir: "/tmp"},
+			},
+			wantSkills: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			reg := listmocks.NewMockRegistry(ctrl)
+			reg.EXPECT().List().Return([]*registry.PackageManifest{
+				{
+					Name:  "skill-test-pkg",
+					Files: tt.files,
+				},
+			}, nil)
+
+			l := list.New()
+			entries, err := l.RunWithRegistry(reg)
+			require.NoError(t, err)
+			require.Len(t, entries, 1)
+
+			if tt.wantSkills == nil {
+				assert.Empty(t, entries[0].Skills)
+			} else {
+				assert.Equal(t, tt.wantSkills, entries[0].Skills)
+			}
 		})
 	}
 }

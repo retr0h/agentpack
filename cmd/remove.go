@@ -43,21 +43,29 @@ var pkgRemover remover = pkgremove.New()
 var delGlobal bool
 
 var delCmd = &cobra.Command{
-	Use:   "del <name>",
+	Use:   "del <name[@skill]>",
 	Short: "Delete an installed agentpack plugin",
 	Long: `Delete an installed agentpack plugin. Only the exact files recorded in
 the plugin registry are deleted. User-modified files are skipped. The .git
-directory is never touched.`,
+directory is never touched.
+
+To remove a single skill from a package without deleting the entire package,
+append @skill to the package name: agentpack del my-package@my-skill`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		name := args[0]
+		name, skill := parseAtSkill(args[0])
+
+		displayName := name
+		if skill != "" {
+			displayName = name + "@" + skill
+		}
 
 		var onStep func(pkgremove.Step)
 		if outputFormat != "json" {
-			cli.Header(out, "deleting", name)
+			cli.Header(out, "deleting", displayName)
 			onStep = func(s pkgremove.Step) {
 				if s.Skipped {
 					cli.Printf(out, "  %s %s\n", cli.Mute(out, "skipped"), cli.Mute(out, s.Path))
@@ -69,6 +77,7 @@ directory is never touched.`,
 
 		result, err := pkgRemover.Run(ctx, pkgremove.Options{
 			Name:   name,
+			Skill:  skill,
 			Global: delGlobal,
 			OnStep: onStep,
 		})
@@ -76,7 +85,10 @@ directory is never touched.`,
 			return err
 		}
 
-		removeManifests(name)
+		// Only clean up manifests on full package removal (no skill filter).
+		if skill == "" {
+			removeManifests(name)
+		}
 
 		if outputFormat == "json" {
 			return jsonOutput(out, result)
