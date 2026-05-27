@@ -74,7 +74,8 @@ var searchCmd = &cobra.Command{
 			}
 		}
 
-		cli.Printf(out, "\n%s %s\n\n",
+		cli.Printf(
+			out, "\n%s %s\n\n",
 			cli.Mute(out, "Install with"),
 			"agentpack add <source@skill>",
 		)
@@ -82,7 +83,14 @@ var searchCmd = &cobra.Command{
 			installCmd := r.Source + "@" + r.Name
 			installs := cli.Info(out, formatInstalls(r.Installs))
 			link := cli.Mute(out, "https://skills.sh/"+r.Source+"/"+r.Name)
-			cli.Printf(out, "%s %s\n%s %s\n\n", cli.Accent(out, installCmd), installs, cli.Mute(out, "└"), link)
+			cli.Printf(
+				out,
+				"%s %s\n%s %s\n\n",
+				cli.Accent(out, installCmd),
+				installs,
+				cli.Mute(out, "└"),
+				link,
+			)
 		}
 
 		return nil
