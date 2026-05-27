@@ -303,12 +303,7 @@ func resolveTargets(names []string) ([]target.Target, error) {
 	for _, name := range names {
 		t, ok := byName[name]
 		if !ok {
-			valid := make([]string, len(all))
-			for i, a := range all {
-				valid[i] = a.Name()
-			}
-
-			return nil, fmt.Errorf("unknown target %q (valid: %s)", name, strings.Join(valid, ", "))
+			return nil, fmt.Errorf("unknown target %q (see agentpack list --targets)", name)
 		}
 
 		resolved = append(resolved, t)
