@@ -71,6 +71,12 @@ type TargetInfo struct {
 	FileCount int    `json:"fileCount"`
 }
 
+// SkillInfo holds a skill name and which targets it was installed to.
+type SkillInfo struct {
+	Name    string   `json:"name"`
+	Targets []string `json:"targets"`
+}
+
 // Entry represents a single installed package.
 type Entry struct {
 	Name      string         `json:"name"`
@@ -78,7 +84,7 @@ type Entry struct {
 	SHA       string         `json:"sha"`
 	Source    string         `json:"source"`
 	Targets   []TargetInfo   `json:"targets"`
-	Skills    []string       `json:"skills"`
+	Skills    []SkillInfo    `json:"skills"`
 	Installed string         `json:"installed"`
 	Scope     registry.Scope `json:"scope"`
 	Status    Status         `json:"status"`
@@ -244,30 +250,50 @@ func collectTargets(m *registry.PackageManifest) []TargetInfo {
 
 // extractSkills scans file paths for the pattern */skills/{skill-name}/* and
 // returns a sorted, deduplicated slice of skill names found across all targets.
-func extractSkills(m *registry.PackageManifest) []string {
-	seen := make(map[string]bool)
+func extractSkills(m *registry.PackageManifest) []SkillInfo {
+	// Map skill name → set of target names.
+	skillTargets := make(map[string]map[string]bool)
 
 	for _, f := range m.Files {
-		// Normalise separators so we can split cleanly on /.
 		normalized := filepath.ToSlash(f.Path)
 		parts := strings.Split(normalized, "/")
 
 		for i, part := range parts {
-			if part == "skills" && i+1 < len(parts) {
-				skillName := parts[i+1]
-				if skillName != "" {
-					seen[skillName] = true
+			if part != "skills" || i+1 >= len(parts) {
+				continue
+			}
+
+			skillName := parts[i+1]
+
+			// .agents/skills/{repo}/{skill}/ — skip repo level
+			if i > 0 && parts[i-1] == ".agents" && i+2 < len(parts) {
+				skillName = parts[i+2]
+			}
+
+			if skillName != "" {
+				if skillTargets[skillName] == nil {
+					skillTargets[skillName] = make(map[string]bool)
 				}
+
+				skillTargets[skillName][f.Target] = true
 			}
 		}
 	}
 
-	skills := make([]string, 0, len(seen))
-	for s := range seen {
-		skills = append(skills, s)
+	skills := make([]SkillInfo, 0, len(skillTargets))
+	for name, tgts := range skillTargets {
+		targets := make([]string, 0, len(tgts))
+		for t := range tgts {
+			targets = append(targets, t)
+		}
+
+		slices.Sort(targets)
+		skills = append(skills, SkillInfo{Name: name, Targets: targets})
 	}
 
-	slices.Sort(skills)
+	slices.SortFunc(skills, func(a, b SkillInfo) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 
 	return skills
 }

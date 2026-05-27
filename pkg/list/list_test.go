@@ -451,11 +451,11 @@ func TestRunWithRegistry(t *testing.T) {
 					assert.Equal(t, registry.ScopeLocal, entries[0].Scope)
 					assert.Equal(t, list.StatusEmpty, entries[0].Status)
 				case "skills-pkg":
-					assert.Equal(
-						t,
-						[]string{"claude-skills", "codex", "kubernetes-specialist"},
-						entries[0].Skills,
-					)
+					skillNames := make([]string, len(entries[0].Skills))
+					for k, s := range entries[0].Skills {
+						skillNames[k] = s.Name
+					}
+					assert.Equal(t, []string{"codex", "kubernetes-specialist"}, skillNames)
 				case "counted-targets":
 					require.Len(t, entries[0].Targets, 2)
 					byName := make(map[string]int)
@@ -601,12 +601,13 @@ func TestExtractSkillsViaRunWithRegistry(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		files      []registry.InstalledFile
-		wantSkills []string
+		name           string
+		files          []registry.InstalledFile
+		wantSkillNames []string
+		wantTargets    map[string][]string
 	}{
 		{
-			name: "claude path skills/name/SKILL.md extracts name",
+			name: "claude path skills/name/SKILL.md extracts name with target",
 			files: []registry.InstalledFile{
 				{
 					Path:   ".claude/skills/kubernetes-specialist/SKILL.md",
@@ -614,21 +615,23 @@ func TestExtractSkillsViaRunWithRegistry(t *testing.T) {
 					Dir:    "/tmp",
 				},
 			},
-			wantSkills: []string{"kubernetes-specialist"},
+			wantSkillNames: []string{"kubernetes-specialist"},
+			wantTargets:    map[string][]string{"kubernetes-specialist": {"claude-code"}},
 		},
 		{
-			name: "agents path extracts intermediate skill dir not package dir",
+			name: "agents path skips repo dir and extracts skill name",
 			files: []registry.InstalledFile{
 				{
 					Path:   ".agents/skills/claude-skills/kubernetes-specialist/SKILL.md",
-					Target: "agents",
+					Target: "universal",
 					Dir:    "/tmp",
 				},
 			},
-			wantSkills: []string{"claude-skills"},
+			wantSkillNames: []string{"kubernetes-specialist"},
+			wantTargets:    map[string][]string{"kubernetes-specialist": {"universal"}},
 		},
 		{
-			name: "multiple skills across multiple targets are deduplicated and sorted",
+			name: "multiple skills across targets are deduplicated and sorted",
 			files: []registry.InstalledFile{
 				{Path: ".claude/skills/codex/SKILL.md", Target: "claude-code", Dir: "/tmp"},
 				{
@@ -638,22 +641,25 @@ func TestExtractSkillsViaRunWithRegistry(t *testing.T) {
 				},
 				{Path: ".cursor/skills/codex/SKILL.md", Target: "cursor", Dir: "/tmp"},
 			},
-			wantSkills: []string{"codex", "kubernetes-specialist"},
+			wantSkillNames: []string{"codex", "kubernetes-specialist"},
+			wantTargets: map[string][]string{
+				"codex":                 {"claude-code", "cursor"},
+				"kubernetes-specialist": {"claude-code"},
+			},
 		},
 		{
 			name: "paths without skills segment produce empty skills",
 			files: []registry.InstalledFile{
 				{Path: ".claude/CLAUDE.md", Target: "claude-code", Dir: "/tmp"},
-				{Path: "README.md", Target: "claude-code", Dir: "/tmp"},
 			},
-			wantSkills: nil,
+			wantSkillNames: nil,
 		},
 		{
-			name: "skills segment at last position with no following component is ignored",
+			name: "skills segment at last position is ignored",
 			files: []registry.InstalledFile{
 				{Path: "root/skills", Target: "claude-code", Dir: "/tmp"},
 			},
-			wantSkills: nil,
+			wantSkillNames: nil,
 		},
 	}
 
@@ -675,10 +681,20 @@ func TestExtractSkillsViaRunWithRegistry(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, entries, 1)
 
-			if tt.wantSkills == nil {
+			if tt.wantSkillNames == nil {
 				assert.Empty(t, entries[0].Skills)
 			} else {
-				assert.Equal(t, tt.wantSkills, entries[0].Skills)
+				names := make([]string, len(entries[0].Skills))
+				for k, s := range entries[0].Skills {
+					names[k] = s.Name
+				}
+				assert.Equal(t, tt.wantSkillNames, names)
+
+				for _, s := range entries[0].Skills {
+					if want, ok := tt.wantTargets[s.Name]; ok {
+						assert.Equal(t, want, s.Targets)
+					}
+				}
 			}
 		})
 	}

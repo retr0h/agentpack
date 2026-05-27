@@ -95,7 +95,6 @@ func listInstalled(cmd *cobra.Command) error {
 	names := make([]string, len(entries))
 	versions := make([]string, len(entries))
 	shas := make([]string, len(entries))
-	targets := make([]string, len(entries))
 	scopes := make([]string, len(entries))
 	statuses := make([]string, len(entries))
 	sources := make([]string, len(entries))
@@ -104,11 +103,6 @@ func listInstalled(cmd *cobra.Command) error {
 		names[i] = e.Name
 		versions[i] = e.Version
 		shas[i] = e.SHA
-		tgtNames := make([]string, len(e.Targets))
-		for j, ti := range e.Targets {
-			tgtNames[j] = ti.Name
-		}
-		targets[i] = strings.Join(tgtNames, ", ")
 		scopes[i] = string(e.Scope)
 		statuses[i] = string(e.Status)
 		sources[i] = e.Source
@@ -118,27 +112,25 @@ func listInstalled(cmd *cobra.Command) error {
 		{Header: "NAME", Values: names, Accent: true},
 		{Header: "VERSION", Values: versions},
 		{Header: "SHA", Values: shas, Muted: true},
-		{Header: "TARGETS", Values: targets, Tag: true},
 		{Header: "SCOPE", Values: scopes, Muted: true},
 		{Header: "STATUS", Values: statuses},
 		{Header: "SOURCE", Values: sources, Muted: true},
 	})
 
-	for i, e := range entries {
-		cli.Print(out, "")
-
+	for _, e := range entries {
 		for j, skill := range e.Skills {
 			prefix := "  ├─"
 			if j == len(e.Skills)-1 {
 				prefix = "  └─"
 			}
 
-			cli.Printf(out, "%s %s\n", cli.Mute(out, prefix), skill)
-		}
-
-		// Blank line between packages (but not after the last).
-		if i < len(entries)-1 {
-			cli.Print(out, "")
+			tgtStr := cli.Tag(out, strings.Join(skill.Targets, ", "))
+			cli.Printf(out, "%s %s  %s %s\n",
+				cli.Mute(out, prefix),
+				skill.Name,
+				cli.Mute(out, "→"),
+				tgtStr,
+			)
 		}
 	}
 
