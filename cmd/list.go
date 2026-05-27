@@ -22,6 +22,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -129,19 +130,78 @@ func listInstalled(cmd *cobra.Command) error {
 			continue
 		}
 
-		for j, item := range e.Contents {
+		var skillCount int
+		var skillTargets []string
+		var nonSkills []list.ContentItem
+
+		for _, item := range e.Contents {
+			if item.Type == "skills" {
+				skillCount++
+				for _, t := range item.Targets {
+					found := false
+					for _, st := range skillTargets {
+						if st == t {
+							found = true
+							break
+						}
+					}
+					if !found {
+						skillTargets = append(skillTargets, t)
+					}
+				}
+			} else {
+				nonSkills = append(nonSkills, item)
+			}
+		}
+
+		var rows []struct {
+			label   string
+			targets string
+		}
+
+		if len(e.SelectedSkills) > 0 {
+			for _, item := range e.Contents {
+				if item.Type == "skills" {
+					rows = append(rows, struct {
+						label   string
+						targets string
+					}{
+						label:   item.Type + "/" + item.Name,
+						targets: strings.Join(item.Targets, ", "),
+					})
+				}
+			}
+		} else if skillCount > 0 {
+			rows = append(rows, struct {
+				label   string
+				targets string
+			}{
+				label:   fmt.Sprintf("%d %s", skillCount, cli.Plural(skillCount, "skill", "skills")),
+				targets: strings.Join(skillTargets, ", "),
+			})
+		}
+
+		for _, item := range nonSkills {
+			rows = append(rows, struct {
+				label   string
+				targets string
+			}{
+				label:   item.Type + "/" + item.Name,
+				targets: strings.Join(item.Targets, ", "),
+			})
+		}
+
+		for j, row := range rows {
 			prefix := "  ├─"
-			if j == len(e.Contents)-1 {
+			if j == len(rows)-1 {
 				prefix = "  └─"
 			}
 
-			label := item.Type + "/" + item.Name
-			tgtStr := cli.Tag(out, strings.Join(item.Targets, ", "))
 			cli.Printf(out, "%s %s  %s %s\n",
 				cli.Mute(out, prefix),
-				label,
+				row.label,
 				cli.Mute(out, "→"),
-				tgtStr,
+				cli.Tag(out, row.targets),
 			)
 		}
 	}
