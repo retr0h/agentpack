@@ -132,6 +132,11 @@ func removeManifests(name, skill string) {
 			_ = packages.Save(pkgPath, cfg)
 		}
 
+		if lf, loadErr := lock.Load(lockPath); loadErr == nil {
+			lf.RemoveSkill(name, skill)
+			_ = lock.Save(lockPath, lf)
+		}
+
 		return
 	}
 

@@ -19,52 +19,50 @@
 // DEALINGS IN THE SOFTWARE.
 
 // Package lock manages the agentpack.lock file that pins resolved package
-// SHAs for reproducible installs.
+// state for reproducible installs.
 package lock
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 )
 
+// LockedFile records a single installed file with its integrity hash.
+type LockedFile struct {
+	Path   string `yaml:"path" json:"path"`
+	SHA256 string `yaml:"sha256" json:"sha256"`
+	Target string `yaml:"target" json:"target"`
+}
+
 // LockedPackage records the resolved state of a single installed package.
 type LockedPackage struct {
-	// Name is the plugin identifier, matching the agentpack-packages.yaml entry.
-	Name string `yaml:"name"`
-
-	// Source is the git URL or archive path that was resolved.
-	Source string `yaml:"source"`
-
-	// Ref is the git ref that was requested (branch, tag, or SHA). Optional.
-	Ref string `yaml:"ref,omitempty"`
-
-	// SHA is the exact git commit SHA that was resolved and installed.
-	SHA string `yaml:"sha"`
-
-	// Resolved is the RFC3339 timestamp of when the package was resolved.
-	Resolved string `yaml:"resolved"`
+	Name     string       `yaml:"name" json:"name"`
+	Source   string       `yaml:"source" json:"source"`
+	Ref      string       `yaml:"ref,omitempty" json:"ref,omitempty"`
+	SHA      string       `yaml:"sha" json:"sha"`
+	Resolved string       `yaml:"resolved" json:"resolved"`
+	Skills   []string     `yaml:"skills,omitempty" json:"skills,omitempty"`
+	Targets  []string     `yaml:"targets,omitempty" json:"targets,omitempty"`
+	Files    []LockedFile `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 // Lockfile represents the full contents of an agentpack.lock file.
 type Lockfile struct {
-	// LockVersion is the schema version of this lockfile.
-	LockVersion int `yaml:"lockVersion"`
-
-	// Packages is the ordered list of resolved packages.
-	Packages []LockedPackage `yaml:"packages"`
+	LockVersion int             `yaml:"lockVersion" json:"lockVersion"`
+	Packages    []LockedPackage `yaml:"packages" json:"packages"`
 }
 
 // Load reads the lockfile at path. When the file does not exist an empty
-// Lockfile (with LockVersion 1) is returned without error, matching typical
-// lockfile semantics.
+// Lockfile (with LockVersion 2) is returned without error.
 func Load(path string) (*Lockfile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &Lockfile{LockVersion: 1}, nil
+			return &Lockfile{LockVersion: 2}, nil
 		}
 
 		return nil, fmt.Errorf("read lock file %s: %w", path, err)
@@ -96,11 +94,15 @@ func Save(path string, lf *Lockfile) error {
 	return nil
 }
 
-// Set inserts or replaces a LockedPackage entry. When an entry with the same
-// Name already exists it is overwritten in place; otherwise it is appended.
+// Set inserts or merges a LockedPackage entry. When an entry with the same
+// Name exists, files are merged (new files replace existing by path+target,
+// new files are appended), and skills/targets are merged and deduplicated.
 func (lf *Lockfile) Set(p LockedPackage) {
 	for i, existing := range lf.Packages {
 		if existing.Name == p.Name {
+			p.Files = mergeLockedFiles(existing.Files, p.Files)
+			p.Skills = mergeStrings(existing.Skills, p.Skills)
+			p.Targets = mergeStrings(existing.Targets, p.Targets)
 			lf.Packages[i] = p
 
 			return
@@ -110,8 +112,7 @@ func (lf *Lockfile) Set(p LockedPackage) {
 	lf.Packages = append(lf.Packages, p)
 }
 
-// Remove deletes the LockedPackage with the given name. It is a no-op when
-// the name does not exist.
+// Remove deletes the LockedPackage with the given name.
 func (lf *Lockfile) Remove(name string) {
 	updated := lf.Packages[:0]
 	for _, p := range lf.Packages {
@@ -123,8 +124,34 @@ func (lf *Lockfile) Remove(name string) {
 	lf.Packages = updated
 }
 
-// Find returns a pointer to the LockedPackage with the given name, or nil
-// when not found. The pointer references the slice element directly.
+// RemoveSkill removes a skill from an existing entry's Skills list and
+// prunes any files containing that skill name in their path.
+func (lf *Lockfile) RemoveSkill(name, skill string) {
+	p := lf.Find(name)
+	if p == nil {
+		return
+	}
+
+	remaining := make([]string, 0, len(p.Skills))
+	for _, s := range p.Skills {
+		if s != skill {
+			remaining = append(remaining, s)
+		}
+	}
+
+	p.Skills = remaining
+
+	var keptFiles []LockedFile
+	for _, f := range p.Files {
+		if !fileMatchesSkill(f.Path, skill) {
+			keptFiles = append(keptFiles, f)
+		}
+	}
+
+	p.Files = keptFiles
+}
+
+// Find returns a pointer to the LockedPackage with the given name, or nil.
 func (lf *Lockfile) Find(name string) *LockedPackage {
 	for i := range lf.Packages {
 		if lf.Packages[i].Name == name {
@@ -133,4 +160,73 @@ func (lf *Lockfile) Find(name string) *LockedPackage {
 	}
 
 	return nil
+}
+
+func fileMatchesSkill(path, skill string) bool {
+	return filepath.ToSlash(path) != "" &&
+		(contains(path, "/skills/"+skill+"/") || contains(path, "/skills/"+skill))
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && findSubstring(s, substr))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+
+	return false
+}
+
+func mergeLockedFiles(existing, incoming []LockedFile) []LockedFile {
+	type key struct {
+		Path   string
+		Target string
+	}
+
+	seen := make(map[key]int, len(existing))
+	merged := make([]LockedFile, len(existing))
+	copy(merged, existing)
+
+	for i, f := range merged {
+		seen[key{f.Path, f.Target}] = i
+	}
+
+	for _, f := range incoming {
+		k := key{f.Path, f.Target}
+		if idx, ok := seen[k]; ok {
+			merged[idx] = f
+		} else {
+			seen[k] = len(merged)
+			merged = append(merged, f)
+		}
+	}
+
+	return merged
+}
+
+func mergeStrings(a, b []string) []string {
+	if len(a) == 0 && len(b) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool, len(a)+len(b))
+	for _, s := range a {
+		seen[s] = true
+	}
+	for _, s := range b {
+		seen[s] = true
+	}
+
+	result := make([]string, 0, len(seen))
+	for s := range seen {
+		result = append(result, s)
+	}
+
+	sort.Strings(result)
+
+	return result
 }

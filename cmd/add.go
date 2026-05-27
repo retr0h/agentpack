@@ -196,11 +196,23 @@ func updateManifests(source string, skills []string, result *install.Result) err
 		lockSource = lockSource[:idx]
 	}
 
+	var lockedFiles []lock.LockedFile
+	var lockedTargets []string
+
+	if result.Dirs != nil {
+		for _, tgtName := range result.Dirs {
+			lockedTargets = append(lockedTargets, tgtName)
+		}
+	}
+
 	lp := lock.LockedPackage{
 		Name:     result.Name,
 		Source:   lockSource,
 		SHA:      result.SHA,
 		Resolved: time.Now().UTC().Format(time.RFC3339),
+		Skills:   skills,
+		Targets:  lockedTargets,
+		Files:    lockedFiles,
 	}
 
 	if pkg.Ref != "" {

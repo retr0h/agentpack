@@ -80,12 +80,12 @@ type ContentItem struct {
 
 // Entry represents a single installed package.
 type Entry struct {
-	Name      string         `json:"name"`
-	Version   string         `json:"version"`
-	SHA       string         `json:"sha"`
-	Source    string         `json:"source"`
-	Targets   []TargetInfo   `json:"targets"`
-	Contents       []ContentItem    `json:"contents"`
+	Name           string         `json:"name"`
+	Version        string         `json:"version"`
+	SHA            string         `json:"sha"`
+	Source         string         `json:"source"`
+	Targets        []TargetInfo   `json:"targets"`
+	Contents       []ContentItem  `json:"contents"`
 	SelectedSkills []string       `json:"selectedSkills,omitempty"`
 	Installed      string         `json:"installed"`
 	Scope          registry.Scope `json:"scope"`

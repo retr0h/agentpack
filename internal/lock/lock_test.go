@@ -47,13 +47,13 @@ func TestLoad(t *testing.T) {
 		wantErr     string
 	}{
 		{
-			name: "nonexistent file returns empty lockfile with version 1",
+			name: "nonexistent file returns empty lockfile with version 2",
 			setup: func(t *testing.T) string {
 				t.Helper()
 				return filepath.Join(t.TempDir(), "agentpack.lock")
 			},
 			wantLen:     0,
-			wantVersion: 1,
+			wantVersion: 2,
 		},
 		{
 			name: "valid lock file parsed correctly",
@@ -122,12 +122,12 @@ func TestSave(t *testing.T) {
 	}{
 		{
 			name: "writes empty lockfile",
-			lf:   &lock.Lockfile{LockVersion: 1},
+			lf:   &lock.Lockfile{LockVersion: 2},
 		},
 		{
 			name: "writes lockfile with packages",
 			lf: &lock.Lockfile{
-				LockVersion: 1,
+				LockVersion: 2,
 				Packages: []lock.LockedPackage{
 					{
 						Name:     "security-skills",
@@ -147,7 +147,7 @@ func TestSave(t *testing.T) {
 		},
 		{
 			name: "creates parent directories",
-			lf:   &lock.Lockfile{LockVersion: 1},
+			lf:   &lock.Lockfile{LockVersion: 2},
 		},
 	}
 
@@ -273,7 +273,7 @@ func TestSaveErrorPaths(t *testing.T) {
 			}
 
 			path := tt.setup(t)
-			err := lock.Save(path, &lock.Lockfile{LockVersion: 1})
+			err := lock.Save(path, &lock.Lockfile{LockVersion: 2})
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -338,7 +338,7 @@ func TestLockfile_Set(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			lf := &lock.Lockfile{LockVersion: 1, Packages: tt.initial}
+			lf := &lock.Lockfile{LockVersion: 2, Packages: tt.initial}
 			lf.Set(tt.set)
 
 			require.Len(t, lf.Packages, tt.wantLen)
@@ -391,7 +391,7 @@ func TestLockfile_Remove(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			lf := &lock.Lockfile{LockVersion: 1, Packages: tt.initial}
+			lf := &lock.Lockfile{LockVersion: 2, Packages: tt.initial}
 			lf.Remove(tt.remove)
 
 			assert.Len(t, lf.Packages, tt.wantLen)
@@ -439,7 +439,7 @@ func TestLockfile_Find(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			lf := &lock.Lockfile{LockVersion: 1, Packages: tt.initial}
+			lf := &lock.Lockfile{LockVersion: 2, Packages: tt.initial}
 			got := lf.Find(tt.find)
 
 			if tt.wantNil {
