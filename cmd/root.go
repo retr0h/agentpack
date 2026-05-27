@@ -48,6 +48,7 @@ func Execute() {
 	defer cancel()
 
 	rootCmd.SilenceUsage = true
+	rootCmd.SilenceErrors = true
 
 	rootCmd.PersistentFlags().
 		StringVarP(&outputFormat, "output", "o", "text", "output format (text, json)")
@@ -63,6 +64,8 @@ func Execute() {
 	})
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		out := rootCmd.ErrOrStderr()
+		cli.Printf(out, "  %s %s\n", cli.Err(out, "✗"), err.Error())
 		os.Exit(1)
 	}
 }
