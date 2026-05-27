@@ -92,27 +92,33 @@ func listInstalled(cmd *cobra.Command) error {
 		return nil
 	}
 
-	// Compute column widths for aligned header + data.
-	maxName := len("NAME")
-	for _, e := range entries {
-		if len(e.Name) > maxName {
-			maxName = len(e.Name)
-		}
-	}
-
-	cli.Printf(out, "%s\n", cli.Mute(out,
-		cli.Pad("NAME", maxName+2)+"VERSION  SHA      INSTALLED   SOURCE"))
+	names := make([]string, len(entries))
+	versions := make([]string, len(entries))
+	shas := make([]string, len(entries))
+	scopes := make([]string, len(entries))
+	statuses := make([]string, len(entries))
+	sources := make([]string, len(entries))
 
 	for i, e := range entries {
-		cli.Printf(
-			out,
-			"%s  %s  %s  %s  %s\n",
-			cli.Accent(out, cli.Pad(e.Name, maxName)),
-			cli.Pad(e.Version, 7),
-			cli.Mute(out, cli.Pad(e.SHA, 7)),
-			cli.Info(out, cli.Pad(e.Installed, 10)),
-			cli.Mute(out, e.Source),
-		)
+		names[i] = e.Name
+		versions[i] = e.Version
+		shas[i] = e.SHA
+		scopes[i] = string(e.Scope)
+		statuses[i] = string(e.Status)
+		sources[i] = e.Source
+	}
+
+	cli.Table(out, []cli.TableColumn{
+		{Header: "NAME", Values: names, Accent: true},
+		{Header: "VERSION", Values: versions},
+		{Header: "SHA", Values: shas, Muted: true},
+		{Header: "SCOPE", Values: scopes, Muted: true},
+		{Header: "STATUS", Values: statuses},
+		{Header: "SOURCE", Values: sources, Muted: true},
+	})
+
+	for i, e := range entries {
+		cli.Printf(out, "\n%s\n", cli.Accent(out, e.Name))
 
 		// Skills — one per line with tree connectors (white, no accent).
 		totalRows := len(e.Skills) + len(e.Targets)
