@@ -31,7 +31,7 @@
   "repos": [
     {
       "name": "agentpack",
-      "description": "The native package manager for agentskills.io — 50+ AI coding agents.",
+      "description": "The native package manager for agentskills.io.",
       "topics": ["agentskills", "ai-agents", "package-manager", "skills", "claude-code", "cursor", "copilot", "codex", "gemini-cli", "windsurf", "go", "golang", "cli"]
     }
   ]
