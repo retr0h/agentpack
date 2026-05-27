@@ -380,14 +380,14 @@ func TestRunWithRegistry(t *testing.T) {
 			if len(entries) == 1 {
 				switch entries[0].Name {
 				case "ok-pkg":
-					assert.Equal(t, "ok", entries[0].Status)
+					assert.Equal(t, list.StatusOK, entries[0].Status)
 				case "gone-pkg":
-					assert.Equal(t, "missing", entries[0].Status)
+					assert.Equal(t, list.StatusMissing, entries[0].Status)
 				case "dir-pkg":
-					assert.Equal(t, "local", entries[0].Scope)
+					assert.Equal(t, registry.ScopeLocal, entries[0].Scope)
 				case "nofiles-pkg":
-					assert.Equal(t, "local", entries[0].Scope)
-					assert.Equal(t, "empty", entries[0].Status)
+					assert.Equal(t, registry.ScopeLocal, entries[0].Scope)
+					assert.Equal(t, list.StatusEmpty, entries[0].Status)
 				}
 			}
 

@@ -415,9 +415,18 @@ func installFromDir(
 	}
 
 	// Save registry manifest.
-	scope := "local"
+	scope := registry.ScopeLocal
 	if opts.Global {
-		scope = "global"
+		scope = registry.ScopeGlobal
+	}
+
+	if len(allFiles) == 0 {
+		return &Result{
+			Name:                  meta.Name,
+			Version:               meta.Version,
+			SHA:                   shortSHA(meta.GitCommitSHA),
+			ContentClassification: meta.Content,
+		}, nil
 	}
 
 	manifest := &registry.PackageManifest{

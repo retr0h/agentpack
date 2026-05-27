@@ -101,7 +101,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "installed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusInstalled, results[0].Status)
 				assert.Equal(t, "my-plugin", results[0].Name)
 				assert.Equal(t, "1.0.0", results[0].Version)
 			},
@@ -123,7 +123,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "failed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusFailed, results[0].Status)
 				assert.NotNil(t, results[0].Err)
 			},
 		},
@@ -157,7 +157,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "installed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusInstalled, results[0].Status)
 				assert.Equal(t, "git-plugin", results[0].Name)
 			},
 		},
@@ -192,7 +192,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "installed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusInstalled, results[0].Status)
 				assert.Equal(t, "locked-plugin", results[0].Name)
 			},
 		},
@@ -227,7 +227,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "installed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusInstalled, results[0].Status)
 				assert.Equal(t, "unlocked-plugin", results[0].Name)
 			},
 		},
@@ -253,7 +253,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "failed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusFailed, results[0].Status)
 				assert.NotNil(t, results[0].Err)
 			},
 		},
@@ -283,7 +283,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "failed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusFailed, results[0].Status)
 				assert.NotNil(t, results[0].Err)
 			},
 		},
@@ -324,8 +324,8 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 2)
-				assert.Equal(t, "installed", results[0].Status)
-				assert.Equal(t, "failed", results[1].Status)
+				assert.Equal(t, pkgsync.StatusInstalled, results[0].Status)
+				assert.Equal(t, pkgsync.StatusFailed, results[1].Status)
 				assert.NotNil(t, results[1].Err)
 			},
 		},
@@ -388,7 +388,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "failed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusFailed, results[0].Status)
 				assert.NotNil(t, results[0].Err)
 			},
 		},
@@ -413,7 +413,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "installed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusInstalled, results[0].Status)
 			},
 		},
 		{
@@ -436,7 +436,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "failed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusFailed, results[0].Status)
 				assert.NotNil(t, results[0].Err)
 			},
 		},
@@ -465,7 +465,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "failed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusFailed, results[0].Status)
 				assert.NotNil(t, results[0].Err)
 			},
 		},
@@ -483,7 +483,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 
 				require.Len(t, results, 1)
-				assert.Equal(t, "failed", results[0].Status)
+				assert.Equal(t, pkgsync.StatusFailed, results[0].Status)
 				assert.NotNil(t, results[0].Err)
 			},
 		},

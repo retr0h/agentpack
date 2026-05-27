@@ -103,7 +103,7 @@ plugin. When agentpack.lock exists, locked SHAs are used for reproducibility.`,
 				jr := syncResultJSON{
 					Name:    r.Name,
 					Version: r.Version,
-					Status:  r.Status,
+					Status:  string(r.Status),
 				}
 				if r.Err != nil {
 					jr.Err = r.Err.Error()
@@ -119,21 +119,21 @@ plugin. When agentpack.lock exists, locked SHAs are used for reproducibility.`,
 
 		for _, r := range results {
 			switch r.Status {
-			case "installed":
+			case pkgsync.StatusInstalled:
 				cli.Printf(
 					out, "  %s %s  %s\n",
 					cli.OK(out, cli.Checkmark),
 					cli.Accent(out, r.Name),
 					r.Version,
 				)
-			case "up to date":
+			case pkgsync.StatusUpToDate:
 				cli.Printf(
 					out, "  %s %s  %s\n",
 					cli.OK(out, cli.Checkmark),
 					r.Name,
-					cli.OK(out, "up to date"),
+					cli.OK(out, string(pkgsync.StatusUpToDate)),
 				)
-			case "failed":
+			case pkgsync.StatusFailed:
 				cli.Printf(
 					out, "  %s %s  %s\n",
 					cli.Err(out, "✗"),

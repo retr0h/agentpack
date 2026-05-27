@@ -55,6 +55,16 @@ func (defaultRegistry) List() ([]*registry.PackageManifest, error) {
 	return registry.New().List()
 }
 
+// Status describes the on-disk health of an installed package.
+type Status string
+
+// Status constants for on-disk health.
+const (
+	StatusOK      Status = "ok"
+	StatusMissing Status = "missing"
+	StatusEmpty   Status = "empty"
+)
+
 // Entry represents a single installed package.
 type Entry struct {
 	Name      string
@@ -63,8 +73,8 @@ type Entry struct {
 	Source    string
 	Targets   string
 	Installed string
-	Scope     string
-	Status    string
+	Scope     registry.Scope
+	Status    Status
 }
 
 // GlobalEntry represents a single globally installed skill.
@@ -103,9 +113,9 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 	for _, m := range manifests {
 		targets := collectTargets(m)
 
-		var status string
+		var status Status
 		if len(m.Files) == 0 {
-			status = "empty"
+			status = StatusEmpty
 		} else {
 			found := false
 			for _, f := range m.Files {
@@ -118,15 +128,15 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 			}
 
 			if found {
-				status = "ok"
+				status = StatusOK
 			} else {
-				status = "missing"
+				status = StatusMissing
 			}
 		}
 
 		scope := m.Scope
 		if scope == "" {
-			scope = "local"
+			scope = registry.ScopeLocal
 		}
 
 		entries = append(entries, Entry{

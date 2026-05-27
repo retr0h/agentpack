@@ -104,8 +104,8 @@ func listInstalled(cmd *cobra.Command) error {
 		versions[i] = e.Version
 		shas[i] = e.SHA
 		targets[i] = e.Targets
-		scopes[i] = e.Scope
-		statuses[i] = e.Status
+		scopes[i] = string(e.Scope)
+		statuses[i] = string(e.Status)
 		sources[i] = e.Source
 	}
 

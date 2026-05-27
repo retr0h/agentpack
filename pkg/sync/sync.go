@@ -59,11 +59,21 @@ type Package struct {
 	Ref    string `yaml:"ref"`
 }
 
+// Status describes the outcome of a single package sync operation.
+type Status string
+
+// Status constants for sync results.
+const (
+	StatusInstalled Status = "installed"
+	StatusUpToDate  Status = "up to date"
+	StatusFailed    Status = "failed"
+)
+
 // Result holds the outcome for one package in a sync run.
 type Result struct {
 	Name    string
 	Version string
-	Status  string // "installed", "up to date", "failed"
+	Status  Status
 	Err     error
 }
 
@@ -136,16 +146,16 @@ func (s *Syncer) Run(ctx context.Context, opts Options) ([]Result, error) {
 func syncSourcePackage(ctx context.Context, pkg Package, opts Options) []Result {
 	if opts.Installer == nil {
 		return []Result{
-			{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no installer configured")},
+			{Name: pkg.Name, Status: StatusFailed, Err: fmt.Errorf("no installer configured")},
 		}
 	}
 
 	r, err := opts.Installer.Install(ctx, pkg.Source)
 	if err != nil {
-		return []Result{{Name: pkg.Name, Status: "failed", Err: err}}
+		return []Result{{Name: pkg.Name, Status: StatusFailed, Err: err}}
 	}
 
-	return []Result{{Name: r.Name, Version: r.Version, Status: "installed"}}
+	return []Result{{Name: r.Name, Version: r.Version, Status: StatusInstalled}}
 }
 
 func syncGitPackage(ctx context.Context, pkg Package, opts Options) []Result {
@@ -165,29 +175,29 @@ func syncGitPackage(ctx context.Context, pkg Package, opts Options) []Result {
 	cloneDir, err := os.MkdirTemp("", "agentpack-sync-git-*")
 	if err != nil {
 		return []Result{
-			{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("create temp dir: %w", err)},
+			{Name: pkg.Name, Status: StatusFailed, Err: fmt.Errorf("create temp dir: %w", err)},
 		}
 	}
 	defer func() { _ = os.RemoveAll(cloneDir) }()
 
 	if err := f.Fetch(ctx, source, cloneDir); err != nil {
-		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("git fetch: %w", err)}}
+		return []Result{{Name: pkg.Name, Status: StatusFailed, Err: fmt.Errorf("git fetch: %w", err)}}
 	}
 
 	if opts.Builder == nil {
 		return []Result{
-			{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no builder configured")},
+			{Name: pkg.Name, Status: StatusFailed, Err: fmt.Errorf("no builder configured")},
 		}
 	}
 
 	buildResults, err := opts.Builder.Build(ctx, cloneDir)
 	if err != nil {
-		return []Result{{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("build: %w", err)}}
+		return []Result{{Name: pkg.Name, Status: StatusFailed, Err: fmt.Errorf("build: %w", err)}}
 	}
 
 	if opts.Installer == nil {
 		return []Result{
-			{Name: pkg.Name, Status: "failed", Err: fmt.Errorf("no installer configured")},
+			{Name: pkg.Name, Status: StatusFailed, Err: fmt.Errorf("no installer configured")},
 		}
 	}
 
@@ -195,10 +205,10 @@ func syncGitPackage(ctx context.Context, pkg Package, opts Options) []Result {
 	for _, br := range buildResults {
 		r, err := opts.Installer.Install(ctx, br.ArchivePath)
 		if err != nil {
-			results = append(results, Result{Name: br.Name, Status: "failed", Err: err})
+			results = append(results, Result{Name: br.Name, Status: StatusFailed, Err: err})
 			continue
 		}
-		results = append(results, Result{Name: r.Name, Version: r.Version, Status: "installed"})
+		results = append(results, Result{Name: r.Name, Version: r.Version, Status: StatusInstalled})
 	}
 
 	return results

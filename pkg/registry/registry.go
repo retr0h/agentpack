@@ -52,6 +52,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Scope identifies whether a package was installed into a project-local or
+// user-global location.
+type Scope string
+
+// Scope constants for install location.
+const (
+	ScopeLocal  Scope = "local"
+	ScopeGlobal Scope = "global"
+)
+
 // osUserHomeDir is a swappable wrapper around os.UserHomeDir so tests can
 // redirect registry writes to a temp directory without touching the real
 // ~/.config/agentpack/packages/ tree.
@@ -106,8 +116,8 @@ type PackageManifest struct {
 	// Installed is the RFC3339 timestamp of when the package was installed.
 	Installed string `yaml:"installed,omitempty"`
 
-	// Scope is "local" or "global".
-	Scope string `yaml:"scope,omitempty"`
+	// Scope is ScopeLocal or ScopeGlobal.
+	Scope Scope `yaml:"scope,omitempty"`
 
 	// Files is the complete list of files written to disk.
 	Files []InstalledFile `yaml:"files"`
