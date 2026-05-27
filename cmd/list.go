@@ -22,7 +22,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -128,39 +127,13 @@ func listInstalled(cmd *cobra.Command) error {
 	for i, e := range entries {
 		cli.Print(out, "")
 
-		// Skills — one per line with tree connectors (white, no accent).
-		totalRows := len(e.Skills) + len(e.Targets)
-		row := 0
-
-		for _, skill := range e.Skills {
-			row++
+		for j, skill := range e.Skills {
 			prefix := "  ├─"
-			if row == totalRows {
+			if j == len(e.Skills)-1 {
 				prefix = "  └─"
 			}
 
 			cli.Printf(out, "%s %s\n", cli.Mute(out, prefix), skill)
-		}
-
-		// Targets with file count.
-		for _, ti := range e.Targets {
-			row++
-			prefix := "  ├─"
-			if row == totalRows {
-				prefix = "  └─"
-			}
-
-			detail := cli.Mute(
-				out,
-				fmt.Sprintf("(%d %s)", ti.FileCount, cli.Plural(ti.FileCount, "file", "files")),
-			)
-			cli.Printf(
-				out,
-				"%s %s  %s\n",
-				cli.Mute(out, prefix),
-				cli.Tag(out, ti.Name),
-				detail,
-			)
 		}
 
 		// Blank line between packages (but not after the last).
