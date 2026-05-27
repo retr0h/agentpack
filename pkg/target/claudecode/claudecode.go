@@ -97,7 +97,7 @@ func (c *ClaudeCode) Install(
 		root = home
 	}
 
-	claudeDir := filepath.Join(root, ".claude")
+	var allFiles []target.InstalledFile
 
 	for _, content := range []string{"skills", "commands", "agents"} {
 		if err := ctx.Err(); err != nil {
@@ -109,11 +109,14 @@ func (c *ClaudeCode) Install(
 			continue
 		}
 
-		dstDir := filepath.Join(claudeDir, content)
+		dstDir := filepath.Join(root, ".claude", content)
 
-		if err := copyTree(c.mkdirAllFunc, srcDir, dstDir); err != nil {
-			return nil, fmt.Errorf("install %s: %w", content, err)
+		written, copyErr := copyTreeTracked(c.mkdirAllFunc, srcDir, dstDir, root)
+		if copyErr != nil {
+			return nil, fmt.Errorf("install %s: %w", content, copyErr)
 		}
+
+		allFiles = append(allFiles, written...)
 	}
 
 	settingsPath := filepath.Join(root, ".claude", "settings.json")
@@ -130,52 +133,7 @@ func (c *ClaudeCode) Install(
 		return nil, err
 	}
 
-	files, err := collectInstalledFiles(root, claudeDir)
-	if err != nil {
-		return nil, err
-	}
-
-	return files, nil
-}
-
-// collectInstalledFiles walks claudeDir and returns all regular files with
-// paths relative to root and their SHA-256 digests. Returns nil when
-// claudeDir does not exist.
-func collectInstalledFiles(root, claudeDir string) ([]target.InstalledFile, error) {
-	if _, err := os.Stat(claudeDir); os.IsNotExist(err) {
-		return nil, nil
-	}
-
-	var files []target.InstalledFile
-
-	err := filepath.WalkDir(claudeDir, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil || d.IsDir() {
-			return walkErr
-		}
-
-		rel, relErr := filepath.Rel(root, path)
-		if relErr != nil {
-			return relErr
-		}
-
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
-
-		h := sha256.Sum256(data)
-		files = append(files, target.InstalledFile{
-			Path:   rel,
-			SHA256: hex.EncodeToString(h[:]),
-		})
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return files, nil
+	return allFiles, nil
 }
 
 // installMCP merges all mcp/*.json files from srcDir into settingsPath.
@@ -362,6 +320,56 @@ func copyTree(mkdirAll func(string, os.FileMode) error, src, dst string) error {
 
 		return copyFile(path, tgt)
 	})
+}
+
+// copyTreeTracked copies src to dst and returns the files written with
+// paths relative to root and SHA256 digests.
+func copyTreeTracked(
+	mkdirAll func(string, os.FileMode) error,
+	src, dst, root string,
+) ([]target.InstalledFile, error) {
+	var files []target.InstalledFile
+
+	err := filepath.WalkDir(src, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		rel, relErr := filepath.Rel(src, path)
+		if relErr != nil {
+			return relErr
+		}
+
+		tgt := filepath.Join(dst, rel)
+
+		if d.IsDir() {
+			return mkdirAll(tgt, 0o755)
+		}
+
+		if copyErr := copyFile(path, tgt); copyErr != nil {
+			return copyErr
+		}
+
+		data, readErr := os.ReadFile(tgt)
+		if readErr != nil {
+			return readErr
+		}
+
+		relToRoot, relErr := filepath.Rel(root, tgt)
+		if relErr != nil {
+			return relErr
+		}
+
+		h := sha256.Sum256(data)
+		files = append(files, target.InstalledFile{
+			Path:   relToRoot,
+			SHA256: hex.EncodeToString(h[:]),
+		})
+
+		return nil
+	})
+
+	return files, err
 }
 
 func copyFile(src, dst string) error {
