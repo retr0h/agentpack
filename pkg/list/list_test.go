@@ -280,6 +280,62 @@ func TestRunWithRegistry(t *testing.T) {
 			wantCount: 1,
 		},
 		{
+			name: "status is ok when files exist on disk",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				dir := os.TempDir()
+				tmpFile := filepath.Join(dir, "agentpack-status-test.md")
+				_ = os.WriteFile(tmpFile, []byte("test"), 0o644)
+
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{
+						Name: "ok-pkg",
+						Files: []registry.InstalledFile{
+							{Path: "agentpack-status-test.md", Dir: dir},
+						},
+					},
+				}, nil)
+			},
+			wantCount: 1,
+		},
+		{
+			name: "status is missing when no files exist on disk",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{
+						Name: "gone-pkg",
+						Files: []registry.InstalledFile{
+							{Path: "nonexistent.md", Dir: "/tmp/agentpack-no-such-dir"},
+						},
+					},
+				}, nil)
+			},
+			wantCount: 1,
+		},
+		{
+			name: "dir is set from first file entry",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{
+						Name: "dir-pkg",
+						Files: []registry.InstalledFile{
+							{Path: "skill.md", Dir: "/home/user/project"},
+							{Path: "other.md", Dir: "/home/user/project"},
+						},
+					},
+				}, nil)
+			},
+			wantCount: 1,
+		},
+		{
+			name: "status is ok and dir is empty when no files in manifest",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{Name: "nofiles-pkg", Files: []registry.InstalledFile{}},
+				}, nil)
+			},
+			wantCount: 1,
+		},
+		{
 			name: "multiple targets are deduplicated and sorted",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
@@ -319,6 +375,20 @@ func TestRunWithRegistry(t *testing.T) {
 
 			if tt.wantFirst != "" && len(entries) > 0 {
 				assert.Equal(t, tt.wantFirst, entries[0].Name)
+			}
+
+			if len(entries) == 1 {
+				switch entries[0].Name {
+				case "ok-pkg":
+					assert.Equal(t, "ok", entries[0].Status)
+				case "gone-pkg":
+					assert.Equal(t, "missing", entries[0].Status)
+				case "dir-pkg":
+					assert.Equal(t, "/home/user/project", entries[0].Dir)
+				case "nofiles-pkg":
+					assert.Equal(t, "", entries[0].Dir)
+					assert.Equal(t, "ok", entries[0].Status)
+				}
 			}
 
 			// Verify sort order.
