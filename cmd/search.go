@@ -74,12 +74,12 @@ var searchCmd = &cobra.Command{
 			}
 		}
 
-		cli.Print(out, "")
+		cli.Printf(out, "%s\n\n", cli.Mute(out, "Install with agentpack add <source@skill>"))
 		for _, r := range results {
-			name := cli.Accent(out, cli.Pad(r.Name, maxName))
-			source := cli.Mute(out, cli.Pad(r.Source, maxSource))
+			installCmd := r.Source + "@" + r.Name
+			name := cli.Accent(out, cli.Pad(installCmd, maxName+maxSource+1))
 			installs := cli.Mute(out, formatInstalls(r.Installs))
-			cli.Printf(out, "  %s    %s    %s\n", name, source, installs)
+			cli.Printf(out, "  %s  %s\n", name, installs)
 		}
 
 		cli.Printf(

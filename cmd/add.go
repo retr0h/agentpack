@@ -64,7 +64,12 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		source := args[0]
+		source, atSkill := parseAtSkill(args[0])
+		skills := installSkills
+		if atSkill != "" {
+			skills = append(skills, atSkill)
+		}
+
 		displayName := cli.SourceBaseName(source)
 
 		var onStep func(install.Step)
@@ -82,7 +87,7 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 
 		result, err := pkgInstaller.Run(ctx, install.Options{
 			Source:       source,
-			Skills:       installSkills,
+			Skills:       skills,
 			Targets:      targets,
 			Global:       installGlobal,
 			OnStep:       onStep,
@@ -286,6 +291,20 @@ func buildContentCheck(cmd *cobra.Command, trust bool) func(*safety.Classificati
 
 		return nil
 	}
+}
+
+// parseAtSkill splits "owner/repo@skill" into ("owner/repo", "skill").
+// If no @ is present, returns (source, "").
+func parseAtSkill(source string) (string, string) {
+	if idx := strings.LastIndex(source, "@"); idx > 0 {
+		before := source[:idx]
+		after := source[idx+1:]
+		if after != "" && !strings.Contains(after, "/") {
+			return before, after
+		}
+	}
+
+	return source, ""
 }
 
 func resolveTargets(names []string) ([]target.Target, error) {
