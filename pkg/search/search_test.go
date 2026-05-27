@@ -140,10 +140,12 @@ func TestRun(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(tt.serverCode)
-				_, _ = w.Write([]byte(tt.serverBody))
-			}))
+			srv := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(tt.serverCode)
+					_, _ = w.Write([]byte(tt.serverBody))
+				}),
+			)
 			defer srv.Close()
 
 			opts := tt.opts(srv.URL)

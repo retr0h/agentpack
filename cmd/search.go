@@ -82,7 +82,12 @@ var searchCmd = &cobra.Command{
 			cli.Printf(out, "  %s    %s    %s\n", name, source, installs)
 		}
 
-		cli.Printf(out, "\n%d %s found\n", len(results), cli.Plural(len(results), "skill", "skills"))
+		cli.Printf(
+			out,
+			"\n%d %s found\n",
+			len(results),
+			cli.Plural(len(results), "skill", "skills"),
+		)
 
 		return nil
 	},
