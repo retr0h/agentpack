@@ -40,4 +40,4 @@ Additional sections (e.g. **Influences**) are permitted when they add clarity.
 | [004](004-config-merging.md)           | Config Merging for MCP, Hooks, Settings | Accepted                               |
 | [005](005-content-safety.md)           | Content Safety and Executable Prompts   | Accepted                               |
 | [006](006-agent-registry-alignment.md) | Agent Registry Alignment                | Accepted                               |
-| [007](007-skill-search.md)             | Skill Search and Discovery              | Proposed                               |
+| [007](007-skill-search.md)             | Skill Search and Discovery              | Accepted                               |
