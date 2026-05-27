@@ -70,6 +70,16 @@ See [Usage][] for full details.
 - 📋 **JSON everywhere** — `-o json` on every command for scripting
 - 📚 **CLI + Go library** — use from the terminal or import `pkg/` in your own tools
 
+## 🔍 Discover Skills
+
+```bash
+agentpack search react
+agentpack search typescript
+agentpack search security
+```
+
+Browse the full catalog at [skills.sh](https://skills.sh).
+
 ## 📖 Documentation
 
 - [Usage][] — add, install, build, verify, info, examples

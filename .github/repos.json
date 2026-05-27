@@ -31,8 +31,8 @@
   "repos": [
     {
       "name": "agentpack",
-      "description": "Git-free package manager for Claude Code plugins.",
-      "topics": ["claude", "claude-code", "plugins", "package-manager", "go", "golang", "cli"]
+      "description": "The native package manager for agentskills.io — 50+ AI coding agents.",
+      "topics": ["agentskills", "ai-agents", "package-manager", "skills", "claude-code", "cursor", "copilot", "codex", "gemini-cli", "windsurf", "go", "golang", "cli"]
     }
   ]
 }
