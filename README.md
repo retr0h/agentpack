@@ -9,6 +9,7 @@
 <p align="center">The native package manager for <a href="https://agentskills.io">agentskills.io</a>.</p>
 
 <p align="center">
+  <a href="https://github.com/retr0h/agentpack/releases/latest"><img alt="release" src="https://img.shields.io/github/release/retr0h/agentpack.svg?style=for-the-badge"></a>
   <a href="https://goreportcard.com/report/github.com/retr0h/agentpack"><img alt="go report card" src="https://goreportcard.com/badge/github.com/retr0h/agentpack?style=for-the-badge"></a>
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-brightgreen.svg?style=for-the-badge"></a>
   <a href="https://github.com/retr0h/agentpack/actions/workflows/go.yml"><img alt="build" src="https://img.shields.io/github/actions/workflow/status/retr0h/agentpack/go.yml?style=for-the-badge"></a>
