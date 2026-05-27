@@ -48,15 +48,26 @@ import (
 
 // PackagesFile represents the top-level structure of agentpack-packages.yaml.
 type PackagesFile struct {
+	// Packages is the ordered list of plugin declarations.
 	Packages []Package `yaml:"packages"`
 }
 
 // Package declares a single plugin source in agentpack-packages.yaml.
 type Package struct {
-	Name   string `yaml:"name"`
+	// Name is the human-readable plugin identifier used in status output.
+	Name string `yaml:"name"`
+
+	// Source is a direct URL or local path to a .agentpack archive.
+	// Mutually exclusive with Git.
 	Source string `yaml:"source"`
-	Git    string `yaml:"git"`
-	Ref    string `yaml:"ref"`
+
+	// Git is the git repository URL to clone and build. Mutually exclusive
+	// with Source.
+	Git string `yaml:"git"`
+
+	// Ref is the git ref (branch, tag, or commit SHA) to check out.
+	// When empty the remote default branch is used.
+	Ref string `yaml:"ref"`
 }
 
 // Status describes the outcome of a single package sync operation.

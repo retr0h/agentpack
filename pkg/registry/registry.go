@@ -82,45 +82,45 @@ func SetOsUserHomeDir(fn func() (string, error)) func() {
 // InstalledFile records a single file placed on disk during an install.
 type InstalledFile struct {
 	// Path is the relative path of the file within its target directory.
-	Path string `yaml:"path"`
+	Path string `yaml:"path" json:"path"`
 
 	// SHA256 is the hex-encoded SHA256 of the file at install time.
-	SHA256 string `yaml:"sha256"`
+	SHA256 string `yaml:"sha256" json:"sha256"`
 
 	// Target is the name of the target driver that wrote this file
 	// (e.g. "claude-code", "cursor").
-	Target string `yaml:"target"`
+	Target string `yaml:"target" json:"target"`
 
 	// Dir is the absolute path to the directory that contains Path.
-	Dir string `yaml:"dir"`
+	Dir string `yaml:"dir" json:"dir"`
 }
 
 // PackageManifest records everything needed to manage (update/remove) an
 // installed package.
 type PackageManifest struct {
 	// Name is the plugin identifier.
-	Name string `yaml:"name"`
+	Name string `yaml:"name" json:"name"`
 
 	// Source is the original install source URI.
-	Source string `yaml:"source"`
+	Source string `yaml:"source" json:"source"`
 
 	// Ref is the git ref that was resolved during install.
-	Ref string `yaml:"ref,omitempty"`
+	Ref string `yaml:"ref,omitempty" json:"ref,omitempty"`
 
 	// SHA is the resolved git commit SHA.
-	SHA string `yaml:"sha,omitempty"`
+	SHA string `yaml:"sha,omitempty" json:"sha,omitempty"`
 
 	// Version is the plugin version string.
-	Version string `yaml:"version,omitempty"`
+	Version string `yaml:"version,omitempty" json:"version,omitempty"`
 
 	// Installed is the RFC3339 timestamp of when the package was installed.
-	Installed string `yaml:"installed,omitempty"`
+	Installed string `yaml:"installed,omitempty" json:"installed,omitempty"`
 
 	// Scope is ScopeLocal or ScopeGlobal.
-	Scope Scope `yaml:"scope,omitempty"`
+	Scope Scope `yaml:"scope,omitempty" json:"scope,omitempty"`
 
 	// Files is the complete list of files written to disk.
-	Files []InstalledFile `yaml:"files"`
+	Files []InstalledFile `yaml:"files" json:"files"`
 }
 
 // Registry manages per-package installation manifests.

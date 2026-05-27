@@ -59,16 +59,16 @@ type RemoteChecker interface {
 // Entry describes the outdated status of a single plugin.
 type Entry struct {
 	// Name is the plugin identifier.
-	Name string
+	Name string `json:"name"`
 
 	// InstalledSHA is the commit SHA that is currently installed.
-	InstalledSHA string
+	InstalledSHA string `json:"installedSHA"`
 
 	// RemoteSHA is the HEAD commit SHA on the remote.
-	RemoteSHA string
+	RemoteSHA string `json:"remoteSHA"`
 
 	// Outdated is true when InstalledSHA != RemoteSHA.
-	Outdated bool
+	Outdated bool `json:"outdated"`
 }
 
 // Options configures an outdated check run.

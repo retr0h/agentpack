@@ -56,15 +56,15 @@ var osMkdirTemp = os.MkdirTemp
 
 // FileResult holds the verification outcome for a single file in the archive.
 type FileResult struct {
-	Path string
-	OK   bool
-	Err  string
+	Path string `json:"path"`
+	OK   bool   `json:"ok"`
+	Err  string `json:"err,omitempty"`
 }
 
 // Result holds the outcome of verifying a .agentpack archive.
 type Result struct {
-	ArchiveName string
-	Files       []FileResult
+	ArchiveName string       `json:"archiveName"`
+	Files       []FileResult `json:"files"`
 }
 
 // Verifier orchestrates an archive verification run.

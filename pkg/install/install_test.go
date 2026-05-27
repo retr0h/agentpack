@@ -360,7 +360,7 @@ description: Multi-target plugin
 			},
 		},
 		{
-			name:       "succeeds with no targets (empty list)",
+			name:       "errors with no targets (empty list)",
 			noParallel: true,
 			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
@@ -368,17 +368,7 @@ description: Multi-target plugin
 
 				return archivePath, []target.Target{}
 			},
-			injectFuncs: func(t *testing.T) {
-				t.Helper()
-				restore := install.SetRegistrySave(
-					func(_ *registry.PackageManifest) error { return nil },
-				)
-				t.Cleanup(restore)
-			},
-			checkResult: func(t *testing.T, r *install.Result) {
-				t.Helper()
-				assert.Equal(t, "empty-targets-plugin", r.Name)
-			},
+			wantErr: "no agent targets detected",
 		},
 		{
 			name:       "OnStep emits installing-to step per target",

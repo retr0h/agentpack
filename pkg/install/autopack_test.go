@@ -34,6 +34,7 @@ import (
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/metadata"
@@ -41,6 +42,7 @@ import (
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/pkg/target/mocks"
 )
 
 // --------------------------------------------------------------------------
@@ -881,9 +883,15 @@ func TestContentCheckCallback(t *testing.T) {
 
 			archivePath := buildArchiveWithContentClassification(t)
 
+			ctrl := gomock.NewController(t)
+			mockTarget := mocks.NewMockTarget(ctrl)
+			mockTarget.EXPECT().Name().Return("test-target").AnyTimes()
+			mockTarget.EXPECT().DisplayName().Return("Test Target").AnyTimes()
+			mockTarget.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 			r, err := install.New().Run(context.Background(), install.Options{
 				Source:       archivePath,
-				Targets:      []target.Target{},
+				Targets:      []target.Target{mockTarget},
 				ContentCheck: tt.contentCheck,
 			})
 

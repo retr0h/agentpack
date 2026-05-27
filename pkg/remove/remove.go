@@ -91,23 +91,23 @@ type Options struct {
 // RemovedFile records a file that was successfully removed.
 type RemovedFile struct {
 	// Path is the absolute path that was removed.
-	Path string
+	Path string `json:"path"`
 
 	// Skipped is true when the file was not removed because its checksum
 	// no longer matched the recorded value (user-modified).
-	Skipped bool
+	Skipped bool `json:"skipped"`
 }
 
 // Result holds the outcome of a remove run.
 type Result struct {
 	// Name is the plugin that was removed.
-	Name string
+	Name string `json:"name"`
 
 	// Removed lists files that were successfully deleted.
-	Removed []RemovedFile
+	Removed []RemovedFile `json:"removed,omitempty"`
 
 	// Skipped lists files that were not deleted because they were modified.
-	Skipped []RemovedFile
+	Skipped []RemovedFile `json:"skipped,omitempty"`
 }
 
 // defaultRegistry wraps registry.New() to satisfy Registry.

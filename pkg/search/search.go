@@ -43,8 +43,15 @@ type Result struct {
 
 // Options configures a search run.
 type Options struct {
-	Query       string
-	Limit       int
+	// Query is the search string sent to the registry.
+	Query string
+
+	// Limit is the maximum number of results to return. When zero the default
+	// of 20 is used.
+	Limit int
+
+	// RegistryURL overrides the default registry endpoint. When empty
+	// DefaultRegistryURL is used.
 	RegistryURL string
 }
 

@@ -115,24 +115,24 @@ type Options struct {
 
 // Step represents a completed pipeline phase for display.
 type Step struct {
-	Name   string
-	Detail string
+	Name   string `json:"name"`
+	Detail string `json:"detail"`
 }
 
 // Result holds the outcome of a successful install.
 type Result struct {
-	Name    string
-	Version string
-	SHA     string
-	Source  string
-	Steps   []Step
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	SHA     string `json:"sha"`
+	Source  string `json:"source"`
+	Steps   []Step `json:"steps,omitempty"`
 	// Dirs maps target display-name → installed directory.
-	Dirs map[string]string
+	Dirs map[string]string `json:"dirs,omitempty"`
 	// FileCounts maps target display-name → number of files installed.
-	FileCounts map[string]int
+	FileCounts map[string]int `json:"fileCounts,omitempty"`
 	// ContentClassification holds the safety classification embedded in the
 	// package metadata. Nil when the archive predates ADR-005.
-	ContentClassification *safety.Classification
+	ContentClassification *safety.Classification `json:"contentClassification,omitempty"`
 }
 
 // Run installs from any source: .agentpack archive, git repo, or local path.
@@ -358,6 +358,10 @@ func installFromDir(
 	targets := opts.Targets
 	if len(targets) == 0 {
 		targets = target.Detected()
+	}
+
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no agent targets detected — nothing to install to")
 	}
 
 	dir := opts.Dir

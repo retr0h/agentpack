@@ -206,17 +206,17 @@ func TestRunWithRegistry(t *testing.T) {
 					{
 						Name:   "zebra",
 						Source: "github.com/org/zebra",
-						Files:  []registry.InstalledFile{},
+						Files:  []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
 					},
 					{
 						Name:   "alpha",
 						Source: "github.com/org/alpha",
-						Files:  []registry.InstalledFile{},
+						Files:  []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
 					},
 					{
 						Name:   "middle",
 						Source: "github.com/org/middle",
-						Files:  []registry.InstalledFile{},
+						Files:  []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
 					},
 				}, nil)
 			},
@@ -234,7 +234,7 @@ func TestRunWithRegistry(t *testing.T) {
 			name: "SHA is shortened to 7 characters",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "sha-pkg", SHA: "abcdef1234567890", Files: []registry.InstalledFile{}},
+					{Name: "sha-pkg", SHA: "abcdef1234567890", Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}}},
 				}, nil)
 			},
 			wantCount: 1,
@@ -243,7 +243,7 @@ func TestRunWithRegistry(t *testing.T) {
 			name: "SHA shorter than 7 chars is returned as-is",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "short-sha-pkg", SHA: "abc", Files: []registry.InstalledFile{}},
+					{Name: "short-sha-pkg", SHA: "abc", Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}}},
 				}, nil)
 			},
 			wantCount: 1,
@@ -255,7 +255,7 @@ func TestRunWithRegistry(t *testing.T) {
 					{
 						Name:      "ts-pkg",
 						Installed: "2026-01-15T12:00:00Z",
-						Files:     []registry.InstalledFile{},
+						Files:     []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
 					},
 				}, nil)
 			},
@@ -265,7 +265,7 @@ func TestRunWithRegistry(t *testing.T) {
 			name: "installed timestamp without T is returned as-is",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "no-t-pkg", Installed: "2026-01-15", Files: []registry.InstalledFile{}},
+					{Name: "no-t-pkg", Installed: "2026-01-15", Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}}},
 				}, nil)
 			},
 			wantCount: 1,
@@ -274,7 +274,7 @@ func TestRunWithRegistry(t *testing.T) {
 			name: "empty installed timestamp is returned as empty string",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
-					{Name: "empty-ts-pkg", Installed: "", Files: []registry.InstalledFile{}},
+					{Name: "empty-ts-pkg", Installed: "", Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}}},
 				}, nil)
 			},
 			wantCount: 1,
@@ -327,13 +327,13 @@ func TestRunWithRegistry(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name: "status is ok and dir is empty when no files in manifest",
+			name: "manifests with no files are filtered out",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
 					{Name: "nofiles-pkg", Files: []registry.InstalledFile{}},
 				}, nil)
 			},
-			wantCount: 1,
+			wantCount: 0,
 		},
 		{
 			name: "multiple targets are deduplicated and sorted",
@@ -440,7 +440,7 @@ func TestRunWithRegistryFormatDate(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			reg := listmocks.NewMockRegistry(ctrl)
 			reg.EXPECT().List().Return([]*registry.PackageManifest{
-				{Name: "fmt-pkg", Installed: tt.installed, Files: []registry.InstalledFile{}},
+				{Name: "fmt-pkg", Installed: tt.installed, Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}}},
 			}, nil)
 
 			l := list.New()
@@ -471,7 +471,7 @@ func TestRun(t *testing.T) {
 				t.Helper()
 				require.NoError(t, os.WriteFile(
 					filepath.Join(pkgDir, "run-pkg.yaml"),
-					[]byte("name: run-pkg\nsource: github.com/org/run\n"),
+					[]byte("name: run-pkg\nsource: github.com/org/run\nfiles:\n  - path: skills/x.md\n    sha256: abc\n    target: claude-code\n    dir: /tmp\n"),
 					0o644,
 				))
 			},

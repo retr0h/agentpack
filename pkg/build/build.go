@@ -67,12 +67,12 @@ type Options struct {
 
 // Result holds the outcome of building a single plugin.
 type Result struct {
-	Name        string
-	Version     string
-	ArchivePath string
-	SHA256      string
-	FileCount   int
-	Size        int64
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	ArchivePath string `json:"archivePath"`
+	SHA256      string `json:"sha256"`
+	FileCount   int    `json:"fileCount"`
+	Size        int64  `json:"size"`
 }
 
 // Run executes the build pipeline for all selected plugins.

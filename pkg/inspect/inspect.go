@@ -62,23 +62,23 @@ type Options struct {
 
 // FileEntry describes a single file found in the archive.
 type FileEntry struct {
-	Path     string
-	Size     int64
-	SHA256   string
-	Verified bool
+	Path     string `json:"path"`
+	Size     int64  `json:"size"`
+	SHA256   string `json:"sha256"`
+	Verified bool   `json:"verified"`
 }
 
 // Result holds the outcome of inspecting a .agentpack archive.
 type Result struct {
-	Name    string
-	Version string
-	Built   string
-	SHA     string
-	Files   []FileEntry
-	Total   int64
+	Name    string      `json:"name"`
+	Version string      `json:"version"`
+	Built   string      `json:"built"`
+	SHA     string      `json:"sha"`
+	Files   []FileEntry `json:"files"`
+	Total   int64       `json:"total"`
 	// Content holds the safety classification embedded in the archive metadata.
 	// Nil when the archive predates ADR-005.
-	Content *safety.Classification
+	Content *safety.Classification `json:"content,omitempty"`
 }
 
 // archiveMetadata mirrors the fields written into .agentpack/metadata.json.

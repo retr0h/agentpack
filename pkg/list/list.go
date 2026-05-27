@@ -67,21 +67,21 @@ const (
 
 // Entry represents a single installed package.
 type Entry struct {
-	Name      string
-	Version   string
-	SHA       string
-	Source    string
-	Targets   string
-	Installed string
-	Scope     registry.Scope
-	Status    Status
+	Name      string         `json:"name"`
+	Version   string         `json:"version"`
+	SHA       string         `json:"sha"`
+	Source    string         `json:"source"`
+	Targets   string         `json:"targets"`
+	Installed string         `json:"installed"`
+	Scope     registry.Scope `json:"scope"`
+	Status    Status         `json:"status"`
 }
 
 // GlobalEntry represents a single globally installed skill.
 type GlobalEntry struct {
-	Agent string
-	Skill string
-	Dir   string
+	Agent string `json:"agent"`
+	Skill string `json:"skill"`
+	Dir   string `json:"dir"`
 }
 
 // Lister reads installed packages from the registry.
@@ -103,9 +103,18 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 		reg = defaultRegistry{}
 	}
 
-	manifests, err := reg.List()
+	all, err := reg.List()
 	if err != nil {
 		return nil, err
+	}
+
+	// Filter out manifests that have no tracked files — they are registry
+	// artefacts from installs that produced nothing (e.g. content-less repos).
+	manifests := make([]*registry.PackageManifest, 0, len(all))
+	for _, m := range all {
+		if len(m.Files) > 0 {
+			manifests = append(manifests, m)
+		}
 	}
 
 	var entries []Entry
