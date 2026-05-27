@@ -63,6 +63,8 @@ type Entry struct {
 	Source    string
 	Targets   string
 	Installed string
+	Dir       string
+	Status    string
 }
 
 // GlobalEntry represents a single globally installed skill.
@@ -101,6 +103,26 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 	for _, m := range manifests {
 		targets := collectTargets(m)
 
+		dir := ""
+		status := "ok"
+		if len(m.Files) > 0 {
+			dir = m.Files[0].Dir
+
+			found := false
+			for _, f := range m.Files {
+				path := filepath.Join(f.Dir, f.Path)
+				if _, err := os.Stat(path); err == nil {
+					found = true
+
+					break
+				}
+			}
+
+			if !found {
+				status = "missing"
+			}
+		}
+
 		entries = append(entries, Entry{
 			Name:      m.Name,
 			Version:   shortVersion(m.Version),
@@ -108,6 +130,8 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 			Source:    shortSource(m.Source),
 			Targets:   strings.Join(targets, ", "),
 			Installed: formatDate(m.Installed),
+			Dir:       dir,
+			Status:    status,
 		})
 	}
 

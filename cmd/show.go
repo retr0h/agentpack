@@ -98,13 +98,18 @@ func showInstalled(cmd *cobra.Command, name string) error {
 	cli.FieldMuted(out, "Source", source)
 	cli.FieldMuted(out, "SHA", cli.ShortSHA(m.SHA))
 	cli.FieldInfo(out, "Installed", installed)
+
+	if len(m.Files) > 0 {
+		cli.Field(out, "Dir", m.Files[0].Dir)
+	}
+
 	if infoGlobal {
 		cli.Field(out, "Scope", "global")
 	}
 
 	archiveBase := fmt.Sprintf("%s@%s", m.Name, cli.ShortSHA(m.SHA))
 	archivePath := fmt.Sprintf("~/.config/agentpack/archives/%s.agentpack", archiveBase)
-	cli.Field(out, "Archive", archivePath)
+	cli.FieldMuted(out, "Archive", archivePath)
 
 	shaFilePath := fmt.Sprintf("~/.config/agentpack/archives/%s.sha256", archiveBase)
 	cli.Field(out, "SHA256", shaFilePath)

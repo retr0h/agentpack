@@ -95,7 +95,7 @@ func listInstalled(cmd *cobra.Command) error {
 	versions := make([]string, len(entries))
 	shas := make([]string, len(entries))
 	targets := make([]string, len(entries))
-	installed := make([]string, len(entries))
+	statuses := make([]string, len(entries))
 	sources := make([]string, len(entries))
 
 	for i, e := range entries {
@@ -103,7 +103,7 @@ func listInstalled(cmd *cobra.Command) error {
 		versions[i] = e.Version
 		shas[i] = e.SHA
 		targets[i] = e.Targets
-		installed[i] = e.Installed
+		statuses[i] = e.Status
 		sources[i] = e.Source
 	}
 
@@ -112,7 +112,7 @@ func listInstalled(cmd *cobra.Command) error {
 		{Header: "VERSION", Values: versions},
 		{Header: "SHA", Values: shas, Muted: true},
 		{Header: "TARGETS", Values: targets, Tag: true},
-		{Header: "INSTALLED", Values: installed, Info: true},
+		{Header: "STATUS", Values: statuses},
 		{Header: "SOURCE", Values: sources, Muted: true},
 	})
 
