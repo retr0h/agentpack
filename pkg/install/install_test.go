@@ -132,6 +132,10 @@ func initGitRepo(t *testing.T, dir string) {
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0o644))
 
+	skillDir := filepath.Join(dir, "skills", "test-skill")
+	require.NoError(t, os.MkdirAll(skillDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Test Skill\n"), 0o644))
+
 	run("add", ".")
 	run("commit", "-m", "init")
 }
@@ -305,7 +309,7 @@ description: A test plugin
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("test").AnyTimes()
 				m.EXPECT().DisplayName().Return("Test").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
 
 				return archivePath, []target.Target{m}
 			},
@@ -338,12 +342,12 @@ description: Multi-target plugin
 				m1 := mocks.NewMockTarget(ctrl)
 				m1.EXPECT().Name().Return("alpha").AnyTimes()
 				m1.EXPECT().DisplayName().Return("Alpha").AnyTimes()
-				m1.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
+				m1.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
 
 				m2 := mocks.NewMockTarget(ctrl)
 				m2.EXPECT().Name().Return("beta").AnyTimes()
 				m2.EXPECT().DisplayName().Return("Beta").AnyTimes()
-				m2.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
+				m2.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
 
 				return archivePath, []target.Target{m1, m2}
 			},
@@ -385,7 +389,7 @@ description: step test
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("step-target").AnyTimes()
 				m.EXPECT().DisplayName().Return("Step Target").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
 
 				return archivePath, []target.Target{m}
 			},
@@ -442,7 +446,7 @@ description: Plugin for cancel test
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -463,7 +467,7 @@ description: ctx after fetch
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -484,7 +488,7 @@ description: ctx after extract
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -508,7 +512,7 @@ description: ctx in verify
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -641,7 +645,7 @@ description: test copyToTemp mkdir fail
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -668,7 +672,7 @@ description: ctx during verify
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -694,7 +698,7 @@ description: ctx after metadata
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -718,7 +722,7 @@ description: ctx inside targets loop
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).AnyTimes()
 
 				return archivePath, []target.Target{m}
 			},
@@ -1537,7 +1541,7 @@ func TestRunFromGit(t *testing.T) {
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("claude-code").AnyTimes()
 				m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
 
 				return bareRepo, []target.Target{m}
 			},
@@ -1570,7 +1574,7 @@ func TestRunFromGit(t *testing.T) {
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("claude-code").AnyTimes()
 				m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
-				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return(nil, nil)
+				m.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
 
 				return bareRepo + "#main", []target.Target{m}
 			},

@@ -435,12 +435,7 @@ func installFromDir(
 	}
 
 	if len(allFiles) == 0 {
-		return &Result{
-			Name:                  meta.Name,
-			Version:               meta.Version,
-			SHA:                   shortSHA(meta.GitCommitSHA),
-			ContentClassification: meta.Content,
-		}, nil
+		return nil, fmt.Errorf("package %s has no installable content", meta.Name)
 	}
 
 	manifest := &registry.PackageManifest{
