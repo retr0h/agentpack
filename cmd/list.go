@@ -92,15 +92,25 @@ func listInstalled(cmd *cobra.Command) error {
 		return nil
 	}
 
+	// Compute column widths for aligned header + data.
+	maxName := len("NAME")
+	for _, e := range entries {
+		if len(e.Name) > maxName {
+			maxName = len(e.Name)
+		}
+	}
+
+	cli.Printf(out, "%s\n", cli.Mute(out,
+		cli.Pad("NAME", maxName+2)+"VERSION  SHA      INSTALLED   SOURCE"))
+
 	for i, e := range entries {
-		// Package header line.
 		cli.Printf(
 			out,
 			"%s  %s  %s  %s  %s\n",
-			cli.Accent(out, e.Name),
-			e.Version,
-			cli.Mute(out, e.SHA),
-			cli.Info(out, e.Installed),
+			cli.Accent(out, cli.Pad(e.Name, maxName)),
+			cli.Pad(e.Version, 7),
+			cli.Mute(out, cli.Pad(e.SHA, 7)),
+			cli.Info(out, cli.Pad(e.Installed, 10)),
 			cli.Mute(out, e.Source),
 		)
 
