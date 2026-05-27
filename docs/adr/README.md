@@ -41,3 +41,4 @@ Additional sections (e.g. **Influences**) are permitted when they add clarity.
 | [005](005-content-safety.md)           | Content Safety and Executable Prompts   | Accepted                               |
 | [006](006-agent-registry-alignment.md) | Agent Registry Alignment                | Accepted                               |
 | [007](007-skill-search.md)             | Skill Search and Discovery              | Accepted                               |
+| [008](008-content-filtering.md)        | Content Type Filtering in Manifest      | Proposed                               |
