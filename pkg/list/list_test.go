@@ -451,7 +451,11 @@ func TestRunWithRegistry(t *testing.T) {
 					assert.Equal(t, registry.ScopeLocal, entries[0].Scope)
 					assert.Equal(t, list.StatusEmpty, entries[0].Status)
 				case "skills-pkg":
-					assert.Equal(t, []string{"claude-skills", "codex", "kubernetes-specialist"}, entries[0].Skills)
+					assert.Equal(
+						t,
+						[]string{"claude-skills", "codex", "kubernetes-specialist"},
+						entries[0].Skills,
+					)
 				case "counted-targets":
 					require.Len(t, entries[0].Targets, 2)
 					byName := make(map[string]int)
@@ -604,14 +608,22 @@ func TestExtractSkillsViaRunWithRegistry(t *testing.T) {
 		{
 			name: "claude path skills/name/SKILL.md extracts name",
 			files: []registry.InstalledFile{
-				{Path: ".claude/skills/kubernetes-specialist/SKILL.md", Target: "claude-code", Dir: "/tmp"},
+				{
+					Path:   ".claude/skills/kubernetes-specialist/SKILL.md",
+					Target: "claude-code",
+					Dir:    "/tmp",
+				},
 			},
 			wantSkills: []string{"kubernetes-specialist"},
 		},
 		{
 			name: "agents path extracts intermediate skill dir not package dir",
 			files: []registry.InstalledFile{
-				{Path: ".agents/skills/claude-skills/kubernetes-specialist/SKILL.md", Target: "agents", Dir: "/tmp"},
+				{
+					Path:   ".agents/skills/claude-skills/kubernetes-specialist/SKILL.md",
+					Target: "agents",
+					Dir:    "/tmp",
+				},
 			},
 			wantSkills: []string{"claude-skills"},
 		},
@@ -619,7 +631,11 @@ func TestExtractSkillsViaRunWithRegistry(t *testing.T) {
 			name: "multiple skills across multiple targets are deduplicated and sorted",
 			files: []registry.InstalledFile{
 				{Path: ".claude/skills/codex/SKILL.md", Target: "claude-code", Dir: "/tmp"},
-				{Path: ".claude/skills/kubernetes-specialist/SKILL.md", Target: "claude-code", Dir: "/tmp"},
+				{
+					Path:   ".claude/skills/kubernetes-specialist/SKILL.md",
+					Target: "claude-code",
+					Dir:    "/tmp",
+				},
 				{Path: ".cursor/skills/codex/SKILL.md", Target: "cursor", Dir: "/tmp"},
 			},
 			wantSkills: []string{"codex", "kubernetes-specialist"},

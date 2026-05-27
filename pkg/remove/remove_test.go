@@ -388,7 +388,9 @@ func TestRun(t *testing.T) {
 			checkFiles: func(t *testing.T, pluginDir string) {
 				t.Helper()
 				// kubernetes-specialist file must be deleted.
-				_, err := os.Stat(filepath.Join(pluginDir, "skills", "kubernetes-specialist", "SKILL.md"))
+				_, err := os.Stat(
+					filepath.Join(pluginDir, "skills", "kubernetes-specialist", "SKILL.md"),
+				)
 				assert.True(t, os.IsNotExist(err))
 				// codex file must remain.
 				_, err = os.Stat(filepath.Join(pluginDir, "skills", "codex", "SKILL.md"))
