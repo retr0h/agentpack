@@ -45,6 +45,9 @@ type Package struct {
 	// Source is the local path or HTTP URL to a .agentpack archive. Set when
 	// the source is not a git repository.
 	Source string `yaml:"source,omitempty"`
+
+	// Skills restricts the install to named skills. Optional.
+	Skills []string `yaml:"skills,omitempty"`
 }
 
 // Config is the parsed contents of agentpack-packages.yaml.

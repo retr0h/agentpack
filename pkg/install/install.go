@@ -458,35 +458,27 @@ func installFromDir(
 	}, nil
 }
 
-// collectTargetFiles walks srcDir to enumerate the files that were installed,
-// then reads their installed copies from installDir to compute checksums.
-// This scopes the collection to only the current plugin's files, avoiding
-// cross-contamination when multiple plugins share a target directory.
+// collectTargetFiles scans the installDir for files written by the current
+// install. It walks the entire installDir and records every regular file.
 func collectTargetFiles(
 	installDir string,
 	tgt target.Target,
-	srcDir string,
+	_ string,
 ) ([]registry.InstalledFile, error) {
 	var allFiles []registry.InstalledFile
 
-	err := filepath.WalkDir(srcDir, func(path string, d os.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(installDir, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil || d.IsDir() {
 			return walkErr
 		}
 
-		rel, relErr := filepath.Rel(srcDir, path)
+		rel, relErr := filepath.Rel(installDir, path)
 		if relErr != nil {
 			return relErr
 		}
 
-		installedPath := filepath.Join(installDir, rel)
-
-		data, readErr := os.ReadFile(installedPath)
+		data, readErr := os.ReadFile(path)
 		if readErr != nil {
-			if os.IsNotExist(readErr) {
-				return nil
-			}
-
 			return readErr
 		}
 

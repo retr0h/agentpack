@@ -97,7 +97,7 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 			return err
 		}
 
-		if updateErr := updateManifests(source, result); updateErr != nil {
+		if updateErr := updateManifests(source, skills, result); updateErr != nil {
 			return updateErr
 		}
 
@@ -161,7 +161,7 @@ var gitHosts = []string{"github.com", "gitlab.com", "bitbucket.org"}
 
 // updateManifests writes the installed package into agentpack-packages.yaml
 // and agentpack.lock in the current working directory.
-func updateManifests(source string, result *install.Result) error {
+func updateManifests(source string, skills []string, result *install.Result) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("get cwd: %w", err)
@@ -175,7 +175,7 @@ func updateManifests(source string, result *install.Result) error {
 		return fmt.Errorf("load packages: %w", err)
 	}
 
-	pkg := buildPackage(result.Name, source)
+	pkg := buildPackage(result.Name, source, skills)
 	cfg.Add(pkg)
 
 	if err := packages.Save(pkgPath, cfg); err != nil {
@@ -219,7 +219,7 @@ func updateManifests(source string, result *install.Result) error {
 // buildPackage constructs a packages.Package from the install source URL.
 // Git-hosted sources populate the Git (and optionally Ref) fields; everything
 // else populates the Source field.
-func buildPackage(name, source string) packages.Package {
+func buildPackage(name, source string, skills []string) packages.Package {
 	pkg := packages.Package{Name: name}
 
 	isGit := false
@@ -245,6 +245,10 @@ func buildPackage(name, source string) packages.Package {
 		pkg.Ref = ref
 	} else {
 		pkg.Source = source
+	}
+
+	if len(skills) > 0 {
+		pkg.Skills = skills
 	}
 
 	return pkg
