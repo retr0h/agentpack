@@ -126,6 +126,31 @@ func TestRun(t *testing.T) {
 				assert.Contains(t, got, "- skills/**/*")
 			},
 		},
+		{
+			name:      "error when base dir cannot be created",
+			skillName: "my-skill",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				blocked := filepath.Join(t.TempDir(), "blocked")
+				require.NoError(t, os.WriteFile(blocked, []byte("file"), 0o644))
+
+				return filepath.Join(blocked, "subdir")
+			},
+			wantErr: "create dir",
+		},
+		{
+			name:      "error when skill dir cannot be created",
+			skillName: "my-skill",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				blocked := filepath.Join(dir, "skills")
+				require.NoError(t, os.WriteFile(blocked, []byte("file"), 0o644))
+
+				return dir
+			},
+			wantErr: "create skill dir",
+		},
 	}
 
 	for _, tt := range tests {
