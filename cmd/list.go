@@ -118,6 +118,10 @@ func listInstalled(cmd *cobra.Command) error {
 	})
 
 	for _, e := range entries {
+		if len(e.SelectedSkills) == 0 {
+			continue
+		}
+
 		for j, skill := range e.Skills {
 			prefix := "  ├─"
 			if j == len(e.Skills)-1 {

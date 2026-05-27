@@ -119,6 +119,10 @@ type PackageManifest struct {
 	// Scope is ScopeLocal or ScopeGlobal.
 	Scope Scope `yaml:"scope,omitempty" json:"scope,omitempty"`
 
+	// SelectedSkills records which skills were explicitly chosen via @skill
+	// or --skill. When empty, the entire repo was installed.
+	SelectedSkills []string `yaml:"selectedSkills,omitempty" json:"selectedSkills,omitempty"`
+
 	// Files is the complete list of files written to disk.
 	Files []InstalledFile `yaml:"files" json:"files"`
 }

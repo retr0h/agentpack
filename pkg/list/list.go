@@ -84,10 +84,11 @@ type Entry struct {
 	SHA       string         `json:"sha"`
 	Source    string         `json:"source"`
 	Targets   []TargetInfo   `json:"targets"`
-	Skills    []SkillInfo    `json:"skills"`
-	Installed string         `json:"installed"`
-	Scope     registry.Scope `json:"scope"`
-	Status    Status         `json:"status"`
+	Skills         []SkillInfo    `json:"skills"`
+	SelectedSkills []string       `json:"selectedSkills,omitempty"`
+	Installed      string         `json:"installed"`
+	Scope          registry.Scope `json:"scope"`
+	Status         Status         `json:"status"`
 }
 
 // GlobalEntry represents a single globally installed skill.
@@ -162,15 +163,16 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 		}
 
 		entries = append(entries, Entry{
-			Name:      m.Name,
-			Version:   shortVersion(m.Version),
-			SHA:       shortSHA(m.SHA),
-			Source:    shortSource(m.Source),
-			Targets:   targets,
-			Skills:    extractSkills(m),
-			Installed: formatDate(m.Installed),
-			Scope:     scope,
-			Status:    status,
+			Name:           m.Name,
+			Version:        shortVersion(m.Version),
+			SHA:            shortSHA(m.SHA),
+			Source:         shortSource(m.Source),
+			Targets:        targets,
+			Skills:         extractSkills(m),
+			SelectedSkills: m.SelectedSkills,
+			Installed:      formatDate(m.Installed),
+			Scope:          scope,
+			Status:         status,
 		})
 	}
 

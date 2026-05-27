@@ -439,13 +439,14 @@ func installFromDir(
 	}
 
 	manifest := &registry.PackageManifest{
-		Name:      meta.Name,
-		Source:    registrySource(opts),
-		SHA:       meta.GitCommitSHA,
-		Version:   meta.Version,
-		Installed: time.Now().UTC().Format(time.RFC3339),
-		Scope:     scope,
-		Files:     allFiles,
+		Name:           meta.Name,
+		Source:         registrySource(opts),
+		SHA:            meta.GitCommitSHA,
+		Version:        meta.Version,
+		Installed:      time.Now().UTC().Format(time.RFC3339),
+		Scope:          scope,
+		SelectedSkills: opts.Skills,
+		Files:          allFiles,
 	}
 	if saveErr := registrySave(manifest); saveErr != nil {
 		return nil, fmt.Errorf("save registry manifest: %w", saveErr)
