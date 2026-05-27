@@ -384,9 +384,9 @@ func TestRunWithRegistry(t *testing.T) {
 				case "gone-pkg":
 					assert.Equal(t, "missing", entries[0].Status)
 				case "dir-pkg":
-					assert.Equal(t, "/home/user/project", entries[0].Dir)
+					assert.Equal(t, "local", entries[0].Scope)
 				case "nofiles-pkg":
-					assert.Equal(t, "", entries[0].Dir)
+					assert.Equal(t, "local", entries[0].Scope)
 					assert.Equal(t, "ok", entries[0].Status)
 				}
 			}

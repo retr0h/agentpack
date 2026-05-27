@@ -63,7 +63,7 @@ type Entry struct {
 	Source    string
 	Targets   string
 	Installed string
-	Dir       string
+	Scope     string
 	Status    string
 }
 
@@ -103,11 +103,8 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 	for _, m := range manifests {
 		targets := collectTargets(m)
 
-		dir := ""
 		status := "ok"
 		if len(m.Files) > 0 {
-			dir = m.Files[0].Dir
-
 			found := false
 			for _, f := range m.Files {
 				path := filepath.Join(f.Dir, f.Path)
@@ -123,6 +120,11 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 			}
 		}
 
+		scope := m.Scope
+		if scope == "" {
+			scope = "local"
+		}
+
 		entries = append(entries, Entry{
 			Name:      m.Name,
 			Version:   shortVersion(m.Version),
@@ -130,7 +132,7 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 			Source:    shortSource(m.Source),
 			Targets:   strings.Join(targets, ", "),
 			Installed: formatDate(m.Installed),
-			Dir:       dir,
+			Scope:     scope,
 			Status:    status,
 		})
 	}

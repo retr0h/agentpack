@@ -106,6 +106,9 @@ type PackageManifest struct {
 	// Installed is the RFC3339 timestamp of when the package was installed.
 	Installed string `yaml:"installed,omitempty"`
 
+	// Scope is "local" or "global".
+	Scope string `yaml:"scope,omitempty"`
+
 	// Files is the complete list of files written to disk.
 	Files []InstalledFile `yaml:"files"`
 }

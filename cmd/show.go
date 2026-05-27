@@ -92,11 +92,17 @@ func showInstalled(cmd *cobra.Command, name string) error {
 		source = source[:idx]
 	}
 
+	scope := m.Scope
+	if scope == "" {
+		scope = "local"
+	}
+
 	cli.FieldAccent(out, "Name", m.Name)
 	cli.Field(out, "Version", version)
 	cli.FieldMuted(out, "Source", source)
 	cli.FieldMuted(out, "SHA", cli.ShortSHA(m.SHA))
 	cli.FieldInfo(out, "Installed", installed)
+	cli.Field(out, "Scope", scope)
 
 	archiveBase := fmt.Sprintf("%s@%s", m.Name, cli.ShortSHA(m.SHA))
 	archivePath := fmt.Sprintf("~/.config/agentpack/archives/%s.agentpack", archiveBase)
