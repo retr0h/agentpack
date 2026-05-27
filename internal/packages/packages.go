@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 )
@@ -101,6 +102,8 @@ func Save(path string, cfg *Config) error {
 func (c *Config) Add(p Package) {
 	for i, existing := range c.Packages {
 		if existing.Name == p.Name {
+			p.Skills = mergeStrings(existing.Skills, p.Skills)
+			p.Targets = mergeStrings(existing.Targets, p.Targets)
 			c.Packages[i] = p
 
 			return
@@ -108,6 +111,29 @@ func (c *Config) Add(p Package) {
 	}
 
 	c.Packages = append(c.Packages, p)
+}
+
+func mergeStrings(a, b []string) []string {
+	if len(a) == 0 && len(b) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool, len(a)+len(b))
+	for _, s := range a {
+		seen[s] = true
+	}
+	for _, s := range b {
+		seen[s] = true
+	}
+
+	result := make([]string, 0, len(seen))
+	for s := range seen {
+		result = append(result, s)
+	}
+
+	sort.Strings(result)
+
+	return result
 }
 
 // Remove deletes the Package with the given name. It is a no-op when the name
