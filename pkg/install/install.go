@@ -187,7 +187,9 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 	}
 
 	if !hasContentDirs(cloneDir) {
-		return nil, fmt.Errorf("repository has no installable content (no skills, commands, hooks, agents, mcp, or settings)")
+		return nil, fmt.Errorf(
+			"repository has no installable content (no skills, commands, hooks, agents, mcp, or settings)",
+		)
 	}
 
 	name := nameFromSource(opts.Source)
