@@ -1318,34 +1318,54 @@ func TestNameFromSource(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "extracts repo name from github URL",
+			name:   "returns owner/repo from github URL",
+			source: "github.com/jeffallan/claude-skills",
+			want:   "jeffallan/claude-skills",
+		},
+		{
+			name:   "returns owner/repo from github URL with different org",
 			source: "github.com/org/skills-repo",
-			want:   "skills-repo",
+			want:   "org/skills-repo",
 		},
 		{
-			name:   "strips .git suffix",
+			name:   "strips .git suffix before extracting owner/repo",
 			source: "github.com/org/skills-repo.git",
-			want:   "skills-repo",
+			want:   "org/skills-repo",
 		},
 		{
-			name:   "strips fragment before extracting name",
+			name:   "strips fragment before extracting owner/repo",
 			source: "github.com/org/skills-repo#v1.0.0",
-			want:   "skills-repo",
+			want:   "org/skills-repo",
 		},
 		{
-			name:   "strips trailing slash",
+			name:   "strips trailing slash before extracting owner/repo",
 			source: "github.com/org/skills-repo/",
-			want:   "skills-repo",
+			want:   "org/skills-repo",
 		},
 		{
-			name:   "returns source unchanged when no slash present",
+			name:   "returns base filename for local path without extension",
 			source: "myrepo",
 			want:   "myrepo",
 		},
 		{
-			name:   "handles https:// prefix",
+			name:   "strips https scheme and returns owner/repo",
 			source: "https://github.com/org/my-plugin.git#main",
-			want:   "my-plugin",
+			want:   "org/my-plugin",
+		},
+		{
+			name:   "returns owner/repo from gitlab URL",
+			source: "gitlab.com/org/repo#v1.0",
+			want:   "org/repo",
+		},
+		{
+			name:   "returns filename without extension for local agentpack archive",
+			source: "/local/path/file.agentpack",
+			want:   "file",
+		},
+		{
+			name:   "returns owner/repo from https github URL without ref",
+			source: "https://github.com/org/repo.git",
+			want:   "org/repo",
 		},
 	}
 

@@ -331,21 +331,73 @@ func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Resu
 	return installFromDir(ctx, opts, tmpDir, meta)
 }
 
-// nameFromSource extracts a plugin name from a source URL.
+// knownGitHosts is the set of hosting domains whose first two path segments
+// form an owner/repo pair.
+var knownGitHosts = []string{
+	"github.com",
+	"gitlab.com",
+	"bitbucket.org",
+}
+
+// nameFromSource extracts a namespaced owner/repo identifier from a source
+// string. For git-hosted sources the two path segments immediately after the
+// host are returned (e.g. "jeffallan/claude-skills"). For local paths only
+// the base filename (without extension) is returned because there is no
+// meaningful owner segment.
 func nameFromSource(source string) string {
 	s := source
+
+	// Local absolute paths (or Windows-style) are identified by a leading
+	// separator. Return just the base filename without extension.
+	if filepath.IsAbs(s) {
+		base := filepath.Base(s)
+		if ext := filepath.Ext(base); ext != "" {
+			base = base[:len(base)-len(ext)]
+		}
+
+		return base
+	}
+
+	// Strip #ref fragment.
 	if idx := strings.LastIndex(s, "#"); idx >= 0 {
 		s = s[:idx]
 	}
 
-	s = strings.TrimSuffix(s, ".git")
+	// Strip trailing slash.
 	s = strings.TrimSuffix(s, "/")
 
-	if idx := strings.LastIndex(s, "/"); idx >= 0 {
-		return s[idx+1:]
+	// Strip .git suffix.
+	s = strings.TrimSuffix(s, ".git")
+
+	// Strip scheme (https://, http://).
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
 	}
 
-	return s
+	// Strip known git host prefix to obtain the remaining path segments.
+	for _, host := range knownGitHosts {
+		if strings.HasPrefix(s, host+"/") {
+			s = strings.TrimPrefix(s, host+"/")
+			break
+		}
+	}
+
+	// s is now one of:
+	//   "owner/repo"          → return as-is
+	//   "owner/repo/extra"    → return first two segments
+	//   "just-a-name"         → no slash, bare name with no owner
+	parts := strings.SplitN(s, "/", 3)
+	if len(parts) >= 2 {
+		return parts[0] + "/" + parts[1]
+	}
+
+	// Bare name (no owner, no host prefix): strip any file extension.
+	base := parts[0]
+	if ext := filepath.Ext(base); ext != "" {
+		base = base[:len(base)-len(ext)]
+	}
+
+	return base
 }
 
 // emitStep calls opts.OnStep when the callback is set.

@@ -48,6 +48,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -127,6 +128,16 @@ type PackageManifest struct {
 	Files []InstalledFile `yaml:"files" json:"files"`
 }
 
+// registryFileName converts a package name to a safe filename. Slashes in
+// namespaced names (e.g. "owner/repo") are replaced with "--" so the result
+// is a flat filename with no directory separators.
+//
+//	"jeffallan/claude-skills" → "jeffallan--claude-skills.yaml"
+//	"my-plugin"               → "my-plugin.yaml"
+func registryFileName(name string) string {
+	return strings.ReplaceAll(name, "/", "--") + ".yaml"
+}
+
 // Registry manages per-package installation manifests.
 type Registry struct{}
 
@@ -161,7 +172,7 @@ func (r *Registry) Save(m *PackageManifest) error {
 		return fmt.Errorf("marshal manifest: %w", err)
 	}
 
-	path := filepath.Join(dir, m.Name+".yaml")
+	path := filepath.Join(dir, registryFileName(m.Name))
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("write manifest %s: %w", path, err)
 	}
@@ -177,7 +188,7 @@ func (r *Registry) Load(name string) (*PackageManifest, error) {
 		return nil, err
 	}
 
-	path := filepath.Join(dir, name+".yaml")
+	path := filepath.Join(dir, registryFileName(name))
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -204,7 +215,7 @@ func (r *Registry) Remove(name string) error {
 		return err
 	}
 
-	path := filepath.Join(dir, name+".yaml")
+	path := filepath.Join(dir, registryFileName(name))
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove manifest %s: %w", path, err)
 	}

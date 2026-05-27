@@ -269,6 +269,83 @@ func TestSaveAndLoad(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
+// TestSaveAndLoadNamespaced
+// --------------------------------------------------------------------------
+
+// TestSaveAndLoadNamespaced verifies that namespaced owner/repo package names
+// round-trip correctly through the registry. The on-disk filename uses "--"
+// instead of "/" so no directory separators appear in the path, but the Name
+// field stored in YAML retains the original "owner/repo" form.
+func TestSaveAndLoadNamespaced(t *testing.T) {
+	tests := []struct {
+		name     string
+		manifest *registry.PackageManifest
+		wantFile string
+	}{
+		{
+			name: "owner/repo name saves as owner--repo.yaml and loads back correctly",
+			manifest: &registry.PackageManifest{
+				Name:    "jeffallan/claude-skills",
+				Source:  "github.com/jeffallan/claude-skills",
+				Version: "1.0.0",
+				Files: []registry.InstalledFile{
+					{
+						Path:   "skills/review.md",
+						SHA256: "deadbeef",
+						Target: "claude-code",
+						Dir:    "/tmp/dir",
+					},
+				},
+			},
+			wantFile: "jeffallan--claude-skills.yaml",
+		},
+		{
+			name: "simple name without slash saves as name.yaml and loads back correctly",
+			manifest: &registry.PackageManifest{
+				Name:    "my-plugin",
+				Source:  "github.com/org/my-plugin",
+				Version: "2.0.0",
+			},
+			wantFile: "my-plugin.yaml",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp, restore := tempHome(t)
+			defer restore()
+
+			r := registry.New()
+			require.NoError(t, r.Save(tt.manifest))
+
+			// Verify the on-disk filename uses "--" instead of "/".
+			pkgDir := filepath.Join(tmp, ".config", "agentpack", "packages")
+			_, statErr := os.Stat(filepath.Join(pkgDir, tt.wantFile))
+			require.NoError(t, statErr)
+
+			// Verify round-trip: Load by the original name returns correct data.
+			got, err := r.Load(tt.manifest.Name)
+			require.NoError(t, err)
+			assert.Equal(t, tt.manifest.Name, got.Name)
+			assert.Equal(t, tt.manifest.Source, got.Source)
+			assert.Equal(t, tt.manifest.Version, got.Version)
+			assert.Len(t, got.Files, len(tt.manifest.Files))
+
+			// Verify List returns the manifest with the correct namespaced name.
+			all, listErr := r.List()
+			require.NoError(t, listErr)
+			require.Len(t, all, 1)
+			assert.Equal(t, tt.manifest.Name, all[0].Name)
+
+			// Verify Remove cleans up by the original name.
+			require.NoError(t, r.Remove(tt.manifest.Name))
+			_, statErr = os.Stat(filepath.Join(pkgDir, tt.wantFile))
+			assert.True(t, os.IsNotExist(statErr))
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
 // TestLoad
 // --------------------------------------------------------------------------
 
