@@ -71,8 +71,9 @@ type TargetInfo struct {
 	FileCount int    `json:"fileCount"`
 }
 
-// SkillInfo holds a skill name and which targets it was installed to.
-type SkillInfo struct {
+// ContentItem holds a content type/name pair and which targets it was installed to.
+type ContentItem struct {
+	Type    string   `json:"type"`
 	Name    string   `json:"name"`
 	Targets []string `json:"targets"`
 }
@@ -84,7 +85,7 @@ type Entry struct {
 	SHA       string         `json:"sha"`
 	Source    string         `json:"source"`
 	Targets   []TargetInfo   `json:"targets"`
-	Skills         []SkillInfo    `json:"skills"`
+	Contents       []ContentItem    `json:"contents"`
 	SelectedSkills []string       `json:"selectedSkills,omitempty"`
 	Installed      string         `json:"installed"`
 	Scope          registry.Scope `json:"scope"`
@@ -168,7 +169,7 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 			SHA:            shortSHA(m.SHA),
 			Source:         shortSource(m.Source),
 			Targets:        targets,
-			Skills:         extractSkills(m),
+			Contents:       extractContentItems(m),
 			SelectedSkills: m.SelectedSkills,
 			Installed:      formatDate(m.Installed),
 			Scope:          scope,
@@ -250,54 +251,68 @@ func collectTargets(m *registry.PackageManifest) []TargetInfo {
 	return infos
 }
 
-// extractSkills scans file paths for the pattern */skills/{skill-name}/* and
-// returns a sorted, deduplicated slice of skill names found across all targets.
-func extractSkills(m *registry.PackageManifest) []SkillInfo {
-	// Map skill name → set of target names.
-	skillTargets := make(map[string]map[string]bool)
+// extractContentItems scans file paths for the pattern */skills/{skill-name}/* and
+var contentDirs = map[string]bool{
+	"skills": true, "commands": true, "agents": true,
+	"hooks": true, "mcp": true, "settings": true,
+}
+
+func extractContentItems(m *registry.PackageManifest) []ContentItem {
+	type itemKey struct{ typ, name string }
+
+	itemTargets := make(map[itemKey]map[string]bool)
 
 	for _, f := range m.Files {
 		normalized := filepath.ToSlash(f.Path)
 		parts := strings.Split(normalized, "/")
 
 		for i, part := range parts {
-			if part != "skills" || i+1 >= len(parts) {
+			if !contentDirs[part] || i+1 >= len(parts) {
 				continue
 			}
 
-			skillName := parts[i+1]
+			itemName := parts[i+1]
 
-			// .agents/skills/{repo}/{skill}/ — skip repo level
-			if i > 0 && parts[i-1] == ".agents" && i+2 < len(parts) {
-				skillName = parts[i+2]
+			if part == "skills" && i > 0 && parts[i-1] == ".agents" && i+2 < len(parts) {
+				itemName = parts[i+2]
 			}
 
-			if skillName != "" {
-				if skillTargets[skillName] == nil {
-					skillTargets[skillName] = make(map[string]bool)
-				}
-
-				skillTargets[skillName][f.Target] = true
+			if strings.Contains(itemName, ".") {
+				itemName = strings.TrimSuffix(itemName, filepath.Ext(itemName))
 			}
+
+			if itemName == "" {
+				continue
+			}
+
+			k := itemKey{part, itemName}
+			if itemTargets[k] == nil {
+				itemTargets[k] = make(map[string]bool)
+			}
+
+			itemTargets[k][f.Target] = true
 		}
 	}
 
-	skills := make([]SkillInfo, 0, len(skillTargets))
-	for name, tgts := range skillTargets {
+	items := make([]ContentItem, 0, len(itemTargets))
+	for k, tgts := range itemTargets {
 		targets := make([]string, 0, len(tgts))
 		for t := range tgts {
 			targets = append(targets, t)
 		}
 
 		slices.Sort(targets)
-		skills = append(skills, SkillInfo{Name: name, Targets: targets})
+		items = append(items, ContentItem{Type: k.typ, Name: k.name, Targets: targets})
 	}
 
-	slices.SortFunc(skills, func(a, b SkillInfo) int {
+	slices.SortFunc(items, func(a, b ContentItem) int {
+		if a.Type != b.Type {
+			return cmp.Compare(a.Type, b.Type)
+		}
 		return cmp.Compare(a.Name, b.Name)
 	})
 
-	return skills
+	return items
 }
 
 func shortSHA(sha string) string {

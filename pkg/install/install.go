@@ -41,6 +41,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -63,6 +64,10 @@ var (
 	// registrySave is a swappable wrapper around registry.New().Save so tests
 	// can prevent writes to the real ~/.config/agentpack/packages/ directory.
 	registrySave = registry.New().Save
+
+	// registryLoad is a swappable wrapper around registry.New().Load so tests
+	// can inject a pre-existing manifest without touching the real registry.
+	registryLoad = registry.New().Load
 )
 
 // Installer orchestrates the agentpack install pipeline.
@@ -448,6 +453,12 @@ func installFromDir(
 		SelectedSkills: opts.Skills,
 		Files:          allFiles,
 	}
+
+	if existing, loadErr := registryLoad(meta.Name); loadErr == nil && existing != nil {
+		manifest.Files = mergeFiles(existing.Files, manifest.Files)
+		manifest.SelectedSkills = mergeStrings(existing.SelectedSkills, manifest.SelectedSkills)
+	}
+
 	if saveErr := registrySave(manifest); saveErr != nil {
 		return nil, fmt.Errorf("save registry manifest: %w", saveErr)
 	}
@@ -605,4 +616,50 @@ func registrySource(opts Options) string {
 		return opts.OriginalSource
 	}
 	return opts.Source
+}
+
+func mergeFiles(existing, incoming []registry.InstalledFile) []registry.InstalledFile {
+	type key struct {
+		Path   string
+		Target string
+	}
+
+	seen := make(map[key]int, len(existing))
+	merged := make([]registry.InstalledFile, len(existing))
+	copy(merged, existing)
+
+	for i, f := range merged {
+		seen[key{f.Path, f.Target}] = i
+	}
+
+	for _, f := range incoming {
+		k := key{f.Path, f.Target}
+		if idx, ok := seen[k]; ok {
+			merged[idx] = f
+		} else {
+			seen[k] = len(merged)
+			merged = append(merged, f)
+		}
+	}
+
+	return merged
+}
+
+func mergeStrings(a, b []string) []string {
+	seen := make(map[string]bool, len(a)+len(b))
+	for _, s := range a {
+		seen[s] = true
+	}
+	for _, s := range b {
+		seen[s] = true
+	}
+
+	result := make([]string, 0, len(seen))
+	for s := range seen {
+		result = append(result, s)
+	}
+
+	slices.Sort(result)
+
+	return result
 }

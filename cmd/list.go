@@ -125,20 +125,21 @@ func listInstalled(cmd *cobra.Command) error {
 	})
 
 	for _, e := range entries {
-		if len(e.SelectedSkills) == 0 {
+		if len(e.Contents) == 0 {
 			continue
 		}
 
-		for j, skill := range e.Skills {
+		for j, item := range e.Contents {
 			prefix := "  ├─"
-			if j == len(e.Skills)-1 {
+			if j == len(e.Contents)-1 {
 				prefix = "  └─"
 			}
 
-			tgtStr := cli.Tag(out, strings.Join(skill.Targets, ", "))
+			label := item.Type + "/" + item.Name
+			tgtStr := cli.Tag(out, strings.Join(item.Targets, ", "))
 			cli.Printf(out, "%s %s  %s %s\n",
 				cli.Mute(out, prefix),
-				skill.Name,
+				label,
 				cli.Mute(out, "→"),
 				tgtStr,
 			)

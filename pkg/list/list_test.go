@@ -451,8 +451,8 @@ func TestRunWithRegistry(t *testing.T) {
 					assert.Equal(t, registry.ScopeLocal, entries[0].Scope)
 					assert.Equal(t, list.StatusEmpty, entries[0].Status)
 				case "skills-pkg":
-					skillNames := make([]string, len(entries[0].Skills))
-					for k, s := range entries[0].Skills {
+					skillNames := make([]string, len(entries[0].Contents))
+					for k, s := range entries[0].Contents {
 						skillNames[k] = s.Name
 					}
 					assert.Equal(t, []string{"codex", "kubernetes-specialist"}, skillNames)
@@ -682,15 +682,15 @@ func TestExtractSkillsViaRunWithRegistry(t *testing.T) {
 			require.Len(t, entries, 1)
 
 			if tt.wantSkillNames == nil {
-				assert.Empty(t, entries[0].Skills)
+				assert.Empty(t, entries[0].Contents)
 			} else {
-				names := make([]string, len(entries[0].Skills))
-				for k, s := range entries[0].Skills {
+				names := make([]string, len(entries[0].Contents))
+				for k, s := range entries[0].Contents {
 					names[k] = s.Name
 				}
 				assert.Equal(t, tt.wantSkillNames, names)
 
-				for _, s := range entries[0].Skills {
+				for _, s := range entries[0].Contents {
 					if want, ok := tt.wantTargets[s.Name]; ok {
 						assert.Equal(t, want, s.Targets)
 					}
