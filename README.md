@@ -43,17 +43,17 @@ go build -o agentpack .
 ## 🚀 Quick Start
 
 ```bash
-agentpack add github.com/org/skills-repo          # add from git
-agentpack add github.com/org/repo#v1.0.0          # pin to a tag
-agentpack add github.com/org/repo --skill review  # one skill only
+agentpack search react                            # find skills
+agentpack add owner/repo@skill-name               # add a skill
+agentpack add owner/repo --skill foo --skill bar  # add multiple skills
+agentpack add owner/repo -g                       # add globally
 agentpack ls                                      # list installed
-agentpack ls --outdated                           # check for updates
+agentpack ls --targets                            # show detected agents
 agentpack info my-plugin                          # package details
-agentpack info plugin.agentpack                   # peek inside an archive
-agentpack verify plugin.agentpack                 # verify checksums
 agentpack del my-plugin                           # delete a plugin
-agentpack install                                 # install from agentpack-packages.yaml
+agentpack init my-skill                           # scaffold a new skill
 agentpack build                                   # build .agentpack archives
+agentpack install                                 # install from manifest
 ```
 
 See [Usage][] for full details.
