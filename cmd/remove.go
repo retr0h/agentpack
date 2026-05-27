@@ -85,10 +85,7 @@ append @skill to the package name: agentpack del my-package@my-skill`,
 			return err
 		}
 
-		// Only clean up manifests on full package removal (no skill filter).
-		if skill == "" {
-			removeManifests(name)
-		}
+		removeManifests(name, skill)
 
 		if outputFormat == "json" {
 			return jsonOutput(out, result)
@@ -110,20 +107,40 @@ append @skill to the package name: agentpack del my-package@my-skill`,
 // agentpack.lock, and the hooks section of .claude/settings.json. All
 // operations are best-effort: a missing file or missing entry is not an error,
 // because users may have installed a package without a managed yaml/lock.
-func removeManifests(name string) {
+func removeManifests(name, skill string) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return
 	}
 
 	pkgPath := filepath.Join(cwd, "agentpack-packages.yaml")
-	if cfg, err := packages.Load(pkgPath); err == nil {
+	lockPath := filepath.Join(cwd, "agentpack.lock")
+
+	if skill != "" {
+		if cfg, loadErr := packages.Load(pkgPath); loadErr == nil {
+			if p := cfg.Find(name); p != nil {
+				remaining := make([]string, 0, len(p.Skills))
+				for _, s := range p.Skills {
+					if s != skill {
+						remaining = append(remaining, s)
+					}
+				}
+
+				p.Skills = remaining
+			}
+
+			_ = packages.Save(pkgPath, cfg)
+		}
+
+		return
+	}
+
+	if cfg, loadErr := packages.Load(pkgPath); loadErr == nil {
 		cfg.Remove(name)
 		_ = packages.Save(pkgPath, cfg)
 	}
 
-	lockPath := filepath.Join(cwd, "agentpack.lock")
-	if lf, err := lock.Load(lockPath); err == nil {
+	if lf, loadErr := lock.Load(lockPath); loadErr == nil {
 		lf.Remove(name)
 		_ = lock.Save(lockPath, lf)
 	}
