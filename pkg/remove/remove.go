@@ -233,14 +233,18 @@ func (r *Remover) Run(ctx context.Context, opts Options) (*Result, error) {
 }
 
 // filterSkillFiles returns only files whose path contains the segment
-// /skills/{skill}/ (using forward-slash normalisation).
+// skills/{skill}/ as a path component sequence (using forward-slash
+// normalisation). The segment may appear at any position in the path.
 func filterSkillFiles(files []registry.InstalledFile, skill string) []registry.InstalledFile {
-	needle := "/skills/" + skill + "/"
+	// Build two forms to match: mid-path (/skills/name/) and leading (skills/name/).
+	midNeedle := "/skills/" + skill + "/"
+	leadNeedle := "skills/" + skill + "/"
+
 	var out []registry.InstalledFile
 
 	for _, f := range files {
 		normalized := filepath.ToSlash(f.Path)
-		if strings.Contains(normalized, needle) {
+		if strings.Contains(normalized, midNeedle) || strings.HasPrefix(normalized, leadNeedle) {
 			out = append(out, f)
 		}
 	}

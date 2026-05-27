@@ -9,7 +9,8 @@ Proposed
 - Repos can ship skills, commands, hooks, MCP, settings, and agents
 - Users may want skills but not hooks that modify config
 - CLI shorthand (`@skill`) only handles skills — need full control somewhere
-- The manifest (`agentpack-packages.yaml`) is the right place for declarative control
+- The manifest (`agentpack-packages.yaml`) is the right place for declarative
+  control
 
 ## Considered Alternatives
 
@@ -22,10 +23,9 @@ Proposed
 ## Context
 
 When a repo ships hooks or MCP configs alongside skills, `add repo@skill`
-installs the skill but ALSO installs all hooks and MCP configs. Users have
-no way to say "give me the skills but not the hooks." The CLI shorthand
-should stay simple (`@skill` = skills only). The manifest should provide
-full control.
+installs the skill but ALSO installs all hooks and MCP configs. Users have no
+way to say "give me the skills but not the hooks." The CLI shorthand should stay
+simple (`@skill` = skills only). The manifest should provide full control.
 
 ## Decision
 
@@ -35,14 +35,14 @@ full control.
 - `add owner/repo --skill foo --skill bar` — installs named skills
 - `add owner/repo` — installs everything from the repo
 
-The `@skill` shorthand implies `content: [skills]` — only skills are
-installed, other content types are skipped.
+The `@skill` shorthand implies `content: [skills]` — only skills are installed,
+other content types are skipped.
 
 ### Manifest per-type selectors
 
-Each content type gets its own optional field in `agentpack-packages.yaml`.
-When a field is present, only the named items are installed for that type.
-When absent, all items of that type are installed.
+Each content type gets its own optional field in `agentpack-packages.yaml`. When
+a field is present, only the named items are installed for that type. When
+absent, all items of that type are installed.
 
 ```yaml
 packages:
@@ -60,8 +60,8 @@ packages:
     git: github.com/org/toolkit
     agents:
       - security-reviewer
-    skills: []      # explicit empty = skip all skills
-    commands: []    # explicit empty = skip all commands
+    skills: [] # explicit empty = skip all skills
+    commands: [] # explicit empty = skip all commands
 
   # Install everything (current behavior, backward compatible)
   - name: full-toolkit
@@ -70,33 +70,34 @@ packages:
 
 Supported filter fields:
 
-| Field | Filters | Directory |
-|---|---|---|
-| `skills` | Skill subdirectory names | `skills/` |
-| `commands` | Command file names | `commands/` |
-| `agents` | Agent subdirectory names | `agents/` |
-| `hooks` | Hook file names | `hooks/` |
-| `mcp` | MCP config names | `mcp/` |
-| `settings` | Settings file names | `settings/` |
+| Field      | Filters                  | Directory   |
+| ---------- | ------------------------ | ----------- |
+| `skills`   | Skill subdirectory names | `skills/`   |
+| `commands` | Command file names       | `commands/` |
+| `agents`   | Agent subdirectory names | `agents/`   |
+| `hooks`    | Hook file names          | `hooks/`    |
+| `mcp`      | MCP config names         | `mcp/`      |
+| `settings` | Settings file names      | `settings/` |
 
 An explicit empty list (`skills: []`) means "install none of this type."
 Omitting the field entirely means "install all of this type."
 
 ### Interaction with config merging
 
-When `hooks` or `mcp` or `settings` are excluded from the `content`
-whitelist:
+When `hooks` or `mcp` or `settings` are excluded from the `content` whitelist:
+
 - The files are not copied
 - Config merging does NOT run for those types
 - No entries are written to `.claude/settings.json`
 
-This is safe because the content check happens before the target
-install, not after.
+This is safe because the content check happens before the target install, not
+after.
 
 ### Interaction with `@skill` shorthand
 
-When `@skill` is used on the CLI, it implicitly sets
-`content: [skills]` for that install. This means:
+When `@skill` is used on the CLI, it implicitly sets `content: [skills]` for
+that install. This means:
+
 - Only skills are packaged and installed
 - Commands, hooks, MCP, settings from the repo are ignored
 - No config merging side effects
