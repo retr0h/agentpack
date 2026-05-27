@@ -140,6 +140,17 @@ func SetRegistrySave(fn func(*registry.PackageManifest) error) func() {
 	return func() { registrySave = orig }
 }
 
+// SetRegistryLoad replaces the registryLoad function for testing. It returns
+// a restore function that callers should defer so each test cleans up after
+// itself. Use this in non-parallel tests to prevent reads from the real
+// ~/.config/agentpack/packages/ directory.
+func SetRegistryLoad(fn func(string) (*registry.PackageManifest, error)) func() {
+	orig := registryLoad
+	registryLoad = fn
+
+	return func() { registryLoad = orig }
+}
+
 // NameFromSource exposes nameFromSource for testing.
 func NameFromSource(source string) string {
 	return nameFromSource(source)
