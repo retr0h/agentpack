@@ -93,11 +93,14 @@ func listInstalled(cmd *cobra.Command) error {
 	}
 
 	for i, e := range entries {
-		// Package header: name (accent) + source (muted) on one line.
+		// Package header line.
 		cli.Printf(
 			out,
-			"%s  %s\n",
+			"%s  %s  %s  %s  %s\n",
 			cli.Accent(out, e.Name),
+			e.Version,
+			cli.Mute(out, e.SHA),
+			cli.Info(out, e.Installed),
 			cli.Mute(out, e.Source),
 		)
 
