@@ -108,7 +108,8 @@ func lifecycleArchive(t *testing.T, name, version string) string {
 		})
 	}
 
-	fileEntries = append(fileEntries,
+	fileEntries = append(
+		fileEntries,
 		archive.FileEntry{ArchivePath: ".agentpack/metadata.json", Content: metaJSON},
 		archive.FileEntry{ArchivePath: ".agentpack/checksums.txt", Content: []byte(checksumLines)},
 	)
@@ -149,51 +150,55 @@ func mockTargetThatInstalls(
 		DoAndReturn(func(_ context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
 			var installed []target.InstalledFile
 
-			err := filepath.WalkDir(opts.SourceDir, func(path string, d os.DirEntry, walkErr error) error {
-				if walkErr != nil {
-					return walkErr
-				}
+			err := filepath.WalkDir(
+				opts.SourceDir,
+				func(path string, d os.DirEntry, walkErr error) error {
+					if walkErr != nil {
+						return walkErr
+					}
 
-				if d.IsDir() {
+					if d.IsDir() {
+						return nil
+					}
+
+					rel, relErr := filepath.Rel(opts.SourceDir, path)
+					if relErr != nil {
+						return relErr
+					}
+
+					// Skip .agentpack internal files — targets never install those.
+					if len(rel) >= len(".agentpack") && rel[:len(".agentpack")] == ".agentpack" {
+						return nil
+					}
+
+					dst := filepath.Join(installDir, rel)
+					if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+						return mkErr
+					}
+
+					data, readErr := os.ReadFile(path)
+					if readErr != nil {
+						return readErr
+					}
+
+					if writeErr := os.WriteFile(dst, data, 0o644); writeErr != nil {
+						return writeErr
+					}
+
+					h := sha256.Sum256(data)
+
+					installed = append(installed, target.InstalledFile{
+						Path:   rel,
+						SHA256: hex.EncodeToString(h[:]),
+					})
+
 					return nil
-				}
-
-				rel, relErr := filepath.Rel(opts.SourceDir, path)
-				if relErr != nil {
-					return relErr
-				}
-
-				// Skip .agentpack internal files — targets never install those.
-				if len(rel) >= len(".agentpack") && rel[:len(".agentpack")] == ".agentpack" {
-					return nil
-				}
-
-				dst := filepath.Join(installDir, rel)
-				if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-					return mkErr
-				}
-
-				data, readErr := os.ReadFile(path)
-				if readErr != nil {
-					return readErr
-				}
-
-				if writeErr := os.WriteFile(dst, data, 0o644); writeErr != nil {
-					return writeErr
-				}
-
-				h := sha256.Sum256(data)
-
-				installed = append(installed, target.InstalledFile{
-					Path:   rel,
-					SHA256: hex.EncodeToString(h[:]),
-				})
-
-				return nil
-			})
+				},
+			)
 
 			return installed, err
-		}).AnyTimes()
+		}).
+		AnyTimes()
 
 	return m
 }
@@ -427,7 +432,11 @@ func testLifecycleFull(t *testing.T) {
 	listedM := allManifests[0]
 	assert.Equal(t, "lifecycle-pkg", listedM.Name)
 
-	assert.ElementsMatch(t, []string{"kubernetes-specialist", "react-expert"}, listedM.SelectedSkills)
+	assert.ElementsMatch(
+		t,
+		[]string{"kubernetes-specialist", "react-expert"},
+		listedM.SelectedSkills,
+	)
 
 	listedTargets := collectTargetNames(listedM.Files)
 	assert.ElementsMatch(t, []string{"claude-code", "cursor"}, listedTargets)
@@ -590,56 +599,60 @@ func testLifecycleSkillFilter(t *testing.T) {
 		DoAndReturn(func(_ context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
 			var installed []target.InstalledFile
 
-			err := filepath.WalkDir(opts.SourceDir, func(path string, d os.DirEntry, walkErr error) error {
-				if walkErr != nil {
-					return walkErr
-				}
+			err := filepath.WalkDir(
+				opts.SourceDir,
+				func(path string, d os.DirEntry, walkErr error) error {
+					if walkErr != nil {
+						return walkErr
+					}
 
-				if d.IsDir() {
+					if d.IsDir() {
+						return nil
+					}
+
+					rel, relErr := filepath.Rel(opts.SourceDir, path)
+					if relErr != nil {
+						return relErr
+					}
+
+					// Skip .agentpack metadata files.
+					if len(rel) >= len(".agentpack") && rel[:len(".agentpack")] == ".agentpack" {
+						return nil
+					}
+
+					// Only install files that belong to the requested skill.
+					normalized := filepath.ToSlash(rel)
+					if !strings.Contains(normalized, "kubernetes-specialist") {
+						return nil
+					}
+
+					dst := filepath.Join(installDir, rel)
+					if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+						return mkErr
+					}
+
+					data, readErr := os.ReadFile(path)
+					if readErr != nil {
+						return readErr
+					}
+
+					if writeErr := os.WriteFile(dst, data, 0o644); writeErr != nil {
+						return writeErr
+					}
+
+					h := sha256.Sum256(data)
+					installed = append(installed, target.InstalledFile{
+						Path:   rel,
+						SHA256: hex.EncodeToString(h[:]),
+					})
+
 					return nil
-				}
-
-				rel, relErr := filepath.Rel(opts.SourceDir, path)
-				if relErr != nil {
-					return relErr
-				}
-
-				// Skip .agentpack metadata files.
-				if len(rel) >= len(".agentpack") && rel[:len(".agentpack")] == ".agentpack" {
-					return nil
-				}
-
-				// Only install files that belong to the requested skill.
-				normalized := filepath.ToSlash(rel)
-				if !strings.Contains(normalized, "kubernetes-specialist") {
-					return nil
-				}
-
-				dst := filepath.Join(installDir, rel)
-				if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-					return mkErr
-				}
-
-				data, readErr := os.ReadFile(path)
-				if readErr != nil {
-					return readErr
-				}
-
-				if writeErr := os.WriteFile(dst, data, 0o644); writeErr != nil {
-					return writeErr
-				}
-
-				h := sha256.Sum256(data)
-				installed = append(installed, target.InstalledFile{
-					Path:   rel,
-					SHA256: hex.EncodeToString(h[:]),
-				})
-
-				return nil
-			})
+				},
+			)
 
 			return installed, err
-		}).AnyTimes()
+		}).
+		AnyTimes()
 
 	_, err := install.New().Run(ctx, install.Options{
 		Source:  archivePath,

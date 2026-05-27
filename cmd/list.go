@@ -197,7 +197,8 @@ func listInstalled(cmd *cobra.Command) error {
 				prefix = "  └─"
 			}
 
-			cli.Printf(out, "%s %s  %s %s\n",
+			cli.Printf(
+				out, "%s %s  %s %s\n",
 				cli.Mute(out, prefix),
 				row.label,
 				cli.Mute(out, "→"),

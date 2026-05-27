@@ -33,27 +33,27 @@ import (
 
 // LockedFile records a single installed file with its integrity hash.
 type LockedFile struct {
-	Path   string `yaml:"path" json:"path"`
+	Path   string `yaml:"path"   json:"path"`
 	SHA256 string `yaml:"sha256" json:"sha256"`
 	Target string `yaml:"target" json:"target"`
 }
 
 // LockedPackage records the resolved state of a single installed package.
 type LockedPackage struct {
-	Name     string       `yaml:"name" json:"name"`
-	Source   string       `yaml:"source" json:"source"`
-	Ref      string       `yaml:"ref,omitempty" json:"ref,omitempty"`
-	SHA      string       `yaml:"sha" json:"sha"`
-	Resolved string       `yaml:"resolved" json:"resolved"`
-	Skills   []string     `yaml:"skills,omitempty" json:"skills,omitempty"`
+	Name     string       `yaml:"name"              json:"name"`
+	Source   string       `yaml:"source"            json:"source"`
+	Ref      string       `yaml:"ref,omitempty"     json:"ref,omitempty"`
+	SHA      string       `yaml:"sha"               json:"sha"`
+	Resolved string       `yaml:"resolved"          json:"resolved"`
+	Skills   []string     `yaml:"skills,omitempty"  json:"skills,omitempty"`
 	Targets  []string     `yaml:"targets,omitempty" json:"targets,omitempty"`
-	Files    []LockedFile `yaml:"files,omitempty" json:"files,omitempty"`
+	Files    []LockedFile `yaml:"files,omitempty"   json:"files,omitempty"`
 }
 
 // Lockfile represents the full contents of an agentpack.lock file.
 type Lockfile struct {
 	LockVersion int             `yaml:"lockVersion" json:"lockVersion"`
-	Packages    []LockedPackage `yaml:"packages" json:"packages"`
+	Packages    []LockedPackage `yaml:"packages"    json:"packages"`
 }
 
 // Load reads the lockfile at path. When the file does not exist an empty
