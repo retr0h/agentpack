@@ -65,7 +65,7 @@ func Execute() {
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		out := rootCmd.ErrOrStderr()
-		cli.Printf(out, "  %s %s\n", cli.Err(out, "✗"), err.Error())
+		cli.Printf(out, "  %s %s\n\n", cli.Err(out, "✗"), err.Error())
 		os.Exit(1)
 	}
 }

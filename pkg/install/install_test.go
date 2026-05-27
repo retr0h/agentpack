@@ -305,6 +305,8 @@ func TestRun(t *testing.T) {
 name: test-plugin
 version: "1.0.0"
 description: A test plugin
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("test").AnyTimes()
@@ -338,6 +340,8 @@ description: A test plugin
 name: multi-plugin
 version: "1.0.0"
 description: Multi-target plugin
+skills:
+  - skills/**/*
 `)
 				m1 := mocks.NewMockTarget(ctrl)
 				m1.EXPECT().Name().Return("alpha").AnyTimes()
@@ -385,6 +389,8 @@ description: Multi-target plugin
 name: step-plugin
 version: "1.0.0"
 description: step test
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("step-target").AnyTimes()
@@ -442,6 +448,8 @@ description: step test
 name: cancel-plugin
 version: "1.0.0"
 description: Plugin for cancel test
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
@@ -463,6 +471,8 @@ description: Plugin for cancel test
 name: ctx-after-fetch
 version: "1.0.0"
 description: ctx after fetch
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
@@ -484,6 +494,8 @@ description: ctx after fetch
 name: ctx-after-extract
 version: "1.0.0"
 description: ctx after extract
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
@@ -508,6 +520,8 @@ description: ctx after extract
 name: ctx-in-verify
 version: "1.0.0"
 description: ctx in verify
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
@@ -548,6 +562,8 @@ description: ctx in verify
 name: mkdir-test-plugin
 version: "1.0.0"
 description: Plugin for mkdir temp test
+skills:
+  - skills/**/*
 `)
 
 				return archivePath, nil
@@ -618,6 +634,8 @@ description: Plugin for mkdir temp test
 name: tgt-fail-plugin
 version: "1.0.0"
 description: target fail test
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("fail-target").AnyTimes()
@@ -641,6 +659,8 @@ description: target fail test
 name: copytotemp-mkdir-plugin
 version: "1.0.0"
 description: test copyToTemp mkdir fail
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
@@ -668,6 +688,8 @@ description: test copyToTemp mkdir fail
 name: ctx-verify-plugin
 version: "1.0.0"
 description: ctx during verify
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
@@ -694,6 +716,8 @@ description: ctx during verify
 name: ctx-post-meta-plugin
 version: "1.0.0"
 description: ctx after metadata
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
@@ -718,6 +742,8 @@ description: ctx after metadata
 name: ctx-loop-plugin
 version: "1.0.0"
 description: ctx inside targets loop
+skills:
+  - skills/**/*
 `)
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()

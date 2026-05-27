@@ -186,6 +186,10 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 		return nil, err
 	}
 
+	if !hasContentDirs(cloneDir) {
+		return nil, fmt.Errorf("repository has no installable content (no skills, commands, hooks, agents, mcp, or settings)")
+	}
+
 	name := nameFromSource(opts.Source)
 
 	// Use the ref as version when pinned, otherwise "latest".
@@ -311,6 +315,10 @@ func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Resu
 		if checkErr := opts.ContentCheck(meta.Content); checkErr != nil {
 			return nil, checkErr
 		}
+	}
+
+	if !hasContentDirs(tmpDir) {
+		return nil, fmt.Errorf("package %s has no installable content", meta.Name)
 	}
 
 	emitStep(opts, Step{
@@ -604,6 +612,16 @@ func shortSHA(sha string) string {
 	}
 
 	return sha
+}
+
+func hasContentDirs(dir string) bool {
+	for _, name := range []string{"skills", "commands", "agents", "hooks", "mcp", "settings"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 func registrySource(opts Options) string {
