@@ -21,8 +21,8 @@ agentpack add github.com/org/repo#abc1234          # commit SHA
 ### Filtering specific skills
 
 ```bash
-agentpack add github.com/org/repo --skill review
-agentpack add github.com/org/repo --skill review --skill deploy
+agentpack add org/repo@review                                  # @skill shorthand
+agentpack add github.com/org/repo --skill review --skill deploy # multiple skills
 ```
 
 ### From a local archive
@@ -143,6 +143,10 @@ packages:
   - name: security-skills
     git: github.com/org/security-skills
     ref: v1.0.0
+    skills:
+      - code-review
+    targets:
+      - claude-code
 
   - name: devops-skills
     git: github.com/org/devops-skills
@@ -153,6 +157,12 @@ packages:
   - name: remote-plugin
     source: https://example.com/plugin.agentpack
 ```
+
+Fields:
+- `git` / `source` — where to fetch from (mutually exclusive)
+- `ref` — git tag, branch, or SHA to pin (optional)
+- `skills` — only install named skills (optional, all if omitted)
+- `targets` — only install to named agents (optional, auto-detect if omitted)
 
 Then install:
 

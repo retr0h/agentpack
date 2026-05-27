@@ -48,6 +48,9 @@ type Package struct {
 
 	// Skills restricts the install to named skills. Optional.
 	Skills []string `yaml:"skills,omitempty"`
+
+	// Targets restricts which agent targets to install to. Optional.
+	Targets []string `yaml:"targets,omitempty"`
 }
 
 // Config is the parsed contents of agentpack-packages.yaml.

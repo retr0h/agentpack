@@ -175,7 +175,7 @@ func updateManifests(source string, skills []string, result *install.Result) err
 		return fmt.Errorf("load packages: %w", err)
 	}
 
-	pkg := buildPackage(result.Name, source, skills)
+	pkg := buildPackage(result.Name, source, skills, installTargets)
 	cfg.Add(pkg)
 
 	if err := packages.Save(pkgPath, cfg); err != nil {
@@ -219,7 +219,7 @@ func updateManifests(source string, skills []string, result *install.Result) err
 // buildPackage constructs a packages.Package from the install source URL.
 // Git-hosted sources populate the Git (and optionally Ref) fields; everything
 // else populates the Source field.
-func buildPackage(name, source string, skills []string) packages.Package {
+func buildPackage(name, source string, skills, targets []string) packages.Package {
 	pkg := packages.Package{Name: name}
 
 	isGit := false
@@ -249,6 +249,10 @@ func buildPackage(name, source string, skills []string) packages.Package {
 
 	if len(skills) > 0 {
 		pkg.Skills = skills
+	}
+
+	if len(targets) > 0 {
+		pkg.Targets = targets
 	}
 
 	return pkg

@@ -30,6 +30,85 @@ import (
 	"github.com/retr0h/agentpack/internal/fetcher"
 )
 
+// --------------------------------------------------------------------------
+// TestExpandShorthand
+// --------------------------------------------------------------------------
+
+func TestExpandShorthand(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "bare owner/repo expands to github.com",
+			input: "jeffallan/claude-skills",
+			want:  "github.com/jeffallan/claude-skills",
+		},
+		{
+			name:  "owner/repo with at-skill suffix expands and preserves suffix",
+			input: "owner/repo@skill",
+			want:  "github.com/owner/repo@skill",
+		},
+		{
+			name:  "owner/repo with hash-ref suffix expands and preserves suffix",
+			input: "owner/repo#v1.0",
+			want:  "github.com/owner/repo#v1.0",
+		},
+		{
+			name:  "already qualified github.com path is unchanged",
+			input: "github.com/owner/repo",
+			want:  "github.com/owner/repo",
+		},
+		{
+			name:  "https scheme is unchanged",
+			input: "https://github.com/owner/repo",
+			want:  "https://github.com/owner/repo",
+		},
+		{
+			name:  "absolute path is unchanged",
+			input: "/local/path",
+			want:  "/local/path",
+		},
+		{
+			name:  "relative path is unchanged",
+			input: "./relative",
+			want:  "./relative",
+		},
+		{
+			name:  "home-relative path is unchanged",
+			input: "~/home/path",
+			want:  "~/home/path",
+		},
+		{
+			name:  "bare name without slash is unchanged",
+			input: "just-a-name",
+			want:  "just-a-name",
+		},
+		{
+			name:  "three-segment path is unchanged",
+			input: "a/b/c",
+			want:  "a/b/c",
+		},
+		{
+			name:  "empty string is unchanged",
+			input: "",
+			want:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := fetcher.ExpandShorthand(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestNew(t *testing.T) {
 	t.Parallel()
 

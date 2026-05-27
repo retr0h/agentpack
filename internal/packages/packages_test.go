@@ -173,6 +173,64 @@ func TestSave(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
+// TestSaveLoad_SkillsAndTargets
+// --------------------------------------------------------------------------
+
+func TestSaveLoad_SkillsAndTargets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		pkg         packages.Package
+		wantSkills  []string
+		wantTargets []string
+	}{
+		{
+			name: "skills and targets round-trip through save and load",
+			pkg: packages.Package{
+				Name:    "review-skills",
+				Git:     "github.com/org/review-skills",
+				Skills:  []string{"review", "deploy"},
+				Targets: []string{"claude-code"},
+			},
+			wantSkills:  []string{"review", "deploy"},
+			wantTargets: []string{"claude-code"},
+		},
+		{
+			name: "absent skills and targets round-trip as nil",
+			pkg: packages.Package{
+				Name: "minimal-plugin",
+				Git:  "github.com/org/minimal-plugin",
+			},
+			wantSkills:  nil,
+			wantTargets: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), "agentpack-packages.yaml")
+
+			cfg := &packages.Config{}
+			cfg.Add(tt.pkg)
+
+			require.NoError(t, packages.Save(path, cfg))
+
+			got, err := packages.Load(path)
+			require.NoError(t, err)
+
+			found := got.Find(tt.pkg.Name)
+			require.NotNil(t, found)
+
+			assert.Equal(t, tt.wantSkills, found.Skills)
+			assert.Equal(t, tt.wantTargets, found.Targets)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
 // TestLoadPermissionDenied
 // --------------------------------------------------------------------------
 
