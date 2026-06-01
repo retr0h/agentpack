@@ -31,6 +31,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/metadata"
 )
@@ -220,6 +221,67 @@ func TestCapture(t *testing.T) {
 			if tc.checkResult != nil {
 				tc.checkResult(t, m)
 			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// ContentEntry / Entries
+// --------------------------------------------------------------------------
+
+func TestMetadataEntriesYAMLRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		entries []metadata.ContentEntry
+		wantKey bool // whether "entries:" should appear in the YAML output
+	}{
+		{
+			name: "nil entries omitted from YAML",
+			entries: nil,
+			wantKey: false,
+		},
+		{
+			name: "single entry round-trips",
+			entries: []metadata.ContentEntry{
+				{Name: "my-command", Type: "command"},
+			},
+			wantKey: true,
+		},
+		{
+			name: "multiple entries round-trip",
+			entries: []metadata.ContentEntry{
+				{Name: "agent-one", Type: "agent"},
+				{Name: "hook-init", Type: "hook"},
+			},
+			wantKey: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			original := metadata.Metadata{
+				Name:    "test-plugin",
+				Version: "0.1.0",
+				Entries: tc.entries,
+			}
+
+			data, err := yaml.Marshal(original)
+			require.NoError(t, err)
+
+			if tc.wantKey {
+				assert.Contains(t, string(data), "entries:")
+			} else {
+				assert.NotContains(t, string(data), "entries:")
+			}
+
+			var got metadata.Metadata
+			require.NoError(t, yaml.Unmarshal(data, &got))
+
+			assert.Equal(t, original.Entries, got.Entries)
 		})
 	}
 }

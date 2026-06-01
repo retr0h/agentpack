@@ -33,16 +33,23 @@ import (
 	"github.com/retr0h/agentpack/internal/safety"
 )
 
+// ContentEntry describes a single typed item included in a plugin archive.
+type ContentEntry struct {
+	Name string `json:"name" yaml:"name"`
+	Type string `json:"type" yaml:"type"`
+}
+
 // Metadata holds build and source-control information for a plugin archive.
 type Metadata struct {
-	Name           string                 `json:"name"`
-	Version        string                 `json:"version"`
-	GitCommitSHA   string                 `json:"gitCommitSHA"`
-	GitBranch      string                 `json:"gitBranch"`
-	BuildTimestamp string                 `json:"buildTimestamp"`
-	BuilderVersion string                 `json:"builderVersion"`
-	Platform       string                 `json:"platform"`
-	Content        *safety.Classification `json:"content,omitempty"`
+	Name           string                 `json:"name"                      yaml:"name"`
+	Version        string                 `json:"version"                   yaml:"version"`
+	GitCommitSHA   string                 `json:"gitCommitSHA"              yaml:"gitCommitSHA"`
+	GitBranch      string                 `json:"gitBranch"                 yaml:"gitBranch"`
+	BuildTimestamp string                 `json:"buildTimestamp"            yaml:"buildTimestamp"`
+	BuilderVersion string                 `json:"builderVersion"            yaml:"builderVersion"`
+	Platform       string                 `json:"platform"                  yaml:"platform"`
+	Content        *safety.Classification `json:"content,omitempty"         yaml:"content,omitempty"`
+	Entries        []ContentEntry         `json:"entries,omitempty"         yaml:"entries,omitempty"`
 }
 
 // Capture collects git state and build information from dir and returns a
