@@ -38,6 +38,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/metadata"
@@ -278,6 +279,43 @@ func buildArchiveWithMeta(t *testing.T, name, version string) string {
 	return outPath
 }
 
+// buildArchiveWithEntries builds an archive containing skills and commands with
+// a metadata.yaml that includes explicit entries (ADR-009 format).
+func buildArchiveWithEntries(t *testing.T, name, version string) string {
+	t.Helper()
+
+	skillContent := []byte("# Review Skill\n")
+	commandContent := []byte("# scan command\n")
+
+	meta := metadata.Metadata{
+		Name:           name,
+		Version:        version,
+		GitCommitSHA:   "abc1234567890",
+		BuildTimestamp: "2026-01-01T00:00:00Z",
+		BuilderVersion: "dev",
+		Platform:       "darwin-arm64",
+		Entries: []metadata.ContentEntry{
+			{Name: "review", Type: "skill"},
+			{Name: "commands", Type: "command"},
+		},
+	}
+
+	metaYAML, err := yaml.Marshal(meta)
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	vfs := osfs.NewWithNoIdm()
+	outPath := filepath.Join(dir, name+".agentpack")
+
+	require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+		{ArchivePath: "skills/review/SKILL.md", Content: skillContent},
+		{ArchivePath: "commands/scan.md", Content: commandContent},
+		{ArchivePath: ".agentpack/metadata.yaml", Content: metaYAML},
+	}))
+
+	return outPath
+}
+
 // --------------------------------------------------------------------------
 // TestRun
 // --------------------------------------------------------------------------
@@ -314,7 +352,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("test").AnyTimes()
 				m.EXPECT().DisplayName().Return("Test").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
@@ -336,6 +377,48 @@ skills:
 			},
 		},
 		{
+			name:       "filters entries by target SupportedTypes",
+			noParallel: true,
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				archivePath := buildArchiveWithEntries(t, "filter-entries-plugin", "1.0.0")
+
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("skill-only").AnyTimes()
+				m.EXPECT().DisplayName().Return("Skill Only").AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill"}).
+					AnyTimes()
+				m.EXPECT().
+					Install(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
+						// Verify only skill entries are passed.
+						require.Len(t, opts.Entries, 1)
+						assert.Equal(t, "review", opts.Entries[0].Name)
+						assert.Equal(t, "skill", opts.Entries[0].Type)
+						assert.Contains(t, opts.Entries[0].Root, filepath.Join("skills", "review"))
+
+						return []target.InstalledFile{
+							{Path: "skills/review/SKILL.md", SHA256: "dummy"},
+						}, nil
+					})
+
+				return archivePath, []target.Target{m}
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := install.SetRegistrySave(
+					func(_ *registry.PackageManifest) error { return nil },
+				)
+				t.Cleanup(restore)
+			},
+			checkResult: func(t *testing.T, r *install.Result) {
+				t.Helper()
+				assert.Equal(t, "filter-entries-plugin", r.Name)
+			},
+		},
+		{
 			name:       "installs to multiple targets",
 			noParallel: true,
 			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
@@ -352,7 +435,10 @@ skills:
 				m1 := mocks.NewMockTarget(ctrl)
 				m1.EXPECT().Name().Return("alpha").AnyTimes()
 				m1.EXPECT().DisplayName().Return("Alpha").AnyTimes()
-				m1.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m1.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m1.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
@@ -360,7 +446,10 @@ skills:
 				m2 := mocks.NewMockTarget(ctrl)
 				m2.EXPECT().Name().Return("beta").AnyTimes()
 				m2.EXPECT().DisplayName().Return("Beta").AnyTimes()
-				m2.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m2.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m2.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
@@ -407,7 +496,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("step-target").AnyTimes()
 				m.EXPECT().DisplayName().Return("Step Target").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
@@ -469,7 +561,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).
@@ -496,7 +591,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).
@@ -523,7 +621,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).
@@ -553,7 +654,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).
@@ -671,7 +775,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("fail-target").AnyTimes()
 				m.EXPECT().DisplayName().Return("Fail Target").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return(nil, errors.New("target install error"))
@@ -697,7 +804,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).
@@ -730,7 +840,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).
@@ -762,7 +875,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).
@@ -792,7 +908,10 @@ skills:
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("stub").AnyTimes()
 				m.EXPECT().DisplayName().Return("Stub").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil).
@@ -1635,7 +1754,10 @@ func TestRunFromGit(t *testing.T) {
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("claude-code").AnyTimes()
 				m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
@@ -1671,7 +1793,10 @@ func TestRunFromGit(t *testing.T) {
 				m := mocks.NewMockTarget(ctrl)
 				m.EXPECT().Name().Return("claude-code").AnyTimes()
 				m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
-				m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
 				m.EXPECT().
 					Install(gomock.Any(), gomock.Any()).
 					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)

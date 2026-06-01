@@ -428,6 +428,95 @@ func humanSize(bytes int64) string {
 	return fmt.Sprintf("%d KB", bytes/kb)
 }
 
+// typeToDir maps a metadata entry type back to the conventional directory
+// name used in agentpack archives.
+var typeToDir = map[string]string{
+	"skill":   "skills",
+	"command": "commands",
+	"hook":    "hooks",
+	"agent":   "agents",
+	"mcp":     "mcp",
+	"config":  "settings",
+}
+
+// buildContentEntries builds a []target.ContentEntry list from metadata. When
+// the metadata includes explicit entries (ADR-009 format) those are used;
+// otherwise the source directory is scanned for known content directories to
+// maintain backward compatibility with legacy archives.
+func buildContentEntries(meta *metadata.Metadata, sourceDir string) []target.ContentEntry {
+	if len(meta.Entries) == 0 {
+		return buildContentEntriesFromDirs(sourceDir)
+	}
+
+	entries := make([]target.ContentEntry, 0, len(meta.Entries))
+	for _, e := range meta.Entries {
+		entries = append(entries, target.ContentEntry{
+			Name: e.Name,
+			Type: e.Type,
+			Root: resolveEntryRoot(e.Name, e.Type),
+		})
+	}
+
+	return entries
+}
+
+// buildContentEntriesFromDirs discovers content entries by scanning the known
+// content directories. This provides backward compatibility for archives that
+// predate the entries field in metadata.
+func buildContentEntriesFromDirs(sourceDir string) []target.ContentEntry {
+	var entries []target.ContentEntry
+
+	for _, dir := range []string{"skills", "agents"} {
+		contentPath := filepath.Join(sourceDir, dir)
+
+		subdirs, err := os.ReadDir(contentPath)
+		if err != nil {
+			continue
+		}
+
+		for _, d := range subdirs {
+			if !d.IsDir() {
+				continue
+			}
+
+			entries = append(entries, target.ContentEntry{
+				Name: d.Name(),
+				Type: dirToType[dir],
+				Root: filepath.Join(dir, d.Name()),
+			})
+		}
+	}
+
+	for _, dir := range []string{"commands", "hooks", "mcp", "settings"} {
+		contentPath := filepath.Join(sourceDir, dir)
+		if _, err := os.Stat(contentPath); err != nil {
+			continue
+		}
+
+		entries = append(entries, target.ContentEntry{
+			Name: dir,
+			Type: dirToType[dir],
+			Root: dir,
+		})
+	}
+
+	return entries
+}
+
+// resolveEntryRoot maps an entry name and type to the relative directory path
+// within the archive. For skills and agents the entry name is a subdirectory
+// under the type directory; for other types the root is the type directory
+// itself.
+func resolveEntryRoot(name, entryType string) string {
+	dir := typeToDir[entryType]
+
+	if entryType == "skill" || entryType == "agent" {
+		return filepath.Join(dir, name)
+	}
+
+	return dir
+}
+
 func installFromDir(
 	ctx context.Context,
 	opts Options,
@@ -460,6 +549,8 @@ func installFromDir(
 		Global:  opts.Global,
 	}
 
+	allEntries := buildContentEntries(meta, sourceDir)
+
 	dirs := make(map[string]string)
 	fileCounts := make(map[string]int)
 
@@ -476,6 +567,25 @@ func installFromDir(
 		}
 
 		installOpts.SourceDir = srcDir
+
+		// Filter entries to types this driver supports.
+		supported := make(map[string]bool, len(tgt.SupportedTypes()))
+		for _, t := range tgt.SupportedTypes() {
+			supported[t] = true
+		}
+
+		var filtered []target.ContentEntry
+		for _, e := range allEntries {
+			if supported[e.Type] {
+				filtered = append(filtered, target.ContentEntry{
+					Name: e.Name,
+					Type: e.Type,
+					Root: filepath.Join(srcDir, e.Root),
+				})
+			}
+		}
+
+		installOpts.Entries = filtered
 
 		emitStep(opts, Step{Name: "installing to", Detail: tgt.DisplayName()})
 

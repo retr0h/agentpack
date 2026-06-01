@@ -29,6 +29,7 @@ import (
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/registry"
+	"github.com/retr0h/agentpack/pkg/target"
 )
 
 // StoreArchive exposes storeArchive for testing.
@@ -197,4 +198,9 @@ func AutoPackageWithVersion(
 // ComputeChecksums exposes computeChecksums for testing.
 func ComputeChecksums(files []archive.FileEntry) ([]byte, error) {
 	return computeChecksums(files)
+}
+
+// BuildContentEntries exposes buildContentEntries for testing.
+func BuildContentEntries(meta *metadata.Metadata, sourceDir string) []target.ContentEntry {
+	return buildContentEntries(meta, sourceDir)
 }
