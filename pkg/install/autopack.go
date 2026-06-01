@@ -24,7 +24,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -33,6 +32,7 @@ import (
 	"time"
 
 	"github.com/avfs/avfs/vfs/osfs"
+	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/metadata"
@@ -42,6 +42,17 @@ import (
 // contentDirs are the recognized content directories per ADR-001. Only these
 // are packaged; everything else in the source repo is excluded.
 var contentDirs = []string{"skills", "commands", "agents", "hooks", "mcp", "settings"}
+
+// dirToType maps each content directory name to its metadata entry type per
+// ADR-009.
+var dirToType = map[string]string{
+	"skills":   "skill",
+	"commands": "command",
+	"hooks":    "hook",
+	"agents":   "agent",
+	"mcp":      "mcp",
+	"settings": "config",
+}
 
 // Swappable functions for testing.
 var (
@@ -88,6 +99,8 @@ func autoPackageWithVersion(
 
 	var files []archive.FileEntry
 
+	var entries []metadata.ContentEntry
+
 	dirs := contentDirs
 	if len(skillFilter) > 0 {
 		dirs = []string{"skills"}
@@ -106,12 +119,31 @@ func autoPackageWithVersion(
 		var walkRoots []string
 
 		switch content {
-		case "skills":
-			walkRoots = filteredSubdirs(contentPath, skillFilter)
-		case "agents":
-			walkRoots = filteredSubdirs(contentPath, agentFilter)
+		case "skills", "agents":
+			var filter []string
+			if content == "skills" {
+				filter = skillFilter
+			} else {
+				filter = agentFilter
+			}
+
+			walkRoots = filteredSubdirs(contentPath, filter)
+
+			// Each subdirectory becomes an entry.
+			for _, root := range walkRoots {
+				entries = append(entries, metadata.ContentEntry{
+					Name: filepath.Base(root),
+					Type: dirToType[content],
+				})
+			}
 		default:
 			walkRoots = []string{contentPath}
+
+			// The directory itself is one entry.
+			entries = append(entries, metadata.ContentEntry{
+				Name: content,
+				Type: dirToType[content],
+			})
 		}
 
 		for _, root := range walkRoots {
@@ -119,12 +151,12 @@ func autoPackageWithVersion(
 				return "", err
 			}
 
-			entries, err := walkContentDir(cloneDir, root)
+			fileEntries, err := walkContentDir(cloneDir, root)
 			if err != nil {
 				return "", fmt.Errorf("walk %s: %w", content, err)
 			}
 
-			files = append(files, entries...)
+			files = append(files, fileEntries...)
 		}
 	}
 
@@ -148,27 +180,17 @@ func autoPackageWithVersion(
 		BuilderVersion: "dev",
 		Platform:       runtime.GOOS + "-" + runtime.GOARCH,
 		Content:        classification,
+		Entries:        entries,
 	}
 
-	metaJSON, err := json.MarshalIndent(meta, "", "  ")
+	metaYAML, err := yaml.Marshal(meta)
 	if err != nil {
 		return "", fmt.Errorf("marshaling metadata: %w", err)
 	}
 
 	files = append(files, archive.FileEntry{
-		ArchivePath: ".agentpack/metadata.json",
-		Content:     metaJSON,
-	})
-
-	// Compute checksums over content files (excluding the checksum file itself).
-	checksumContent, err := computeChecksums(files)
-	if err != nil {
-		return "", err
-	}
-
-	files = append(files, archive.FileEntry{
-		ArchivePath: ".agentpack/checksums.txt",
-		Content:     checksumContent,
+		ArchivePath: ".agentpack/metadata.yaml",
+		Content:     metaYAML,
 	})
 
 	// Write the archive to a temp file.

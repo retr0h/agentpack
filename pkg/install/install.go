@@ -45,6 +45,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/checksum"
 	"github.com/retr0h/agentpack/internal/fetcher"
@@ -282,25 +284,33 @@ func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Resu
 		return nil, err
 	}
 
-	// Verify checksums.
-	checksumFile, err := findChecksums(tmpDir)
-	if err != nil {
-		return nil, err
-	}
+	// New YAML-based archives (ADR-009) omit checksums.txt. Legacy archives
+	// include it and must still be verified. Detect the format by probing for
+	// metadata.yaml — its presence signals the new format.
+	newFormat := hasMetadataYAML(tmpDir)
 
-	checksumEntries, err := checksum.ReadFile(checksumFile)
-	if err != nil {
-		return nil, fmt.Errorf("reading checksums: %w", err)
-	}
+	var verifyResults []checksum.Result
 
-	verifyResults, err := checksum.Verify(ctx, tmpDir, checksumEntries)
-	if err != nil {
-		return nil, fmt.Errorf("verify: %w", err)
-	}
+	if !newFormat {
+		checksumFile, err := findChecksums(tmpDir)
+		if err != nil {
+			return nil, err
+		}
 
-	for _, r := range verifyResults {
-		if !r.OK {
-			return nil, fmt.Errorf("checksum failed for %s: %s", r.Path, r.Err)
+		checksumEntries, err := checksum.ReadFile(checksumFile)
+		if err != nil {
+			return nil, fmt.Errorf("reading checksums: %w", err)
+		}
+
+		verifyResults, err = checksum.Verify(ctx, tmpDir, checksumEntries)
+		if err != nil {
+			return nil, fmt.Errorf("verify: %w", err)
+		}
+
+		for _, r := range verifyResults {
+			if !r.OK {
+				return nil, fmt.Errorf("checksum failed for %s: %s", r.Path, r.Err)
+			}
 		}
 	}
 
@@ -323,10 +333,12 @@ func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Resu
 		return nil, fmt.Errorf("package %s has no installable content", meta.Name)
 	}
 
-	emitStep(opts, Step{
-		Name:   "verified checksums",
-		Detail: fmt.Sprintf("%d/%d OK", len(verifyResults), len(verifyResults)),
-	})
+	if len(verifyResults) > 0 {
+		emitStep(opts, Step{
+			Name:   "verified checksums",
+			Detail: fmt.Sprintf("%d/%d OK", len(verifyResults), len(verifyResults)),
+		})
+	}
 
 	return installFromDir(ctx, opts, tmpDir, meta)
 }
@@ -376,8 +388,8 @@ func nameFromSource(source string) string {
 
 	// Strip known git host prefix to obtain the remaining path segments.
 	for _, host := range knownGitHosts {
-		if strings.HasPrefix(s, host+"/") {
-			s = strings.TrimPrefix(s, host+"/")
+		if after, ok := strings.CutPrefix(s, host+"/"); ok {
+			s = after
 			break
 		}
 	}
@@ -576,18 +588,43 @@ func findChecksums(dir string) (string, error) {
 	return found, nil
 }
 
-// findAndReadMetadata locates and parses .agentpack/metadata.json.
+// hasMetadataYAML returns true when the extracted archive contains a
+// .agentpack/metadata.yaml file, indicating the new ADR-009 format.
+func hasMetadataYAML(dir string) bool {
+	matches, _ := filepath.Glob(filepath.Join(dir, "**", ".agentpack", "metadata.yaml"))
+	if len(matches) > 0 {
+		return true
+	}
+
+	// Also check the top-level .agentpack directory directly.
+	_, err := os.Stat(filepath.Join(dir, ".agentpack", "metadata.yaml"))
+
+	return err == nil
+}
+
+// findAndReadMetadata locates and parses archive metadata. It prefers
+// .agentpack/metadata.yaml (new format) and falls back to
+// .agentpack/metadata.json (legacy format) for backward compatibility.
 func findAndReadMetadata(dir string) (*metadata.Metadata, error) {
-	var found string
+	var yamlPath, jsonPath string
 
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if !d.IsDir() && d.Name() == "metadata.json" && strings.Contains(path, ".agentpack") {
-			found = path
+		if d.IsDir() || !strings.Contains(path, ".agentpack") {
+			return nil
+		}
 
+		switch d.Name() {
+		case "metadata.yaml":
+			yamlPath = path
+		case "metadata.json":
+			jsonPath = path
+		}
+
+		if yamlPath != "" && jsonPath != "" {
 			return filepath.SkipAll
 		}
 
@@ -597,21 +634,36 @@ func findAndReadMetadata(dir string) (*metadata.Metadata, error) {
 		return nil, fmt.Errorf("searching for metadata.json: %w", err)
 	}
 
-	if found == "" {
-		return nil, fmt.Errorf("metadata.json not found in archive")
+	// Prefer YAML (new format), fall back to JSON (legacy).
+	if yamlPath != "" {
+		data, err := os.ReadFile(yamlPath)
+		if err != nil {
+			return nil, fmt.Errorf("read metadata.yaml: %w", err)
+		}
+
+		var meta metadata.Metadata
+		if err := yaml.Unmarshal(data, &meta); err != nil {
+			return nil, fmt.Errorf("parse metadata.yaml: %w", err)
+		}
+
+		return &meta, nil
 	}
 
-	data, err := os.ReadFile(found)
-	if err != nil {
-		return nil, fmt.Errorf("read metadata.json: %w", err)
+	if jsonPath != "" {
+		data, err := os.ReadFile(jsonPath)
+		if err != nil {
+			return nil, fmt.Errorf("read metadata.json: %w", err)
+		}
+
+		var meta metadata.Metadata
+		if err := json.Unmarshal(data, &meta); err != nil {
+			return nil, fmt.Errorf("parse metadata.json: %w", err)
+		}
+
+		return &meta, nil
 	}
 
-	var meta metadata.Metadata
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return nil, fmt.Errorf("parse metadata.json: %w", err)
-	}
-
-	return &meta, nil
+	return nil, fmt.Errorf("metadata.json not found in archive")
 }
 
 // copyDir recursively copies src to dst.

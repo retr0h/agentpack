@@ -26,6 +26,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,6 +36,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/metadata"
@@ -620,7 +622,8 @@ func TestComputeChecksums(t *testing.T) {
 // --------------------------------------------------------------------------
 
 // extractMetadataFromArchive opens the .agentpack tarball at path and returns
-// the parsed metadata.Metadata from .agentpack/metadata.json.
+// the parsed metadata.Metadata. It prefers .agentpack/metadata.yaml and falls
+// back to .agentpack/metadata.json for backward compatibility.
 func extractMetadataFromArchive(t *testing.T, archivePath string) *metadata.Metadata {
 	t.Helper()
 
@@ -640,14 +643,26 @@ func extractMetadataFromArchive(t *testing.T, archivePath string) *metadata.Meta
 			break
 		}
 
+		if strings.HasSuffix(hdr.Name, "metadata.yaml") {
+			data, readErr := io.ReadAll(tr)
+			require.NoError(t, readErr)
+
+			var meta metadata.Metadata
+			require.NoError(t, yaml.Unmarshal(data, &meta))
+
+			return &meta
+		}
+
 		if strings.HasSuffix(hdr.Name, "metadata.json") {
 			var meta metadata.Metadata
 			require.NoError(t, json.NewDecoder(tr).Decode(&meta))
+
 			return &meta
 		}
 	}
 
-	require.FailNow(t, "metadata.json not found in archive")
+	require.FailNow(t, "metadata not found in archive")
+
 	return nil
 }
 
@@ -762,6 +777,113 @@ func TestAutoPackageWithVersion(t *testing.T) {
 			if tt.checkArchive != nil {
 				tt.checkArchive(t, archivePath)
 			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestAutoPackageGeneratesEntries
+// --------------------------------------------------------------------------
+
+func TestAutoPackageGeneratesEntries(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		setup       func(t *testing.T) string
+		skillFilter []string
+		agentFilter []string
+		check       func(t *testing.T, meta *metadata.Metadata)
+	}{
+		{
+			name: "skills and commands produce typed entries",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+
+				k8sDir := filepath.Join(dir, "skills", "k8s")
+				require.NoError(t, os.MkdirAll(k8sDir, 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(k8sDir, "SKILL.md"),
+					[]byte("# Kubernetes\n"),
+					0o644,
+				))
+
+				cmdDir := filepath.Join(dir, "commands")
+				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(cmdDir, "scan.md"),
+					[]byte("# Scan\n"),
+					0o644,
+				))
+
+				return dir
+			},
+			check: func(t *testing.T, meta *metadata.Metadata) {
+				t.Helper()
+				require.Len(t, meta.Entries, 2)
+
+				entryMap := make(map[string]string, len(meta.Entries))
+				for _, e := range meta.Entries {
+					entryMap[e.Name] = e.Type
+				}
+
+				assert.Equal(t, "skill", entryMap["k8s"])
+				assert.Equal(t, "command", entryMap["commands"])
+			},
+		},
+		{
+			name: "skill filter restricts entries",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+
+				for _, name := range []string{"k8s", "react"} {
+					skillDir := filepath.Join(dir, "skills", name)
+					require.NoError(t, os.MkdirAll(skillDir, 0o755))
+					require.NoError(t, os.WriteFile(
+						filepath.Join(skillDir, "SKILL.md"),
+						[]byte("# "+name+"\n"),
+						0o644,
+					))
+				}
+
+				return dir
+			},
+			skillFilter: []string{"k8s"},
+			check: func(t *testing.T, meta *metadata.Metadata) {
+				t.Helper()
+				require.Len(t, meta.Entries, 1)
+				assert.Equal(t, "k8s", meta.Entries[0].Name)
+				assert.Equal(t, "skill", meta.Entries[0].Type)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cloneDir := tt.setup(t)
+
+			archivePath, err := install.AutoPackageWithVersion(
+				context.Background(),
+				cloneDir,
+				"test-plugin",
+				"abc1234567890",
+				"1.0.0",
+				tt.skillFilter,
+				tt.agentFilter,
+			)
+			require.NoError(t, err)
+			require.NotEmpty(t, archivePath)
+
+			t.Cleanup(func() { _ = os.Remove(archivePath) })
+
+			meta := extractMetadataFromArchive(t, archivePath)
+			require.NotNil(t, meta)
+
+			tt.check(t, meta)
 		})
 	}
 }
@@ -887,7 +1009,10 @@ func TestContentCheckCallback(t *testing.T) {
 			mockTarget := mocks.NewMockTarget(ctrl)
 			mockTarget.EXPECT().Name().Return("test-target").AnyTimes()
 			mockTarget.EXPECT().DisplayName().Return("Test Target").AnyTimes()
-			mockTarget.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+			mockTarget.EXPECT().
+				SupportedTypes().
+				Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+				AnyTimes()
 			mockTarget.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{
 				{Path: "skills/intro.md", SHA256: "dummy"},
 			}, nil).AnyTimes()
