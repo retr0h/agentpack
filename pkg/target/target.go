@@ -57,12 +57,30 @@ type Target interface {
 	// Detect returns true if this agent is installed on the current system.
 	Detect() bool
 
+	// SupportedTypes returns the content type identifiers this target can
+	// install (e.g. "skill", "command", "hook", "agent", "mcp", "config").
+	SupportedTypes() []string
+
 	// Install places the unpacked archive content into the correct locations
 	// for this agent. Returns the list of files written.
 	Install(ctx context.Context, opts InstallOpts) ([]InstalledFile, error)
 
 	// List returns all agentpack-managed plugins installed for this agent.
 	List() ([]InstalledPlugin, error)
+}
+
+// ContentEntry describes a single content item declared in a plugin manifest.
+type ContentEntry struct {
+	// Name is the entry identifier (e.g. the skill or command name).
+	Name string
+
+	// Type is the content type (e.g. "skill", "command", "hook", "agent",
+	// "mcp", "config").
+	Type string
+
+	// Root is the path of the entry's source directory relative to the
+	// unpacked archive root.
+	Root string
 }
 
 // InstallOpts contains everything needed to install a plugin into a target.
@@ -85,6 +103,11 @@ type InstallOpts struct {
 
 	// Meta is the build metadata read from the extracted archive.
 	Meta *metadata.Metadata
+
+	// Entries is the list of content entries from the plugin manifest. The
+	// install pipeline filters this list against SupportedTypes before passing
+	// it to the driver.
+	Entries []ContentEntry
 }
 
 // InstalledFile represents a single file written by a target's Install method.

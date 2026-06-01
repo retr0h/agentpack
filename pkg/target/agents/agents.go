@@ -321,6 +321,11 @@ func (a *agent) Name() string { return a.def.Name }
 // DisplayName returns the human-readable agent name.
 func (a *agent) DisplayName() string { return a.def.Display }
 
+// SupportedTypes returns the content types this driver can install.
+func (a *agent) SupportedTypes() []string {
+	return []string{"skill"}
+}
+
 // Detect returns true when the agent's home or config directory exists.
 func (a *agent) Detect() bool {
 	if a.def.AlwaysDetect {

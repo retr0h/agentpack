@@ -112,3 +112,17 @@ func (mr *MockTargetMockRecorder) Name() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockTarget)(nil).Name))
 }
+
+// SupportedTypes mocks base method.
+func (m *MockTarget) SupportedTypes() []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SupportedTypes")
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// SupportedTypes indicates an expected call of SupportedTypes.
+func (mr *MockTargetMockRecorder) SupportedTypes() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SupportedTypes", reflect.TypeOf((*MockTarget)(nil).SupportedTypes))
+}

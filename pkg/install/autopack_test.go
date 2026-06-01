@@ -887,6 +887,7 @@ func TestContentCheckCallback(t *testing.T) {
 			mockTarget := mocks.NewMockTarget(ctrl)
 			mockTarget.EXPECT().Name().Return("test-target").AnyTimes()
 			mockTarget.EXPECT().DisplayName().Return("Test Target").AnyTimes()
+			mockTarget.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
 			mockTarget.EXPECT().Install(gomock.Any(), gomock.Any()).Return([]target.InstalledFile{
 				{Path: "skills/intro.md", SHA256: "dummy"},
 			}, nil).AnyTimes()

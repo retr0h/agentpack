@@ -62,6 +62,11 @@ func (c *ClaudeCode) Name() string { return "claude-code" }
 // DisplayName returns the human-readable target name.
 func (c *ClaudeCode) DisplayName() string { return "Claude Code" }
 
+// SupportedTypes returns the content types this driver can install.
+func (c *ClaudeCode) SupportedTypes() []string {
+	return []string{"skill", "command", "hook", "agent", "mcp", "config"}
+}
+
 // Detect returns true if the Claude Code config directory exists.
 func (c *ClaudeCode) Detect() bool {
 	home, err := c.userHomeFunc()

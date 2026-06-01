@@ -37,7 +37,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/retr0h/agentpack/internal/archive"
+	"github.com/retr0h/agentpack/internal/lock"
 	"github.com/retr0h/agentpack/internal/metadata"
+	"github.com/retr0h/agentpack/internal/packages"
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/remove"
@@ -144,6 +146,7 @@ func mockTargetThatInstalls(
 	m := mocks.NewMockTarget(ctrl)
 	m.EXPECT().Name().Return(name).AnyTimes()
 	m.EXPECT().DisplayName().Return(displayName).AnyTimes()
+	m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
 
 	m.EXPECT().
 		Install(gomock.Any(), gomock.Any()).
@@ -552,6 +555,7 @@ func testLifecycleNoTargets(t *testing.T) {
 	failTarget := mocks.NewMockTarget(ctrl)
 	failTarget.EXPECT().Name().Return("fail-target").AnyTimes()
 	failTarget.EXPECT().DisplayName().Return("Fail Target").AnyTimes()
+	failTarget.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
 	failTarget.EXPECT().
 		Install(gomock.Any(), gomock.Any()).
 		Return(nil, fmt.Errorf("simulated: no agent available"))
@@ -594,6 +598,7 @@ func testLifecycleSkillFilter(t *testing.T) {
 	m := mocks.NewMockTarget(ctrl)
 	m.EXPECT().Name().Return("claude-code").AnyTimes()
 	m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
+	m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
 	m.EXPECT().
 		Install(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
@@ -807,4 +812,478 @@ func testLifecycleSkillThenWholeRepo(t *testing.T) {
 	assertFilePath(t, cursorFiles, "skills/react-expert/SKILL.md")
 	assertFilePath(t, cursorFiles, "commands/scan.md")
 	assertFilePath(t, cursorFiles, "hooks/hooks.json")
+}
+
+// --------------------------------------------------------------------------
+// TestLifecycleManifests
+// --------------------------------------------------------------------------
+
+// TestLifecycleManifests exercises the full manifest pipeline: yaml, lock,
+// and registry are all written and asserted after each add/merge/del step.
+// This mirrors what cmd/add and cmd/del do end-to-end.
+func TestLifecycleManifests(t *testing.T) {
+	tests := []struct {
+		name       string
+		noParallel bool
+		run        func(t *testing.T)
+	}{
+		{
+			name:       "add writes yaml + lock + registry, merge accumulates, del prunes, full del cleans",
+			noParallel: true,
+			run:        testManifestFullLifecycle,
+		},
+		{
+			name:       "two packages: independent yaml + lock entries, remove one leaves the other",
+			noParallel: true,
+			run:        testManifestTwoPackages,
+		},
+		{
+			name:       "whole repo add: yaml has no skills, lock has no skills, registry has all content",
+			noParallel: true,
+			run:        testManifestWholeRepo,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !tt.noParallel {
+				t.Parallel()
+			}
+
+			tt.run(t)
+		})
+	}
+}
+
+// manifestEnv bundles the temp paths and registry for manifest tests.
+type manifestEnv struct {
+	reg      *registry.Registry
+	yamlPath string
+	lockPath string
+}
+
+// newManifestEnv creates a temp sandbox with redirected registry, yaml, and
+// lock paths. Callers must defer the returned restore function.
+func newManifestEnv(t *testing.T) (*manifestEnv, func()) {
+	t.Helper()
+
+	sandboxDir := t.TempDir()
+
+	reg, restoreHome := withTempRegistry(t)
+	restoreSave := install.SetRegistrySave(reg.Save)
+	restoreLoad := install.SetRegistryLoad(reg.Load)
+
+	restore := func() {
+		restoreLoad()
+		restoreSave()
+		restoreHome()
+	}
+
+	return &manifestEnv{
+		reg:      reg,
+		yamlPath: filepath.Join(sandboxDir, "agentpack-packages.yaml"),
+		lockPath: filepath.Join(sandboxDir, "agentpack.lock"),
+	}, restore
+}
+
+// simulateAddManifests mirrors what cmd/add.updateManifests does: writes the
+// installed package into the yaml spec and lock file.
+func simulateAddManifests(
+	env *manifestEnv,
+	name, source string,
+	skills, targets []string,
+	sha string,
+) error {
+	cfg, err := packages.Load(env.yamlPath)
+	if err != nil {
+		return err
+	}
+
+	pkg := packages.Package{
+		Name: name,
+		Git:  source,
+	}
+	if len(skills) > 0 {
+		pkg.Skills = skills
+	}
+	if len(targets) > 0 {
+		pkg.Targets = targets
+	}
+
+	cfg.Add(pkg)
+
+	if err := packages.Save(env.yamlPath, cfg); err != nil {
+		return err
+	}
+
+	lf, err := lock.Load(env.lockPath)
+	if err != nil {
+		return err
+	}
+
+	lp := lock.LockedPackage{
+		Name:     name,
+		Source:   source,
+		SHA:      sha,
+		Resolved: "2026-01-01T00:00:00Z",
+		Skills:   skills,
+		Targets:  targets,
+	}
+
+	lf.Set(lp)
+
+	return lock.Save(env.lockPath, lf)
+}
+
+// simulateDelManifests mirrors what cmd/del.removeManifests does.
+func simulateDelManifests(env *manifestEnv, name, skill string) {
+	if skill != "" {
+		if cfg, err := packages.Load(env.yamlPath); err == nil {
+			if p := cfg.Find(name); p != nil {
+				remaining := make([]string, 0, len(p.Skills))
+				for _, s := range p.Skills {
+					if s != skill {
+						remaining = append(remaining, s)
+					}
+				}
+				p.Skills = remaining
+			}
+
+			_ = packages.Save(env.yamlPath, cfg)
+		}
+
+		if lf, err := lock.Load(env.lockPath); err == nil {
+			lf.RemoveSkill(name, skill)
+			_ = lock.Save(env.lockPath, lf)
+		}
+
+		return
+	}
+
+	if cfg, err := packages.Load(env.yamlPath); err == nil {
+		cfg.Remove(name)
+		_ = packages.Save(env.yamlPath, cfg)
+	}
+
+	if lf, err := lock.Load(env.lockPath); err == nil {
+		lf.Remove(name)
+		_ = lock.Save(env.lockPath, lf)
+	}
+}
+
+// testManifestFullLifecycle exercises:
+//  1. Add @kubernetes-specialist to claude-code → assert yaml/lock/registry
+//  2. Add @react-expert to cursor (same pkg) → assert merge in all three
+//  3. Partial del @react-expert → assert yaml/lock pruned, registry pruned
+//  4. Full del → assert yaml/lock/registry all empty
+func testManifestFullLifecycle(t *testing.T) {
+	t.Helper()
+
+	archivePath := lifecycleArchive(t, "manifest-pkg", "1.0.0")
+	installDirCC := t.TempDir()
+	installDirCursor := t.TempDir()
+
+	env, restore := newManifestEnv(t)
+	defer restore()
+
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	sha := "deadbeef1234567890abcdef"
+
+	// -------------------------------------------------------------------------
+	// Step 1: Add @kubernetes-specialist → claude-code
+	// -------------------------------------------------------------------------
+	ccTarget := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDirCC)
+
+	_, err := install.New().Run(ctx, install.Options{
+		Source:  archivePath,
+		Skills:  []string{"kubernetes-specialist"},
+		Targets: []target.Target{ccTarget},
+		Dir:     installDirCC,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, simulateAddManifests(
+		env, "manifest-pkg", "github.com/test/manifest-pkg",
+		[]string{"kubernetes-specialist"}, []string{"claude-code"}, sha,
+	))
+
+	// Assert yaml.
+	cfg, err := packages.Load(env.yamlPath)
+	require.NoError(t, err)
+	require.Len(t, cfg.Packages, 1)
+	assert.Equal(t, "manifest-pkg", cfg.Packages[0].Name)
+	assert.Equal(t, []string{"kubernetes-specialist"}, cfg.Packages[0].Skills)
+	assert.Equal(t, []string{"claude-code"}, cfg.Packages[0].Targets)
+
+	// Assert lock.
+	lf, err := lock.Load(env.lockPath)
+	require.NoError(t, err)
+	require.Len(t, lf.Packages, 1)
+	assert.Equal(t, "manifest-pkg", lf.Packages[0].Name)
+	assert.Equal(t, sha, lf.Packages[0].SHA)
+	assert.Equal(t, []string{"kubernetes-specialist"}, lf.Packages[0].Skills)
+
+	// Assert registry.
+	m, err := env.reg.Load("manifest-pkg")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"kubernetes-specialist"}, m.SelectedSkills)
+	assertFilePath(t, m.Files, "skills/kubernetes-specialist/SKILL.md")
+
+	// -------------------------------------------------------------------------
+	// Step 2: Add @react-expert → cursor (merge)
+	// -------------------------------------------------------------------------
+	cursorTarget := mockTargetThatInstalls(t, ctrl, "cursor", "Cursor", installDirCursor)
+
+	_, err = install.New().Run(ctx, install.Options{
+		Source:  archivePath,
+		Skills:  []string{"react-expert"},
+		Targets: []target.Target{cursorTarget},
+		Dir:     installDirCursor,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, simulateAddManifests(
+		env, "manifest-pkg", "github.com/test/manifest-pkg",
+		[]string{"react-expert"}, []string{"cursor"}, sha,
+	))
+
+	// Assert yaml merged.
+	cfg, err = packages.Load(env.yamlPath)
+	require.NoError(t, err)
+	require.Len(t, cfg.Packages, 1)
+	assert.ElementsMatch(t, []string{"claude-code", "cursor"}, cfg.Packages[0].Targets)
+	assert.ElementsMatch(
+		t,
+		[]string{"kubernetes-specialist", "react-expert"},
+		cfg.Packages[0].Skills,
+	)
+
+	// Assert lock merged.
+	lf, err = lock.Load(env.lockPath)
+	require.NoError(t, err)
+	require.Len(t, lf.Packages, 1)
+	assert.ElementsMatch(
+		t,
+		[]string{"kubernetes-specialist", "react-expert"},
+		lf.Packages[0].Skills,
+	)
+	assert.ElementsMatch(t, []string{"claude-code", "cursor"}, lf.Packages[0].Targets)
+
+	// Assert registry merged.
+	m, err = env.reg.Load("manifest-pkg")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"kubernetes-specialist", "react-expert"}, m.SelectedSkills)
+
+	targetNames := collectTargetNames(m.Files)
+	assert.Contains(t, targetNames, "claude-code")
+	assert.Contains(t, targetNames, "cursor")
+
+	// -------------------------------------------------------------------------
+	// Step 3: Partial del @react-expert
+	// -------------------------------------------------------------------------
+	_, err = remove.New().Run(ctx, remove.Options{
+		Name:     "manifest-pkg",
+		Skill:    "react-expert",
+		Registry: env.reg,
+	})
+	require.NoError(t, err)
+
+	simulateDelManifests(env, "manifest-pkg", "react-expert")
+
+	// Assert yaml pruned.
+	cfg, err = packages.Load(env.yamlPath)
+	require.NoError(t, err)
+	require.Len(t, cfg.Packages, 1)
+	assert.Equal(t, []string{"kubernetes-specialist"}, cfg.Packages[0].Skills)
+
+	// Assert lock pruned.
+	lf, err = lock.Load(env.lockPath)
+	require.NoError(t, err)
+	require.Len(t, lf.Packages, 1)
+	lp := lf.Find("manifest-pkg")
+	require.NotNil(t, lp)
+	assert.Equal(t, []string{"kubernetes-specialist"}, lp.Skills)
+
+	// Assert registry pruned.
+	m, err = env.reg.Load("manifest-pkg")
+	require.NoError(t, err)
+	assertNoFilePath(t, m.Files, "skills/react-expert/SKILL.md")
+	assertFilePath(t, m.Files, "skills/kubernetes-specialist/SKILL.md")
+
+	// -------------------------------------------------------------------------
+	// Step 4: Full del
+	// -------------------------------------------------------------------------
+	_, err = remove.New().Run(ctx, remove.Options{
+		Name:     "manifest-pkg",
+		Registry: env.reg,
+	})
+	require.NoError(t, err)
+
+	simulateDelManifests(env, "manifest-pkg", "")
+
+	// Assert yaml empty.
+	cfg, err = packages.Load(env.yamlPath)
+	require.NoError(t, err)
+	assert.Empty(t, cfg.Packages)
+
+	// Assert lock empty.
+	lf, err = lock.Load(env.lockPath)
+	require.NoError(t, err)
+	assert.Empty(t, lf.Packages)
+
+	// Assert registry gone.
+	_, loadErr := env.reg.Load("manifest-pkg")
+	require.Error(t, loadErr)
+	assert.Contains(t, loadErr.Error(), "not found")
+}
+
+// testManifestTwoPackages installs two independent packages and verifies
+// that removing one leaves the other intact across yaml, lock, and registry.
+func testManifestTwoPackages(t *testing.T) {
+	t.Helper()
+
+	archiveA := lifecycleArchive(t, "pkg-alpha", "1.0.0")
+	archiveB := lifecycleArchive(t, "pkg-beta", "2.0.0")
+	installDirA := t.TempDir()
+	installDirB := t.TempDir()
+
+	env, restore := newManifestEnv(t)
+	defer restore()
+
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	// -------------------------------------------------------------------------
+	// Install pkg-alpha
+	// -------------------------------------------------------------------------
+	targetA := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDirA)
+
+	_, err := install.New().Run(ctx, install.Options{
+		Source:  archiveA,
+		Skills:  []string{"kubernetes-specialist"},
+		Targets: []target.Target{targetA},
+		Dir:     installDirA,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, simulateAddManifests(
+		env, "pkg-alpha", "github.com/test/pkg-alpha",
+		[]string{"kubernetes-specialist"}, []string{"claude-code"}, "sha-alpha",
+	))
+
+	// -------------------------------------------------------------------------
+	// Install pkg-beta
+	// -------------------------------------------------------------------------
+	targetB := mockTargetThatInstalls(t, ctrl, "cursor", "Cursor", installDirB)
+
+	_, err = install.New().Run(ctx, install.Options{
+		Source:  archiveB,
+		Targets: []target.Target{targetB},
+		Dir:     installDirB,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, simulateAddManifests(
+		env, "pkg-beta", "github.com/test/pkg-beta",
+		nil, []string{"cursor"}, "sha-beta",
+	))
+
+	// Assert both in yaml.
+	cfg, err := packages.Load(env.yamlPath)
+	require.NoError(t, err)
+	require.Len(t, cfg.Packages, 2)
+	assert.Equal(t, "pkg-alpha", cfg.Packages[0].Name)
+	assert.Equal(t, "pkg-beta", cfg.Packages[1].Name)
+
+	// Assert both in lock.
+	lf, err := lock.Load(env.lockPath)
+	require.NoError(t, err)
+	require.Len(t, lf.Packages, 2)
+
+	// Assert both in registry.
+	allManifests, err := env.reg.List()
+	require.NoError(t, err)
+	require.Len(t, allManifests, 2)
+
+	// -------------------------------------------------------------------------
+	// Remove pkg-alpha — pkg-beta survives
+	// -------------------------------------------------------------------------
+	_, err = remove.New().Run(ctx, remove.Options{
+		Name:     "pkg-alpha",
+		Registry: env.reg,
+	})
+	require.NoError(t, err)
+
+	simulateDelManifests(env, "pkg-alpha", "")
+
+	// Assert yaml has only pkg-beta.
+	cfg, err = packages.Load(env.yamlPath)
+	require.NoError(t, err)
+	require.Len(t, cfg.Packages, 1)
+	assert.Equal(t, "pkg-beta", cfg.Packages[0].Name)
+
+	// Assert lock has only pkg-beta.
+	lf, err = lock.Load(env.lockPath)
+	require.NoError(t, err)
+	require.Len(t, lf.Packages, 1)
+	assert.Equal(t, "pkg-beta", lf.Packages[0].Name)
+
+	// Assert registry has only pkg-beta.
+	allManifests, err = env.reg.List()
+	require.NoError(t, err)
+	require.Len(t, allManifests, 1)
+	assert.Equal(t, "pkg-beta", allManifests[0].Name)
+}
+
+// testManifestWholeRepo installs a whole repo (no skill filter) and verifies
+// that yaml has no skills field, lock has no skills field, and registry has
+// all content types.
+func testManifestWholeRepo(t *testing.T) {
+	t.Helper()
+
+	archivePath := lifecycleArchive(t, "whole-pkg", "3.0.0")
+	installDir := t.TempDir()
+
+	env, restore := newManifestEnv(t)
+	defer restore()
+
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	tgt := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDir)
+
+	_, err := install.New().Run(ctx, install.Options{
+		Source:  archivePath,
+		Targets: []target.Target{tgt},
+		Dir:     installDir,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, simulateAddManifests(
+		env, "whole-pkg", "github.com/test/whole-pkg",
+		nil, []string{"claude-code"}, "sha-whole",
+	))
+
+	// Assert yaml — no skills filter.
+	cfg, err := packages.Load(env.yamlPath)
+	require.NoError(t, err)
+	require.Len(t, cfg.Packages, 1)
+	assert.Empty(t, cfg.Packages[0].Skills)
+	assert.Equal(t, []string{"claude-code"}, cfg.Packages[0].Targets)
+
+	// Assert lock — no skills.
+	lf, err := lock.Load(env.lockPath)
+	require.NoError(t, err)
+	require.Len(t, lf.Packages, 1)
+	assert.Empty(t, lf.Packages[0].Skills)
+
+	// Assert registry — all content types present.
+	m, err := env.reg.Load("whole-pkg")
+	require.NoError(t, err)
+	assert.Empty(t, m.SelectedSkills)
+	assertFilePath(t, m.Files, "skills/kubernetes-specialist/SKILL.md")
+	assertFilePath(t, m.Files, "skills/react-expert/SKILL.md")
+	assertFilePath(t, m.Files, "commands/scan.md")
+	assertFilePath(t, m.Files, "hooks/hooks.json")
 }
