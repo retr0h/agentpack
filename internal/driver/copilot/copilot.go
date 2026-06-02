@@ -161,7 +161,7 @@ func (c *Copilot) installFromDirs(
 		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
-	files, err := enumerateFiles(destDir, baseDir)
+	files, err := enumerateFiles(ctx, destDir, baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate installed files: %w", err)
 	}
@@ -200,7 +200,7 @@ func (c *Copilot) installSkillEntry(
 		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
-	return enumerateFiles(destDir, baseDir)
+	return enumerateFiles(ctx, destDir, baseDir)
 }
 
 // resolveDirs returns (baseDir, skillsDir) based on whether the install is
@@ -293,12 +293,16 @@ func (c *Copilot) List() ([]target.InstalledPlugin, error) {
 
 // enumerateFiles walks destDir and returns InstalledFile entries with paths
 // relative to baseDir and SHA256 digests.
-func enumerateFiles(destDir, baseDir string) ([]target.InstalledFile, error) {
+func enumerateFiles(ctx context.Context, destDir, baseDir string) ([]target.InstalledFile, error) {
 	var files []target.InstalledFile
 
 	err := filepath.WalkDir(destDir, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil || d.IsDir() {
 			return walkErr
+		}
+
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
 		}
 
 		rel, relErr := filepath.Rel(baseDir, path)

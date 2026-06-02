@@ -33,8 +33,8 @@ import (
 )
 
 // StoreArchive exposes storeArchive for testing.
-func StoreArchive(srcPath, name, sha string) (string, error) {
-	return storeArchive(srcPath, name, sha)
+func StoreArchive(ctx context.Context, srcPath, name, sha string) (string, error) {
+	return storeArchive(ctx, srcPath, name, sha)
 }
 
 // FilteredSubdirs exposes filteredSubdirs for testing.
@@ -77,13 +77,13 @@ func CopyFile(src string, dst string) error {
 }
 
 // FindChecksums exposes findChecksums for testing.
-func FindChecksums(dir string) (string, error) {
-	return findChecksums(dir)
+func FindChecksums(ctx context.Context, dir string) (string, error) {
+	return findChecksums(ctx, dir)
 }
 
 // FindAndReadMetadata exposes findAndReadMetadata for testing.
-func FindAndReadMetadata(dir string) (*metadata.Metadata, error) {
-	return findAndReadMetadata(dir)
+func FindAndReadMetadata(ctx context.Context, dir string) (*metadata.Metadata, error) {
+	return findAndReadMetadata(ctx, dir)
 }
 
 // SetOsCreateTemp replaces osCreateTemp for testing.

@@ -233,7 +233,7 @@ func TestStoreArchive(t *testing.T) {
 			restore := install.SetArchivesDir(func() (string, error) { return storeDir, nil })
 			defer restore()
 
-			dstPath, err := install.StoreArchive(srcPath, tt.pkgName, tt.sha)
+			dstPath, err := install.StoreArchive(context.Background(), srcPath, tt.pkgName, tt.sha)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

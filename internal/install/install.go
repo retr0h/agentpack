@@ -231,7 +231,7 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 		return nil, err
 	}
 
-	storedPath, err := storeArchive(archivePath, name, sha)
+	storedPath, err := storeArchive(ctx, archivePath, name, sha)
 	if err != nil {
 		storedPath = archivePath
 	}
@@ -295,7 +295,7 @@ func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Resu
 	var verifyResults []checksum.Result
 
 	if !newFormat {
-		checksumFile, err := findChecksums(tmpDir)
+		checksumFile, err := findChecksums(ctx, tmpDir)
 		if err != nil {
 			return nil, err
 		}
@@ -317,7 +317,7 @@ func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Resu
 		}
 	}
 
-	meta, err := findAndReadMetadata(tmpDir)
+	meta, err := findAndReadMetadata(ctx, tmpDir)
 	if err != nil {
 		return nil, err
 	}
@@ -808,12 +808,16 @@ func copyToTemp(ctx context.Context, src string) (string, error) {
 
 // findChecksums locates the checksums.txt file inside the extracted archive.
 // The generic archive layout places it at .agentpack/checksums.txt.
-func findChecksums(dir string) (string, error) {
+func findChecksums(ctx context.Context, dir string) (string, error) {
 	var found string
 
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
 		}
 
 		if !d.IsDir() && d.Name() == "checksums.txt" && strings.Contains(path, ".agentpack") {
@@ -852,12 +856,16 @@ func hasMetadataYAML(dir string) bool {
 // findAndReadMetadata locates and parses archive metadata. It prefers
 // .agentpack/metadata.yaml (new format) and falls back to
 // .agentpack/metadata.json (legacy format) for backward compatibility.
-func findAndReadMetadata(dir string) (*metadata.Metadata, error) {
+func findAndReadMetadata(ctx context.Context, dir string) (*metadata.Metadata, error) {
 	var yamlPath, jsonPath string
 
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
 		}
 
 		if d.IsDir() || !strings.Contains(path, ".agentpack") {

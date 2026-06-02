@@ -32,7 +32,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/stretchr/testify/assert"
@@ -45,6 +44,7 @@ import (
 	"github.com/retr0h/agentpack/internal/install"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/registry"
+	"github.com/retr0h/agentpack/internal/testutil"
 	"github.com/retr0h/agentpack/pkg/target"
 	"github.com/retr0h/agentpack/pkg/target/mocks"
 )
@@ -74,29 +74,6 @@ func initBareGitRepo(t *testing.T) string {
 	run("clone", "--bare", src, bare)
 
 	return bare
-}
-
-// --------------------------------------------------------------------------
-// cancelAfterN context helper
-// --------------------------------------------------------------------------
-
-type cancelAfterN struct {
-	n    int
-	call int
-}
-
-func newCancelAfterN(n int) *cancelAfterN { return &cancelAfterN{n: n} }
-
-func (c *cancelAfterN) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterN) Done() <-chan struct{}       { return nil }
-func (c *cancelAfterN) Value(_ any) any             { return nil }
-func (c *cancelAfterN) Err() error {
-	c.call++
-	if c.call <= c.n {
-		return nil
-	}
-
-	return errors.New("context canceled")
 }
 
 // --------------------------------------------------------------------------
@@ -603,7 +580,7 @@ skills:
 
 				return archivePath, []target.Target{m}
 			},
-			customCtx: newCancelAfterN(3),
+			customCtx: testutil.NewCancelAfterN(3),
 			wantErr:   "context canceled",
 		},
 		{
@@ -636,7 +613,7 @@ skills:
 			// cancelAfterN(9): calls 1-9 return nil; call 10 fires at the
 			// ctx.Err() check immediately after archive.Extract returns (Run line
 			// 114). Call path: Run(1) + Fetch(2,3) + Run(4) + Extract-loop(5-9).
-			customCtx: newCancelAfterN(9),
+			customCtx: testutil.NewCancelAfterN(9),
 			wantErr:   "context canceled",
 		},
 		{
@@ -669,7 +646,7 @@ skills:
 			// N=15 is sufficient to pass the initial ctx checks and fetch but
 			// fires somewhere inside verify or shortly after — the exact call
 			// count depends on archive size. We verify cancellation propagates.
-			customCtx: newCancelAfterN(15),
+			customCtx: testutil.NewCancelAfterN(15),
 			wantErr:   "context canceled",
 		},
 		{
@@ -857,7 +834,7 @@ skills:
 			// Verify to return (nil, err) → line 131 "verify: %w".
 			// Call path: Run(1) + Fetch(2,3) + Run(4) + Extract(5-9) + Run(10)
 			// + Verify entry 1 = call 11.
-			customCtx: newCancelAfterN(10),
+			customCtx: testutil.NewCancelAfterN(10),
 			wantErr:   "context canceled",
 		},
 		{
@@ -890,7 +867,7 @@ skills:
 			// cancelAfterN(12): calls 11-12 are the two Verify entries (which
 			// succeed). Call 13 fires at Run line 146 ctx.Err() check after
 			// findAndReadMetadata completes.
-			customCtx: newCancelAfterN(12),
+			customCtx: testutil.NewCancelAfterN(12),
 			wantErr:   "context canceled",
 		},
 		{
@@ -922,7 +899,7 @@ skills:
 			},
 			// cancelAfterN(13): call 13 is the Run line 146 check (passes nil).
 			// Call 14 fires at Run line 165 (top of targets for-loop).
-			customCtx: newCancelAfterN(13),
+			customCtx: testutil.NewCancelAfterN(13),
 			wantErr:   "context canceled",
 		},
 		{
@@ -1367,7 +1344,7 @@ func TestFindChecksums(t *testing.T) {
 			t.Parallel()
 
 			dir := tt.setup(t)
-			path, err := install.FindChecksums(dir)
+			path, err := install.FindChecksums(context.Background(), dir)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -1555,7 +1532,7 @@ func TestFindAndReadMetadata(t *testing.T) {
 			t.Parallel()
 
 			dir := tt.setup(t)
-			m, err := install.FindAndReadMetadata(dir)
+			m, err := install.FindAndReadMetadata(context.Background(), dir)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

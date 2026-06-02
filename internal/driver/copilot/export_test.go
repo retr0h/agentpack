@@ -58,6 +58,6 @@ func CopyFile(src, dst string) error {
 }
 
 // EnumerateFiles exposes enumerateFiles for testing.
-func EnumerateFiles(destDir, baseDir string) ([]target.InstalledFile, error) {
-	return enumerateFiles(destDir, baseDir)
+func EnumerateFiles(ctx context.Context, destDir, baseDir string) ([]target.InstalledFile, error) {
+	return enumerateFiles(ctx, destDir, baseDir)
 }

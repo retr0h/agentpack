@@ -215,7 +215,11 @@ func autoPackageWithVersion(
 // storeArchive copies the archive at srcPath to the archives directory and
 // returns the stored path. The naming follows ADR-001:
 // {name}@{sha}.agentpack for git sources.
-func storeArchive(srcPath, name, sha string) (string, error) {
+func storeArchive(ctx context.Context, srcPath, name, sha string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
 	dir, err := archivesDir()
 	if err != nil {
 		return "", err
@@ -367,7 +371,7 @@ func walkContentDir(cloneDir, root string) ([]archive.FileEntry, error) {
 }
 
 // buildContentMap reads file content from disk (Src) or memory (Content) and
-// returns a path→content map suitable for safety.Classify. Only content files
+// returns a path->content map suitable for safety.Classify. Only content files
 // (those without a .agentpack/ prefix) are included.
 func buildContentMap(files []archive.FileEntry) (map[string][]byte, error) {
 	m := make(map[string][]byte, len(files))
