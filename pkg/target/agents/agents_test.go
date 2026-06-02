@@ -379,16 +379,17 @@ func TestAgent_Install(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		def       agents.AgentDef
-		global    bool
-		entries   []target.ContentEntry
-		setupSrc  func(t *testing.T) string
-		homeFunc  func(t *testing.T) func() (string, error)
-		cwdFunc   func(t *testing.T, destBase string) func() (string, error)
-		cancelCtx bool
-		wantErr   string
-		check     func(t *testing.T, destBase string, pluginName string)
+		name           string
+		def            agents.AgentDef
+		global         bool
+		entries        []target.ContentEntry
+		entriesFromSrc func(src string) []target.ContentEntry
+		setupSrc       func(t *testing.T) string
+		homeFunc       func(t *testing.T) func() (string, error)
+		cwdFunc        func(t *testing.T, destBase string) func() (string, error)
+		cancelCtx      bool
+		wantErr        string
+		check          func(t *testing.T, destBase string, pluginName string)
 	}{
 		{
 			name: "local: copies skills into .agents/skills/{name}/",
@@ -603,8 +604,10 @@ func TestAgent_Install(t *testing.T) {
 				DetectHome:      ".cursor",
 				GlobalSkillsDir: ".cursor/skills",
 			},
-			entries: []target.ContentEntry{
-				{Name: "k8s", Type: "skill", Root: "skills/k8s"},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
 			},
 			setupSrc: func(t *testing.T) string {
 				t.Helper()
@@ -676,11 +679,15 @@ func TestAgent_Install(t *testing.T) {
 				cancel()
 			}
 
+			entries := tt.entries
+			if tt.entriesFromSrc != nil {
+				entries = tt.entriesFromSrc(srcDir)
+			}
 			opts := target.InstallOpts{
 				Name:      "my-plugin",
 				SourceDir: srcDir,
 				Global:    tt.global,
-				Entries:   tt.entries,
+				Entries:   entries,
 			}
 
 			files, err := a.Install(ctx, opts)

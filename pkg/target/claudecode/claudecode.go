@@ -134,7 +134,7 @@ func (c *ClaudeCode) installFromEntries(
 		switch entry.Type {
 		case "skill", "command", "agent":
 			plural := entryTypePlural[entry.Type]
-			srcDir := filepath.Join(opts.SourceDir, entry.Root)
+			srcDir := entry.Root
 			dstDir := filepath.Join(root, ".claude", plural, entry.Name)
 
 			written, err := copyTreeTracked(c.mkdirAllFunc, srcDir, dstDir, root)

@@ -485,7 +485,7 @@ func (a *agent) installFromEntries(
 			return nil, err
 		}
 
-		srcDir := filepath.Join(opts.SourceDir, entry.Root)
+		srcDir := entry.Root
 		destDir := filepath.Join(skillsDir, entry.Name)
 
 		if err := os.MkdirAll(destDir, 0o755); err != nil {

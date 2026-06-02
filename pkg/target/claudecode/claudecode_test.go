@@ -117,13 +117,14 @@ func TestInstall(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		setup     func(t *testing.T) (srcDir string, installDir string)
-		entries   []target.ContentEntry
-		homeFunc  func() (string, error)
-		mkdirFunc func(string, os.FileMode) error
-		wantErr   string
-		check     func(t *testing.T, installDir string)
+		name           string
+		setup          func(t *testing.T) (srcDir string, installDir string)
+		entries        []target.ContentEntry
+		entriesFromSrc func(src string) []target.ContentEntry
+		homeFunc       func() (string, error)
+		mkdirFunc      func(string, os.FileMode) error
+		wantErr        string
+		check          func(t *testing.T, installDir string)
 	}{
 		{
 			name: "copies skills recursively to .claude/skills/",
@@ -296,8 +297,10 @@ func TestInstall(t *testing.T) {
 				writeFile(t, filepath.Join(src, "commands", "scan.md"), "# Scan")
 				return src, t.TempDir()
 			},
-			entries: []target.ContentEntry{
-				{Name: "k8s", Type: "skill", Root: "skills/k8s"},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
 			},
 			check: func(t *testing.T, dir string) {
 				t.Helper()
@@ -348,9 +351,13 @@ func TestInstall(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
+			entries := tt.entries
+			if tt.entriesFromSrc != nil {
+				entries = tt.entriesFromSrc(srcDir)
+			}
 			files, err := cc.Install(ctx, target.InstallOpts{
 				Name: "test", SourceDir: srcDir, Dir: installDir,
-				Entries: tt.entries,
+				Entries: entries,
 			})
 			_ = files
 			if tt.wantErr != "" {
