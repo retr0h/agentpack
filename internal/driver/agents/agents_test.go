@@ -82,26 +82,22 @@ func TestDefs(t *testing.T) {
 func TestAgents_AllRegistered(t *testing.T) {
 	t.Parallel()
 
-	wantNames := make([]string, len(agents.Registry))
-	for i, def := range agents.Registry {
-		wantNames[i] = def.Name
-	}
-
-	tests := make([]struct {
-		name     string
-		wantName string
-	}, 0, len(wantNames))
-	for _, n := range wantNames {
-		tests = append(tests, struct {
-			name     string
-			wantName string
-		}{name: n, wantName: n})
-	}
-
 	all := target.All()
 	registeredNames := make(map[string]bool, len(all))
 	for _, tgt := range all {
 		registeredNames[tgt.Name()] = true
+	}
+
+	tests := []struct {
+		name     string
+		wantName string
+	}{}
+
+	for _, def := range agents.Registry {
+		tests = append(tests, struct {
+			name     string
+			wantName string
+		}{name: def.Name, wantName: def.Name})
 	}
 
 	for _, tt := range tests {
