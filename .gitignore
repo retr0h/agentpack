@@ -4,17 +4,9 @@ dist/
 docs/node_modules/
 docs/bun.lock
 .just/remote/
-.superpowers/
 
 /agentpack
 coverage.out
 *.agentpack
 examples/*/.git/
-.agents/
-.claude/skills/
-agentpack-packages.yaml
-agentpack.lock
-.claude/skills/
-.claude/commands/
-.agents/skills/
 skills-lock.json

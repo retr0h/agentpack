@@ -12,13 +12,13 @@ agentpack.yaml → [build] → .agentpack archive → [fetcher] → [target] →
 ```
 
 1. **Build** reads `agentpack.yaml`, resolves content, and produces a
-   checksummed `.agentpack` archive (see
-   [ADR-001](adr/001-agentpack-format.md)).
+   `.agentpack` archive with typed metadata entries (see
+   [ADR-009](adr/009-metadata-driven-format.md)).
 2. **Fetcher** retrieves content from a source (local file, HTTP, git).
-3. **Target** installs content into the right locations for a specific AI coding
-   agent.
-4. **Install** orchestrates fetch → build → install from a declarative
-   `agentpack-packages.yaml`, using locked SHAs for reproducibility (see
+3. **Target** declares supported content types and installs matching entries
+   into the right locations for a specific AI coding agent.
+4. **Install** orchestrates fetch → build → filter entries by driver capability
+   → install, using locked SHAs for reproducibility (see
    [ADR-003](adr/003-dependency-management.md)).
 
 ## Driver interfaces

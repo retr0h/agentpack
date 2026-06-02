@@ -1,0 +1,8 @@
+# agentpack install artifacts — generated during manual testing
+.claude/
+.agents/
+.codex/
+.copilot/
+.config/
+agentpack-packages.yaml
+agentpack.lock
