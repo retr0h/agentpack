@@ -1,0 +1,872 @@
+// Copyright (c) 2026 John Dewey
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
+package cortex_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/retr0h/agentpack/internal/driver/cortex"
+	"github.com/retr0h/agentpack/pkg/target"
+)
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+}
+
+func writeJSON(t *testing.T, path string, v any) {
+	t.Helper()
+	data, err := json.Marshal(v)
+	require.NoError(t, err)
+	writeFile(t, path, string(data))
+}
+
+func TestCortex_Name(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		want string
+	}{
+		{name: "returns cortex", want: "cortex"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := cortex.New()
+			assert.Equal(t, tt.want, c.Name())
+		})
+	}
+}
+
+func TestCortex_DisplayName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		want string
+	}{
+		{name: "returns Cortex Code", want: "Cortex Code"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := cortex.New()
+			assert.Equal(t, tt.want, c.DisplayName())
+		})
+	}
+}
+
+func TestCortex_SupportedTypes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		want []string
+	}{
+		{name: "returns skill hook and mcp", want: []string{"skill", "hook", "mcp"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := cortex.New()
+			assert.Equal(t, tt.want, c.SupportedTypes())
+		})
+	}
+}
+
+func TestCortex_Detect(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		homeFunc     func() (string, error)
+		wantDetected bool
+	}{
+		{
+			name: "detect returns true when ~/.snowflake/cortex exists",
+			homeFunc: func() (string, error) {
+				home := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(home, ".snowflake", "cortex"), 0o755))
+				return home, nil
+			},
+			wantDetected: true,
+		},
+		{
+			name: "detect returns false when ~/.snowflake/cortex missing",
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			wantDetected: false,
+		},
+		{
+			name: "home error returns false",
+			homeFunc: func() (string, error) {
+				return "", errors.New("no home")
+			},
+			wantDetected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := cortex.New()
+			cortex.SetUserHome(c, tt.homeFunc)
+			assert.Equal(t, tt.wantDetected, c.Detect())
+		})
+	}
+}
+
+func TestCortex_Install(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		setup          func(t *testing.T) (srcDir string, installDir string)
+		entries        []target.ContentEntry
+		entriesFromSrc func(src string) []target.ContentEntry
+		global         bool
+		homeFunc       func() (string, error)
+		cwdFunc        func() (string, error)
+		mkdirFunc      func(string, os.FileMode) error
+		cancelCtx      bool
+		wantErr        string
+		check          func(t *testing.T, installDir string, homeDir string)
+	}{
+		{
+			name: "copies skills to .agents/skills/ locally",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "review", "SKILL.md"), "# Review")
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string, _ string) {
+				t.Helper()
+				p := filepath.Join(dir, ".agents", "skills", "test-plugin", "review", "SKILL.md")
+				_, err := os.Stat(p)
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "copies skills to ~/.snowflake/cortex/skills/ globally",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "my-skill.md"), "# My Skill")
+				return src, ""
+			},
+			global: true,
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			check: func(t *testing.T, _ string, home string) {
+				t.Helper()
+				p := filepath.Join(
+					home,
+					".snowflake",
+					"cortex",
+					"skills",
+					"test-plugin",
+					"my-skill.md",
+				)
+				_, err := os.Stat(p)
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "merges hooks into .snowflake/cortex/hooks.json locally",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"PreToolUse": []any{
+						map[string]any{
+							"command":    "echo pre-tool",
+							"showOutput": true,
+						},
+					},
+				})
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string, _ string) {
+				t.Helper()
+				data, err := os.ReadFile(
+					filepath.Join(dir, ".snowflake", "cortex", "hooks.json"),
+				)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				hooks, ok := doc["hooks"].(map[string]any)
+				require.True(t, ok)
+				entries, ok := hooks["PreToolUse"].([]any)
+				require.True(t, ok)
+				require.Len(t, entries, 1)
+				entry, ok := entries[0].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "echo pre-tool", entry["command"])
+			},
+		},
+		{
+			name: "merges MCP config into .snowflake/cortex/mcp.json locally",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "my-api.json"), map[string]any{
+					"name": "my-api",
+					"type": "remote",
+					"url":  "https://mcp.example.com/v1",
+				})
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string, _ string) {
+				t.Helper()
+				data, err := os.ReadFile(
+					filepath.Join(dir, ".snowflake", "cortex", "mcp.json"),
+				)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				servers, ok := doc["mcpServers"].(map[string]any)
+				require.True(t, ok)
+				srv, ok := servers["my-api"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "remote", srv["type"])
+			},
+		},
+		{
+			name: "installs from entries with skill + hook + mcp",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"PostToolUse": []any{
+						map[string]any{
+							"command":    "echo post-tool",
+							"showOutput": false,
+						},
+					},
+				})
+				writeJSON(t, filepath.Join(src, "mcp", "srv.json"), map[string]any{
+					"name": "srv",
+					"type": "stdio",
+				})
+				return src, t.TempDir()
+			},
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+					{Name: "hooks", Type: "hook", Root: filepath.Join(src, "hooks")},
+					{Name: "srv", Type: "mcp", Root: filepath.Join(src, "mcp")},
+				}
+			},
+			check: func(t *testing.T, dir string, _ string) {
+				t.Helper()
+				_, err := os.Stat(filepath.Join(dir, ".agents", "skills", "k8s", "SKILL.md"))
+				assert.NoError(t, err)
+				hooksData, hooksErr := os.ReadFile(
+					filepath.Join(dir, ".snowflake", "cortex", "hooks.json"),
+				)
+				require.NoError(t, hooksErr)
+				var hooksDoc map[string]any
+				require.NoError(t, json.Unmarshal(hooksData, &hooksDoc))
+				hooks, ok := hooksDoc["hooks"].(map[string]any)
+				require.True(t, ok)
+				_, ok = hooks["PostToolUse"]
+				assert.True(t, ok)
+				mcpData, mcpErr := os.ReadFile(
+					filepath.Join(dir, ".snowflake", "cortex", "mcp.json"),
+				)
+				require.NoError(t, mcpErr)
+				var mcpDoc map[string]any
+				require.NoError(t, json.Unmarshal(mcpData, &mcpDoc))
+				servers, ok := mcpDoc["mcpServers"].(map[string]any)
+				require.True(t, ok)
+				_, ok = servers["srv"]
+				assert.True(t, ok)
+			},
+		},
+		{
+			name: "skips missing content dirs without error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+		},
+		{
+			name: "fails on cancelled context",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			cancelCtx: true,
+			wantErr:   "context canceled",
+		},
+		{
+			name: "home dir error when global",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			global: true,
+			homeFunc: func() (string, error) {
+				return "", errors.New("home unavailable")
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "mkdirAll failure propagates error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, t.TempDir()
+			},
+			mkdirFunc: func(string, os.FileMode) error {
+				return errors.New("disk full")
+			},
+			wantErr: "mkdir skills dir",
+		},
+		{
+			name: "cwdFunc error propagates for local install",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			cwdFunc: func() (string, error) {
+				return "", errors.New("getwd failed")
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "hooksPath cwdFunc error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, ""
+			},
+			cwdFunc: func() func() (string, error) {
+				calls := 0
+				return func() (string, error) {
+					calls++
+					if calls == 1 {
+						return t.TempDir(), nil
+					}
+					return "", errors.New("getwd second call failed")
+				}
+			}(),
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "hooksPath home error propagates in installFromEntries hook case when global",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			global: true,
+			homeFunc: func() (string, error) {
+				return "", errors.New("no home for hooks entry")
+			},
+			entries: []target.ContentEntry{
+				{Name: "hooks", Type: "hook"},
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "mcpConfigPath home error propagates in installFromEntries mcp case when global",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			global: true,
+			homeFunc: func() (string, error) {
+				return "", errors.New("no home for mcp entry")
+			},
+			entries: []target.ContentEntry{
+				{Name: "mcp", Type: "mcp"},
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "installSkillEntry mkdirAll failure propagates error via entries",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			mkdirFunc: func(string, os.FileMode) error {
+				return errors.New("disk full on skill entry")
+			},
+			wantErr: "mkdir skills dir",
+		},
+		{
+			name: "installSkillEntry resolveDirs error propagates via skill entry",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, ""
+			},
+			global: true,
+			homeFunc: func() (string, error) {
+				return "", errors.New("no home for skill entry resolveDirs")
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "installHooks error propagates in installFromDirs when hooksPath unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"PreToolUse": []any{
+						map[string]any{"command": "echo lint", "showOutput": true},
+					},
+				})
+				installDir := t.TempDir()
+				hooksFile := filepath.Join(
+					installDir,
+					".snowflake",
+					"cortex",
+					"hooks.json",
+				)
+				require.NoError(t, os.MkdirAll(filepath.Dir(hooksFile), 0o755))
+				require.NoError(t, os.WriteFile(hooksFile, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksFile, 0o644) })
+				return src, installDir
+			},
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			wantErr: "merge hooks",
+		},
+		{
+			name: "installHooks error propagates in installFromEntries hook case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"PreToolUse": []any{
+						map[string]any{"command": "echo lint", "showOutput": true},
+					},
+				})
+				installDir := t.TempDir()
+				hooksFile := filepath.Join(
+					installDir,
+					".snowflake",
+					"cortex",
+					"hooks.json",
+				)
+				require.NoError(t, os.MkdirAll(filepath.Dir(hooksFile), 0o755))
+				require.NoError(t, os.WriteFile(hooksFile, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksFile, 0o644) })
+				return src, installDir
+			},
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			entries: []target.ContentEntry{
+				{Name: "hooks", Type: "hook"},
+			},
+			wantErr: "merge hooks",
+		},
+		{
+			name: "returns error when mcp json has no name field",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "bad.json"), map[string]any{
+					"type": "remote",
+				})
+				return src, t.TempDir()
+			},
+			wantErr: `missing or invalid "name" field`,
+		},
+		{
+			name: "returns error on mcp name conflict",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				dst := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "dup.json"), map[string]any{
+					"name": "dup-srv",
+					"type": "stdio",
+				})
+				writeJSON(
+					t,
+					filepath.Join(dst, ".snowflake", "cortex", "mcp.json"),
+					map[string]any{
+						"mcpServers": map[string]any{
+							"dup-srv": map[string]any{"type": "stdio"},
+						},
+					},
+				)
+				return src, dst
+			},
+			wantErr: "already exists",
+		},
+		{
+			name: "copyTreeIfExists walkErr propagates when source subdir is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				subdir := filepath.Join(src, "subdir")
+				require.NoError(t, os.MkdirAll(subdir, 0o755))
+				require.NoError(t, os.Chmod(subdir, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(subdir, 0o755) })
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "unreadable-skill", Type: "skill", Root: src},
+				}
+			},
+			wantErr: "copy skills",
+		},
+		{
+			name: "copyFile write error propagates when skills destDir is unwritable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "SKILL.md"), "# Skill")
+				return src, t.TempDir()
+			},
+			mkdirFunc: func(path string, mode os.FileMode) error {
+				if err := os.MkdirAll(path, mode); err != nil {
+					return err
+				}
+				return os.Chmod(path, 0o555)
+			},
+			wantErr: "copy skills",
+		},
+		{
+			name: "enumerateFiles walkErr propagates when destDir has unreadable subdir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				installDir := t.TempDir()
+				destDir := filepath.Join(installDir, ".agents", "skills", "test-plugin")
+				unreadable := filepath.Join(destDir, "unreadable")
+				require.NoError(t, os.MkdirAll(unreadable, 0o755))
+				require.NoError(t, os.Chmod(unreadable, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(unreadable, 0o755) })
+				return src, installDir
+			},
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			wantErr: "enumerate installed files",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, installDir := tt.setup(t)
+			c := cortex.New()
+
+			var homeDir string
+			if tt.homeFunc != nil {
+				cortex.SetUserHome(c, func() (string, error) {
+					h, err := tt.homeFunc()
+					homeDir = h
+					return h, err
+				})
+			}
+			if tt.cwdFunc != nil {
+				cortex.SetCwd(c, tt.cwdFunc)
+			}
+			if tt.mkdirFunc != nil {
+				cortex.SetOsMkdirAll(c, tt.mkdirFunc)
+			}
+
+			ctx := context.Background()
+			if tt.cancelCtx {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+
+			entries := tt.entries
+			if tt.entriesFromSrc != nil {
+				entries = tt.entriesFromSrc(srcDir)
+			}
+
+			files, err := c.Install(ctx, target.InstallOpts{
+				Name:      "test-plugin",
+				SourceDir: srcDir,
+				Dir:       installDir,
+				Global:    tt.global,
+				Entries:   entries,
+			})
+			_ = files
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, installDir, homeDir)
+			}
+		})
+	}
+}
+
+func TestCortex_List(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		wantLen int
+	}{
+		{name: "returns empty", wantLen: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := cortex.New()
+			got, err := c.List()
+
+			require.NoError(t, err)
+			assert.Len(t, got, tt.wantLen)
+		})
+	}
+}
+
+func TestCortex_InstallHooks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, hooksPath string)
+		wantErr string
+	}{
+		{
+			name: "no-op when hooks dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), filepath.Join(t.TempDir(), "hooks.json")
+			},
+		},
+		{
+			name: "returns error when hooks.json is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "hooks", "hooks.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, filepath.Join(t.TempDir(), "hooks.json")
+			},
+			wantErr: "read hooks/hooks.json",
+		},
+		{
+			name: "returns error when hooks.json contains invalid JSON",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "hooks", "hooks.json"), `{invalid`)
+				return src, filepath.Join(t.TempDir(), "hooks.json")
+			},
+			wantErr: "parse hooks/hooks.json",
+		},
+		{
+			name: "merges hooks into target file",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"PreToolUse": []any{
+						map[string]any{
+							"command":    "echo lint",
+							"showOutput": true,
+						},
+					},
+				})
+				return src, filepath.Join(t.TempDir(), "hooks.json")
+			},
+		},
+		{
+			name: "returns error when existing hooksPath is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"PreToolUse": []any{
+						map[string]any{"command": "echo lint", "showOutput": true},
+					},
+				})
+				destDir := t.TempDir()
+				hooksPath := filepath.Join(destDir, "hooks.json")
+				require.NoError(t, os.WriteFile(hooksPath, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksPath, 0o644) })
+				return src, hooksPath
+			},
+			wantErr: "merge hooks",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, hooksPath := tt.setup(t)
+			c := cortex.New()
+			err := cortex.InstallHooks(context.Background(), c, srcDir, hooksPath, "test-plugin")
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestCortex_InstallMCP(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, mcpPath string)
+		wantErr string
+	}{
+		{
+			name: "no-op when mcp dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), filepath.Join(t.TempDir(), "mcp.json")
+			},
+		},
+		{
+			name: "returns error when mcp dir is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				d := filepath.Join(src, "mcp")
+				require.NoError(t, os.MkdirAll(d, 0o755))
+				require.NoError(t, os.Chmod(d, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(d, 0o755) })
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "read mcp dir",
+		},
+		{
+			name: "returns error when mcp json file is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "mcp", "srv.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{"name":"srv"}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "read mcp/",
+		},
+		{
+			name: "returns error when mcp json contains invalid JSON",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "mcp", "srv.json"), `{invalid`)
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "parse mcp/",
+		},
+		{
+			name: "skips directories and non-json entries in mcp dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "mcp", "subdir"), 0o755))
+				writeFile(t, filepath.Join(src, "mcp", "readme.txt"), "skip me")
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, mcpPath := tt.setup(t)
+			c := cortex.New()
+			err := cortex.InstallMCP(context.Background(), c, srcDir, mcpPath)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
