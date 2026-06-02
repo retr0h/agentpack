@@ -20,18 +20,20 @@
 
 // Package goose is the agentpack target driver for Goose.
 // It installs skills into .agents/skills/ (local) or ~/.config/goose/skills/
-// (global). MCP support is deferred because Goose uses YAML config files.
+// (global), and merges MCP server configs into ~/.config/goose/config.yaml.
 package goose
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/retr0h/agentpack/pkg/target"
+	"gopkg.in/yaml.v3"
 )
 
 // Goose is the target driver for Goose.
@@ -60,7 +62,7 @@ func (g *Goose) DisplayName() string { return "Goose" }
 
 // SupportedTypes returns the content types this driver can install.
 func (g *Goose) SupportedTypes() []string {
-	return []string{"skill"}
+	return []string{"skill", "mcp"}
 }
 
 // Detect returns true if the Goose config directory exists.
@@ -106,13 +108,24 @@ func (g *Goose) installFromEntries(
 			return nil, err
 		}
 
-		if entry.Type == "skill" {
+		switch entry.Type {
+		case "skill":
 			written, err := g.installSkillEntry(ctx, opts, entry)
 			if err != nil {
 				return nil, err
 			}
 
 			allFiles = append(allFiles, written...)
+
+		case "mcp":
+			configPath, err := g.gooseConfigPath()
+			if err != nil {
+				return nil, err
+			}
+
+			if err := g.installMCP(ctx, opts.SourceDir, configPath); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -149,6 +162,15 @@ func (g *Goose) installFromDirs(
 	files, err := enumerateFiles(ctx, destDir, baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate installed files: %w", err)
+	}
+
+	configPath, configErr := g.gooseConfigPath()
+	if configErr != nil {
+		return nil, configErr
+	}
+
+	if err := g.installMCP(ctx, opts.SourceDir, configPath); err != nil {
+		return nil, err
 	}
 
 	return files, nil
@@ -202,6 +224,141 @@ func (g *Goose) resolveDirs(opts target.InstallOpts) (string, string, error) {
 	}
 
 	return dir, filepath.Join(dir, ".agents", "skills"), nil
+}
+
+// gooseConfigPath returns the path to Goose's global config file at
+// ~/.config/goose/config.yaml.
+func (g *Goose) gooseConfigPath() (string, error) {
+	configDir, err := g.userConfigDirFunc()
+	if err != nil {
+		return "", fmt.Errorf("config dir: %w", err)
+	}
+
+	return filepath.Join(configDir, "goose", "config.yaml"), nil
+}
+
+// installMCP reads all mcp/*.json files from srcDir, parses them, and merges
+// each server entry into the Goose YAML config at configPath under the
+// "extensions" key. The config file is created when absent. Existing keys
+// outside "extensions" are preserved. Returns an error when a server name
+// already exists.
+func (g *Goose) installMCP(ctx context.Context, srcDir, configPath string) error {
+	mcpDir := filepath.Join(srcDir, "mcp")
+	if _, err := os.Stat(mcpDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(mcpDir)
+	if err != nil {
+		return fmt.Errorf("read mcp dir: %w", err)
+	}
+
+	for _, de := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(mcpDir, de.Name()))
+		if err != nil {
+			return fmt.Errorf("read mcp/%s: %w", de.Name(), err)
+		}
+
+		var raw map[string]any
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return fmt.Errorf("parse mcp/%s: %w", de.Name(), err)
+		}
+
+		name, ok := raw["name"].(string)
+		if !ok || name == "" {
+			return fmt.Errorf("mcp/%s: missing or invalid \"name\" field", de.Name())
+		}
+
+		delete(raw, "name")
+
+		if err := mergeGooseExtension(configPath, name, raw); err != nil {
+			return fmt.Errorf("merge mcp %q: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+// mergeGooseExtension reads the YAML config at path, adds an extension entry
+// under the "extensions" key, and writes back. The file and parent directories
+// are created when absent. Returns an error if an extension with the same name
+// already exists.
+func mergeGooseExtension(path, name string, config map[string]any) error {
+	cfg, err := readYAMLConfig(path)
+	if err != nil {
+		return err
+	}
+
+	extensions := getOrCreateYAMLMap(cfg, "extensions")
+	if _, exists := extensions[name]; exists {
+		return fmt.Errorf("extension %q already exists in %s", name, path)
+	}
+
+	extensions[name] = config
+	cfg["extensions"] = extensions
+
+	return writeYAMLConfig(path, cfg)
+}
+
+// readYAMLConfig reads and unmarshals the YAML file at path into a map.
+// When the file does not exist it returns an empty map.
+func readYAMLConfig(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]any{}, nil
+		}
+
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var doc map[string]any
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	if doc == nil {
+		doc = map[string]any{}
+	}
+
+	return doc, nil
+}
+
+// writeYAMLConfig marshals doc as YAML and writes it to path. Parent
+// directories are created as needed.
+func writeYAMLConfig(path string, doc map[string]any) error {
+	data, err := yaml.Marshal(doc)
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", path, err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
+	}
+
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+
+	return nil
+}
+
+// getOrCreateYAMLMap returns the value at key as map[string]any, creating it
+// when absent or when the existing value has an incompatible type.
+func getOrCreateYAMLMap(doc map[string]any, key string) map[string]any {
+	if v, ok := doc[key].(map[string]any); ok {
+		return v
+	}
+
+	return map[string]any{}
 }
 
 // List returns nil; Goose does not store managed-plugin metadata.

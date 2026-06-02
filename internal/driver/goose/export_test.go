@@ -20,7 +20,10 @@
 
 package goose
 
-import "os"
+import (
+	"context"
+	"os"
+)
 
 // SetUserHome replaces userHomeFunc for testing.
 func SetUserHome(g *Goose, fn func() (string, error)) {
@@ -40,4 +43,14 @@ func SetCwd(g *Goose, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(g *Goose, fn func(string, os.FileMode) error) {
 	g.mkdirAllFunc = fn
+}
+
+// InstallMCP exposes installMCP for testing.
+func InstallMCP(ctx context.Context, g *Goose, srcDir, configPath string) error {
+	return g.installMCP(ctx, srcDir, configPath)
+}
+
+// GooseConfigPath exposes gooseConfigPath for testing.
+func GooseConfigPath(g *Goose) (string, error) {
+	return g.gooseConfigPath()
 }

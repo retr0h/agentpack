@@ -22,6 +22,7 @@ package goose_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/driver/goose"
 	"github.com/retr0h/agentpack/pkg/target"
@@ -38,6 +40,20 @@ func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+}
+
+func writeJSON(t *testing.T, path string, v any) {
+	t.Helper()
+	data, err := json.Marshal(v)
+	require.NoError(t, err)
+	writeFile(t, path, string(data))
+}
+
+func writeYAML(t *testing.T, path string, v any) {
+	t.Helper()
+	data, err := yaml.Marshal(v)
+	require.NoError(t, err)
+	writeFile(t, path, string(data))
 }
 
 func TestGoose_Name(t *testing.T) {
@@ -87,7 +103,7 @@ func TestGoose_SupportedTypes(t *testing.T) {
 		name string
 		want []string
 	}{
-		{name: "returns skill only", want: []string{"skill"}},
+		{name: "returns skill and mcp", want: []string{"skill", "mcp"}},
 	}
 
 	for _, tt := range tests {
@@ -154,6 +170,7 @@ func TestGoose_Install(t *testing.T) {
 		entriesFromSrc func(src string) []target.ContentEntry
 		global         bool
 		homeFunc       func() (string, error)
+		configDirFunc  func() (string, error)
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
@@ -209,10 +226,143 @@ func TestGoose_Install(t *testing.T) {
 			},
 		},
 		{
+			name: "merges MCP config into ~/.config/goose/config.yaml",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "my-api.json"), map[string]any{
+					"name":    "my-api",
+					"type":    "stdio",
+					"command": "npx",
+					"args":    []string{"-y", "my-api"},
+				})
+				return src, t.TempDir()
+			},
+			configDirFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			check: func(t *testing.T, _ string) {
+				t.Helper()
+				// Verified via standalone installMCP tests.
+			},
+		},
+		{
+			name: "installs from entries with skill + mcp",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				writeJSON(t, filepath.Join(src, "mcp", "srv.json"), map[string]any{
+					"name":    "srv",
+					"type":    "stdio",
+					"command": "srv-bin",
+				})
+				dir := t.TempDir()
+				return src, dir
+			},
+			configDirFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+					{Name: "srv", Type: "mcp", Root: filepath.Join(src, "mcp")},
+				}
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				_, err := os.Stat(filepath.Join(dir, ".agents", "skills", "k8s", "SKILL.md"))
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "configDirFunc error propagates in installFromDirs mcp path",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, t.TempDir()
+			},
+			configDirFunc: func() (string, error) {
+				return "", errors.New("config dir unavailable")
+			},
+			wantErr: "config dir",
+		},
+		{
+			name: "configDirFunc error propagates in installFromEntries mcp case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			configDirFunc: func() (string, error) {
+				return "", errors.New("config dir for mcp entry")
+			},
+			entriesFromSrc: func(_ string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "srv", Type: "mcp"},
+				}
+			},
+			wantErr: "config dir",
+		},
+		{
+			name: "returns error on mcp name conflict",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "dup.json"), map[string]any{
+					"name":    "dup",
+					"type":    "stdio",
+					"command": "dup-bin",
+				})
+				return src, t.TempDir()
+			},
+			configDirFunc: func() (string, error) {
+				configDir := t.TempDir()
+				writeYAML(t, filepath.Join(configDir, "goose", "config.yaml"), map[string]any{
+					"extensions": map[string]any{
+						"dup": map[string]any{"type": "stdio"},
+					},
+				})
+				return configDir, nil
+			},
+			wantErr: "already exists",
+		},
+		{
+			name: "returns error on mcp name conflict via entries",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "dup-e.json"), map[string]any{
+					"name":    "dup-e",
+					"type":    "stdio",
+					"command": "dup-bin",
+				})
+				return src, t.TempDir()
+			},
+			configDirFunc: func() (string, error) {
+				configDir := t.TempDir()
+				writeYAML(t, filepath.Join(configDir, "goose", "config.yaml"), map[string]any{
+					"extensions": map[string]any{
+						"dup-e": map[string]any{"type": "stdio"},
+					},
+				})
+				return configDir, nil
+			},
+			entriesFromSrc: func(_ string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "dup-e", Type: "mcp"},
+				}
+			},
+			wantErr: "already exists",
+		},
+		{
 			name: "skips missing content dirs without error",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				return t.TempDir(), t.TempDir()
+			},
+			configDirFunc: func() (string, error) {
+				return t.TempDir(), nil
 			},
 		},
 		{
@@ -337,6 +487,9 @@ func TestGoose_Install(t *testing.T) {
 			if tt.homeFunc != nil {
 				goose.SetUserHome(g, tt.homeFunc)
 			}
+			if tt.configDirFunc != nil {
+				goose.SetUserConfigDir(g, tt.configDirFunc)
+			}
 			if tt.cwdFunc != nil {
 				goose.SetCwd(g, tt.cwdFunc)
 			}
@@ -398,6 +551,221 @@ func TestGoose_List(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Len(t, got, tt.wantLen)
+		})
+	}
+}
+
+func TestGoose_InstallMCP(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, configPath string)
+		wantErr string
+		check   func(t *testing.T, configPath string)
+	}{
+		{
+			name: "merges MCP config into config.yaml",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "my-api.json"), map[string]any{
+					"name":    "my-api",
+					"type":    "stdio",
+					"command": "npx",
+					"args":    []string{"-y", "my-api-server"},
+					"env":     map[string]any{"API_KEY": "secret"},
+				})
+				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
+			},
+			check: func(t *testing.T, configPath string) {
+				t.Helper()
+				data, err := os.ReadFile(configPath)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				extensions, ok := doc["extensions"].(map[string]any)
+				require.True(t, ok)
+				srv, ok := extensions["my-api"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "stdio", srv["type"])
+				assert.Equal(t, "npx", srv["command"])
+			},
+		},
+		{
+			name: "creates config.yaml if absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "fresh.json"), map[string]any{
+					"name":    "fresh",
+					"type":    "stdio",
+					"command": "fresh-bin",
+				})
+				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
+			},
+			check: func(t *testing.T, configPath string) {
+				t.Helper()
+				_, err := os.Stat(configPath)
+				require.NoError(t, err)
+				data, err := os.ReadFile(configPath)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				extensions, ok := doc["extensions"].(map[string]any)
+				require.True(t, ok)
+				_, ok = extensions["fresh"]
+				assert.True(t, ok)
+			},
+		},
+		{
+			name: "preserves existing YAML keys when merging",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "new-srv.json"), map[string]any{
+					"name":    "new-srv",
+					"type":    "stdio",
+					"command": "new-bin",
+				})
+				configDir := t.TempDir()
+				configPath := filepath.Join(configDir, "goose", "config.yaml")
+				writeYAML(t, configPath, map[string]any{
+					"GOOSE_PROVIDER": "anthropic",
+					"extensions": map[string]any{
+						"existing-srv": map[string]any{
+							"type":    "stdio",
+							"command": "existing-bin",
+						},
+					},
+				})
+				return src, configPath
+			},
+			check: func(t *testing.T, configPath string) {
+				t.Helper()
+				data, err := os.ReadFile(configPath)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				// Existing top-level key preserved.
+				assert.Equal(t, "anthropic", doc["GOOSE_PROVIDER"])
+				extensions, ok := doc["extensions"].(map[string]any)
+				require.True(t, ok)
+				// Existing extension preserved.
+				_, ok = extensions["existing-srv"]
+				assert.True(t, ok)
+				// New extension added.
+				_, ok = extensions["new-srv"]
+				assert.True(t, ok)
+			},
+		},
+		{
+			name: "no-op when mcp dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), filepath.Join(t.TempDir(), "goose", "config.yaml")
+			},
+		},
+		{
+			name: "returns error when mcp dir is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				d := filepath.Join(src, "mcp")
+				require.NoError(t, os.MkdirAll(d, 0o755))
+				require.NoError(t, os.Chmod(d, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(d, 0o755) })
+				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
+			},
+			wantErr: "read mcp dir",
+		},
+		{
+			name: "returns error when mcp json file is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "mcp", "srv.json")
+				writeFile(t, p, `{"name":"srv"}`)
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
+			},
+			wantErr: "read mcp/",
+		},
+		{
+			name: "returns error when mcp json contains invalid JSON",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "mcp", "srv.json"), `{invalid`)
+				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
+			},
+			wantErr: "parse mcp/",
+		},
+		{
+			name: "returns error when mcp json has no name field",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "bad.json"), map[string]any{
+					"type": "stdio",
+				})
+				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
+			},
+			wantErr: "missing or invalid \"name\" field",
+		},
+		{
+			name: "returns error on extension name conflict",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "dup.json"), map[string]any{
+					"name":    "dup",
+					"type":    "stdio",
+					"command": "dup-bin",
+				})
+				configDir := t.TempDir()
+				configPath := filepath.Join(configDir, "goose", "config.yaml")
+				writeYAML(t, configPath, map[string]any{
+					"extensions": map[string]any{
+						"dup": map[string]any{"type": "stdio"},
+					},
+				})
+				return src, configPath
+			},
+			wantErr: "already exists",
+		},
+		{
+			name: "skips directories and non-json entries in mcp dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "mcp", "subdir"), 0o755))
+				writeFile(t, filepath.Join(src, "mcp", "readme.txt"), "skip me")
+				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, configPath := tt.setup(t)
+			g := goose.New()
+
+			err := goose.InstallMCP(context.Background(), g, srcDir, configPath)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, configPath)
+			}
 		})
 	}
 }
