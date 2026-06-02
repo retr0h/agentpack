@@ -364,6 +364,8 @@ func (a *agent) Detect() bool {
 // Install copies skills into the appropriate skills directory for this agent.
 // When opts.Global is true it installs into the agent's global skills directory
 // under the user's home. Otherwise it installs into the project-local directory.
+// When opts.Entries is non-empty, only those entries are installed; otherwise
+// the legacy directory-walking behaviour is used.
 // Returns the list of files written.
 func (a *agent) Install(
 	ctx context.Context,
@@ -371,6 +373,10 @@ func (a *agent) Install(
 ) ([]target.InstalledFile, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+
+	if len(opts.Entries) > 0 {
+		return a.installFromEntries(ctx, opts)
 	}
 
 	var destDir string
@@ -438,6 +444,86 @@ func (a *agent) Install(
 	}
 
 	return files, nil
+}
+
+// installFromEntries installs only the content items listed in opts.Entries.
+// Each entry's Root tree is copied into {skillsDir}/{entry.Name}/.
+func (a *agent) installFromEntries(
+	ctx context.Context,
+	opts target.InstallOpts,
+) ([]target.InstalledFile, error) {
+	var baseDir string
+	var skillsDir string
+
+	if opts.Global {
+		home, err := a.userHomeFunc()
+		if err != nil {
+			return nil, fmt.Errorf("home dir: %w", err)
+		}
+
+		baseDir = home
+		skillsDir = filepath.Join(home, a.def.GlobalSkillsDir)
+	} else {
+		cwd, err := a.cwdFunc()
+		if err != nil {
+			return nil, fmt.Errorf("getwd: %w", err)
+		}
+
+		baseDir = cwd
+		localDir := ".agents/skills"
+		if a.def.LocalSkillsDir != "" {
+			localDir = a.def.LocalSkillsDir
+		}
+
+		skillsDir = filepath.Join(cwd, localDir)
+	}
+
+	var allFiles []target.InstalledFile
+
+	for _, entry := range opts.Entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		srcDir := filepath.Join(opts.SourceDir, entry.Root)
+		destDir := filepath.Join(skillsDir, entry.Name)
+
+		if err := os.MkdirAll(destDir, 0o755); err != nil {
+			return nil, fmt.Errorf("mkdir agents skills dir: %w", err)
+		}
+
+		if err := copyTreeIfExists(ctx, srcDir, destDir); err != nil {
+			return nil, fmt.Errorf("copy skills: %w", err)
+		}
+
+		if err := filepath.WalkDir(destDir, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+
+			rel, relErr := filepath.Rel(baseDir, path)
+			if relErr != nil {
+				return relErr
+			}
+
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+
+			h := sha256.Sum256(data)
+			allFiles = append(allFiles, target.InstalledFile{
+				Path:   rel,
+				SHA256: hex.EncodeToString(h[:]),
+			})
+
+			return nil
+		}); err != nil {
+			return nil, fmt.Errorf("enumerate installed files: %w", err)
+		}
+	}
+
+	return allFiles, nil
 }
 
 // List returns nil; data-driven agents do not store managed-plugin metadata.

@@ -382,6 +382,7 @@ func TestAgent_Install(t *testing.T) {
 		name      string
 		def       agents.AgentDef
 		global    bool
+		entries   []target.ContentEntry
 		setupSrc  func(t *testing.T) string
 		homeFunc  func(t *testing.T) func() (string, error)
 		cwdFunc   func(t *testing.T, destBase string) func() (string, error)
@@ -594,6 +595,44 @@ func TestAgent_Install(t *testing.T) {
 			},
 			wantErr: "copy skills: write",
 		},
+		{
+			name: "entries: installs only listed entries, not others",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			entries: []target.ContentEntry{
+				{Name: "k8s", Type: "skill", Root: "skills/k8s"},
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "skills", "k8s"), 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(src, "skills", "k8s", "SKILL.md"),
+					[]byte("# K8s Skill"),
+					0o644,
+				))
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "skills", "react"), 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(src, "skills", "react", "SKILL.md"),
+					[]byte("# React Skill"),
+					0o644,
+				))
+				return src
+			},
+			check: func(t *testing.T, destBase string, _ string) {
+				t.Helper()
+				k8sFile := filepath.Join(destBase, ".agents", "skills", "k8s", "SKILL.md")
+				_, err := os.Stat(k8sFile)
+				assert.NoError(t, err)
+				reactFile := filepath.Join(destBase, ".agents", "skills", "react", "SKILL.md")
+				_, err = os.Stat(reactFile)
+				assert.True(t, os.IsNotExist(err))
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -641,6 +680,7 @@ func TestAgent_Install(t *testing.T) {
 				Name:      "my-plugin",
 				SourceDir: srcDir,
 				Global:    tt.global,
+				Entries:   tt.entries,
 			}
 
 			files, err := a.Install(ctx, opts)
