@@ -78,33 +78,16 @@ A `.agentpack` file is a gzipped tarball with typed metadata. Each entry
 declares its content type — the driver for each agent installs only what it
 supports, wherever it belongs.
 
-```
-                                                          Installs to
-.agentpack archive
-┌──────────────────────┐
-│  metadata.yaml       │
-│                      │
-│  k8s       skill    ─┼───→   Claude Code   .claude/skills/k8s/
-│                     ─┼───→   Cursor        .cursor/rules/k8s/
-│                     ─┼───→   Codex         .codex/skills/k8s/
-│                      │
-│  scan      command  ─┼───→   Claude Code   .claude/commands/scan/
-│                      │
-│  k8s-bot   agent    ─┼───→   Claude Code   .claude/agents/k8s-bot/
-│                      │
-│  my-api    mcp      ─┼───→   Claude Code   .claude/settings.json
-│                      │
-│  on-save   hook     ─┼───→   Claude Code   .claude/settings.json
-│                      │
-│  theme     config   ─┼───→   Claude Code   .claude/settings.json
-│                      │
-│                      │       Cursor, Codex skip unsupported types
-└──────────────────────┘
-```
+<p align="center">
+  <picture>
+    <source srcset="docs/assets/format-diagram-dark.svg" media="(prefers-color-scheme: dark)">
+    <img src="docs/assets/format-diagram-dark.svg" alt="agentpack content types" width="700">
+  </picture>
+</p>
 
 Package authors write content once. Drivers install only the types they support.
 When an agent adds support for a new type, existing packages work automatically.
-See the [full specification][Format].
+See the [full specification][Format] and the [feature matrix][Matrix].
 
 ## 🔍 Discover Skills
 
@@ -140,3 +123,4 @@ Agent detection paths and skill directory conventions inspired by
 [Architecture]: docs/architecture.md
 [Development]: docs/development.md
 [Contributing]: docs/contributing.md
+[Matrix]: docs/feature-matrix.md

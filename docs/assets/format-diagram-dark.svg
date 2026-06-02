@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 420" font-family="'SF Mono', 'Fira Code', 'JetBrains Mono', monospace" font-size="13">
+  <rect width="850" height="420" rx="12" fill="#1a1b26"/>
+
+  <!-- Title -->
+  <text x="30" y="35" fill="#c678dd" font-size="11" opacity="0.6">.agentpack content types</text>
+  <text x="520" y="35" fill="#565f89" font-size="11">Supported agents</text>
+
+  <!-- Archive box -->
+  <rect x="24" y="50" width="200" height="340" rx="6" fill="none" stroke="#c678dd" stroke-width="1.5" opacity="0.4"/>
+  <text x="42" y="77" fill="#565f89" font-size="11">metadata.yaml</text>
+
+  <!-- SKILL — green -->
+  <text x="42" y="115" fill="#50fa7b" font-weight="bold" font-size="14">skill</text>
+  <line x1="224" y1="111" x2="370" y2="111" stroke="#50fa7b" stroke-width="1.5"/>
+  <polygon points="368,106 380,111 368,116" fill="#50fa7b"/>
+  <text x="392" y="115" fill="#50fa7b" font-weight="bold">All 50+ agents</text>
+
+  <!-- COMMAND — cyan -->
+  <text x="42" y="160" fill="#00d4ff" font-weight="bold" font-size="14">command</text>
+  <line x1="224" y1="156" x2="370" y2="156" stroke="#00d4ff" stroke-width="1.5"/>
+  <polygon points="368,151 380,156 368,161" fill="#00d4ff"/>
+  <text x="392" y="160" fill="#00d4ff" font-weight="bold">Claude Code</text>
+
+  <!-- AGENT — magenta -->
+  <text x="42" y="205" fill="#c678dd" font-weight="bold" font-size="14">agent</text>
+  <line x1="224" y1="201" x2="370" y2="201" stroke="#c678dd" stroke-width="1.5"/>
+  <polygon points="368,196 380,201 368,206" fill="#c678dd"/>
+  <text x="392" y="205" fill="#c678dd" font-weight="bold">Claude Code</text>
+
+  <!-- MCP — orange -->
+  <text x="42" y="250" fill="#ffb86c" font-weight="bold" font-size="14">mcp</text>
+  <line x1="224" y1="246" x2="370" y2="246" stroke="#ffb86c" stroke-width="1.5"/>
+  <polygon points="368,241 380,246 368,251" fill="#ffb86c"/>
+  <text x="392" y="250" fill="#ffb86c" font-weight="bold">9 agents</text>
+  <text x="392" y="268" fill="#565f89" font-size="11">Claude Code, Cursor, Copilot, Windsurf, Cline, + 4</text>
+
+  <!-- HOOK — pink -->
+  <text x="42" y="310" fill="#ff6ec7" font-weight="bold" font-size="14">hook</text>
+  <line x1="224" y1="306" x2="370" y2="306" stroke="#ff6ec7" stroke-width="1.5"/>
+  <polygon points="368,301 380,306 368,311" fill="#ff6ec7"/>
+  <text x="392" y="310" fill="#ff6ec7" font-weight="bold">5 agents</text>
+  <text x="392" y="328" fill="#565f89" font-size="11">Claude Code, Codex, Windsurf, Cline, Devin</text>
+
+  <!-- CONFIG — blue -->
+  <text x="42" y="370" fill="#7aa2f7" font-weight="bold" font-size="14">config</text>
+  <line x1="224" y1="366" x2="370" y2="366" stroke="#7aa2f7" stroke-width="1.5"/>
+  <polygon points="368,361 380,366 368,371" fill="#7aa2f7"/>
+  <text x="392" y="370" fill="#7aa2f7" font-weight="bold">Claude Code</text>
+</svg>
