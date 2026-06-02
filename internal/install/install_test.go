@@ -328,6 +328,7 @@ func TestRun(t *testing.T) {
 		setup       func(t *testing.T, ctrl *gomock.Controller) (archivePath string, targets []target.Target)
 		cancelCtx   bool
 		noParallel  bool
+		global      bool
 		customCtx   context.Context
 		injectFuncs func(t *testing.T)
 		wantErr     string
@@ -925,6 +926,46 @@ skills:
 			wantErr:   "context canceled",
 		},
 		{
+			name:       "installs with global scope sets ScopeGlobal in manifest",
+			noParallel: true,
+			global:     true,
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+				archivePath := buildTestArchive(t, dir, `
+name: global-plugin
+version: "1.0.0"
+description: Global scope test
+skills:
+  - skills/**/*
+`)
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("global-test").AnyTimes()
+				m.EXPECT().DisplayName().Return("Global Test").AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
+				m.EXPECT().
+					Install(gomock.Any(), gomock.Any()).
+					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
+
+				return archivePath, []target.Target{m}
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := install.SetRegistrySave(
+					func(_ *registry.PackageManifest) error { return nil },
+				)
+				t.Cleanup(restore)
+			},
+			checkResult: func(t *testing.T, r *install.Result) {
+				t.Helper()
+				assert.Equal(t, "global-plugin", r.Name)
+			},
+		},
+		{
 			name: "returns error when archive has metadata but no content dirs",
 			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
 				t.Helper()
@@ -941,9 +982,12 @@ skills:
 				metaYAML, err := yaml.Marshal(meta)
 				require.NoError(t, err)
 
-				require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
-					{ArchivePath: ".agentpack/metadata.yaml", Content: metaYAML},
-				}))
+				require.NoError(
+					t,
+					archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+						{ArchivePath: ".agentpack/metadata.yaml", Content: metaYAML},
+					}),
+				)
 
 				return outPath, nil
 			},
@@ -991,6 +1035,7 @@ skills:
 				Source:  archivePath,
 				Targets: targets,
 				OnStep:  onStep,
+				Global:  tt.global,
 			})
 
 			if tt.wantErr != "" {
@@ -1587,6 +1632,11 @@ func TestNameFromSource(t *testing.T) {
 			name:   "returns owner/repo from https github URL without ref",
 			source: "https://github.com/org/repo.git",
 			want:   "org/repo",
+		},
+		{
+			name:   "returns bare name without extension for name with dot extension",
+			source: "myrepo.agentpack",
+			want:   "myrepo",
 		},
 	}
 

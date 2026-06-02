@@ -204,3 +204,18 @@ func ComputeChecksums(files []archive.FileEntry) ([]byte, error) {
 func BuildContentEntries(meta *metadata.Metadata, sourceDir string) []target.ContentEntry {
 	return buildContentEntries(meta, sourceDir)
 }
+
+// HasMetadataYAML exposes hasMetadataYAML for testing.
+func HasMetadataYAML(dir string) bool {
+	return hasMetadataYAML(dir)
+}
+
+// HasContentDirs exposes hasContentDirs for testing.
+func HasContentDirs(dir string) bool {
+	return hasContentDirs(dir)
+}
+
+// MergeFiles exposes mergeFiles for testing.
+func MergeFiles(existing, incoming []registry.InstalledFile) []registry.InstalledFile {
+	return mergeFiles(existing, incoming)
+}
