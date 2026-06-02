@@ -20,15 +20,64 @@
   <a href="https://agentskills.io"><img alt="agentskills.io" src="https://img.shields.io/badge/standard-agentskills.io-ff6600?style=for-the-badge"></a>
 </p>
 
-## One package, every agent
+<p align="center">
+Install, manage, and distribute AI agent skills across Claude Code,
+Cursor, Copilot, Codex, Gemini CLI, Windsurf, Goose, Roo, Amp, Cline,
+and every agent supporting the <code>.agents/</code> convention.
+</p>
 
-AI coding agents each have their own conventions for skills, rules, commands,
-hooks, and MCP servers. A skill that works in Claude Code doesn't work in
-Cursor. A hook that works in Cline doesn't exist in Codex.
+## 📦 Install
 
-The `.agentpack` format solves this. A single archive describes what content it
-contains — skills, commands, hooks, agents, MCP integrations, config — and each
-agent's driver installs only what it supports, wherever it belongs.
+```bash
+curl -fsSL https://github.com/retr0h/agentpack/raw/main/install.sh | bash
+```
+
+### 🔨 Build from source
+
+```bash
+git clone https://github.com/retr0h/agentpack.git
+cd agentpack
+go build -o agentpack .
+```
+
+## 🚀 Quick Start
+
+```bash
+agentpack search react                            # find skills
+agentpack add owner/repo@skill-name               # add a skill
+agentpack add owner/repo --skill foo --skill bar  # add multiple skills
+agentpack add owner/repo --target claude-code     # add to specific target
+agentpack add owner/repo -g                       # add globally
+agentpack ls                                      # list installed
+agentpack ls --targets                            # show detected agents
+agentpack info owner/repo                         # package details
+agentpack del owner/repo                          # delete a plugin
+agentpack del owner/repo@skill-name               # delete a single skill
+agentpack init my-skill                           # scaffold a new skill
+agentpack build                                   # build .agentpack archives
+agentpack install                                 # install from manifest
+```
+
+See [Usage][] for full details.
+
+## ✨ Features
+
+- 📦 **[.agentpack format][Format]** — one package, every agent. Typed metadata with skills, commands, hooks, MCP, agents, and config
+- 🤖 **50+ agents** — Claude Code, Cursor, Copilot, Codex, Gemini CLI, Windsurf, Goose, Roo, and more
+- 🔒 **Content safety** — binary detection at build time, executable prompts at install
+- 🔄 **Reproducible installs** — lockfile pins exact SHAs, `install` from manifest
+- 🌐 **Global + local** — project-level or user-level installs (`-g`)
+- ⚙️ **Config merging** — MCP servers, hooks, and settings merge into `.claude/settings.json`
+- ✈️ **Offline** — `.agentpack` archives work without git, npm, or any toolchain
+- 🔑 **Private repos** — `~/.netrc` and SSH key support
+- 📋 **JSON everywhere** — `-o json` on every command for scripting
+- 📚 **CLI + Go library** — use from the terminal or import `pkg/` in your own tools
+
+## 📐 The .agentpack format
+
+A `.agentpack` file is a gzipped tarball with typed metadata. Each entry
+declares its content type — the driver for each agent installs only what it
+supports, wherever it belongs.
 
 ```
 .agentpack archive                    Installs to
@@ -51,12 +100,7 @@ agent's driver installs only what it supports, wherever it belongs.
 └───────────────────┘
 ```
 
-Package authors write content once. The format handles the rest.
-
-## The .agentpack format
-
-A `.agentpack` file is a gzipped tarball with typed metadata. Six content types
-cover the AI agent ecosystem:
+Six content types cover the AI agent ecosystem:
 
 | Type | What it is | Who supports it |
 |------|-----------|----------------|
@@ -67,63 +111,21 @@ cover the AI agent ecosystem:
 | **mcp** | External service integration | Claude Code |
 | **config** | Configuration the package needs | Claude Code |
 
-Each agent driver declares which types it supports. When an agent adds support
-for a new type, existing packages automatically start working — no package
-changes needed.
+Package authors write content once. When an agent adds support for a new type,
+existing packages automatically start working — no changes needed. See the
+[full specification][Format].
 
-The format is designed to become an open standard. See
-[ADR-009: Metadata-Driven Package Format][Format] for the full specification.
-
-## Quick start
+## 🔍 Discover Skills
 
 ```bash
-# Install agentpack
-curl -fsSL https://github.com/retr0h/agentpack/raw/main/install.sh | bash
-
-# Find and install skills
 agentpack search react
-agentpack add owner/repo@skill-name
-agentpack add owner/repo --target claude-code
-agentpack add owner/repo -g                     # install globally
-
-# Manage packages
-agentpack ls                                    # list installed
-agentpack ls --targets                          # show detected agents
-agentpack info owner/repo                       # package details
-agentpack del owner/repo@skill-name             # remove a skill
-agentpack del owner/repo                        # remove entire package
-
-# Author packages
-agentpack init my-skill                         # scaffold a new skill
-agentpack build                                 # build .agentpack archive
-agentpack install                               # install from manifest
+agentpack search typescript
+agentpack search security
 ```
 
-See [Usage][] for full details.
+Browse the full catalog at [skills.sh](https://skills.sh).
 
-## 50+ supported agents
-
-Claude Code, Cursor, Copilot, Codex, Gemini CLI, Windsurf, Cline, Goose, Roo,
-Amp, Continue, Kiro, Devin, Warp, Trae, and every agent supporting the
-`.agents/` convention. See `agentpack ls --targets` for the full list.
-
-## Why not just clone git repos?
-
-Tools like `npx @anthropic-ai/claude-code skills` clone repos and copy files.
-That works for one agent. It breaks down when you need:
-
-- **Multiple agents** — each agent has different paths. The format handles translation.
-- **Selective content** — install one skill from a repo with 50. `@skill` filtering.
-- **Reproducibility** — lockfile pins exact git SHAs. `agentpack install` is deterministic.
-- **Safe removal** — registry tracks every file. `del` removes exactly what was installed.
-- **Content safety** — binary detection at build time, executable prompts at install.
-- **Offline installs** — `.agentpack` archives work without git or any toolchain.
-
-The `.agentpack` format is the layer that makes all of this possible. It could
-be adopted by any tool — including npx skills — as the standard packaging for
-AI agent content.
-
-## Documentation
+## 📖 Documentation
 
 - [Usage][] — add, install, build, verify, info, examples
 - [Format (ADR-009)][Format] — the .agentpack specification
@@ -131,13 +133,13 @@ AI agent content.
 - [Development][] — dev setup, testing conventions
 - [Contributing][] — commit style, PR checklist
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
 Agent detection paths and skill directory conventions inspired by
 [vercel-labs/skills](https://github.com/vercel-labs/skills) and the
 [agentskills.io](https://agentskills.io) ecosystem.
 
-## License
+## 📄 License
 
 [MIT][]
 
