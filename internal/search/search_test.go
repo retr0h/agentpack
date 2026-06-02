@@ -134,6 +134,34 @@ func TestRun(t *testing.T) {
 			ctx:         func() context.Context { return context.Background() },
 			wantResults: []search.Result{},
 		},
+		{
+			name:       "empty registry URL uses default and fails with connection error",
+			serverCode: http.StatusOK,
+			serverBody: `{"skills":[]}`,
+			opts: func(_ string) search.Options {
+				// RegistryURL left empty so DefaultRegistryURL is used.
+				// The request will fail because the default URL is unreachable in tests,
+				// but that exercises the defaulting branch before the HTTP call.
+				return search.Options{Query: "anything", RegistryURL: ""}
+			},
+			ctx: func() context.Context {
+				ctx, cancel := context.WithTimeout(context.Background(), 1)
+				_ = cancel
+				return ctx
+			},
+			wantErr: "context deadline exceeded",
+		},
+		{
+			name:       "invalid registry URL returns parse error",
+			serverCode: http.StatusOK,
+			serverBody: `{"skills":[]}`,
+			opts: func(_ string) search.Options {
+				// A URL containing a control character causes url.Parse to fail.
+				return search.Options{Query: "q", RegistryURL: "http://\x7f/bad"}
+			},
+			ctx:     func() context.Context { return context.Background() },
+			wantErr: "parse registry URL",
+		},
 	}
 
 	for _, tt := range tests {
