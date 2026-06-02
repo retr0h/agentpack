@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -332,6 +333,40 @@ func TestAgent_Detect(t *testing.T) {
 			},
 			wantDetected: false,
 		},
+		{
+			name: "no DetectHome no DetectConfig no AlwaysDetect returns false",
+			def: agents.AgentDef{
+				Name:            "empty",
+				Display:         "Empty",
+				GlobalSkillsDir: ".agents/skills",
+			},
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				return func() (string, error) { return t.TempDir(), nil }
+			},
+			wantDetected: false,
+		},
+		{
+			name: "EnvOverride set but env var empty falls through to DetectHome missing",
+			def: agents.AgentDef{
+				Name:            "codex",
+				Display:         "Codex",
+				DetectHome:      ".codex",
+				EnvOverride:     "CODEX_HOME",
+				GlobalSkillsDir: ".codex/skills",
+			},
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				home := t.TempDir()
+				// .codex does NOT exist so DetectHome check fails.
+				return func() (string, error) { return home, nil }
+			},
+			getenvFunc: func(t *testing.T) func(string) string {
+				t.Helper()
+				return func(_ string) string { return "" }
+			},
+			wantDetected: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -360,21 +395,53 @@ func TestAgent_Detect(t *testing.T) {
 	}
 }
 
+func TestAgent_SupportedTypes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		def       agents.AgentDef
+		wantTypes []string
+	}{
+		{
+			name: "returns skill type",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			wantTypes: []string{"skill"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			a := agents.NewAgentWithFuncs(tt.def, os.UserHomeDir, os.Getwd)
+			assert.Equal(t, tt.wantTypes, a.SupportedTypes())
+		})
+	}
+}
+
 func TestAgent_Install(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		def            agents.AgentDef
-		global         bool
-		entries        []target.ContentEntry
-		entriesFromSrc func(src string) []target.ContentEntry
-		setupSrc       func(t *testing.T) string
-		homeFunc       func(t *testing.T) func() (string, error)
-		cwdFunc        func(t *testing.T, destBase string) func() (string, error)
-		cancelCtx      bool
-		wantErr        string
-		check          func(t *testing.T, destBase string, pluginName string)
+		name             string
+		def              agents.AgentDef
+		global           bool
+		entries          []target.ContentEntry
+		entriesFromSrc   func(src string) []target.ContentEntry
+		setupSrc         func(t *testing.T) string
+		setupDest        func(t *testing.T, destBase string)
+		homeFunc         func(t *testing.T) func() (string, error)
+		cwdFunc          func(t *testing.T, destBase string) func() (string, error)
+		cancelCtx        bool
+		cancelAfterDelay time.Duration
+		wantErr          string
+		check            func(t *testing.T, destBase string, pluginName string)
 	}{
 		{
 			name: "local: copies skills into .agents/skills/{name}/",
@@ -582,6 +649,29 @@ func TestAgent_Install(t *testing.T) {
 			wantErr: "copy skills: write",
 		},
 		{
+			name: "local: unreadable file in destDir causes enumerate error",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				// Skills dir is empty so copyTreeIfExists is a no-op.
+				return t.TempDir()
+			},
+			setupDest: func(t *testing.T, destBase string) {
+				t.Helper()
+				destDir := filepath.Join(destBase, ".agents", "skills", "my-plugin")
+				require.NoError(t, os.MkdirAll(destDir, 0o755))
+				unreadable := filepath.Join(destDir, "unreadable.md")
+				require.NoError(t, os.WriteFile(unreadable, []byte("secret"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(unreadable, 0o644) })
+			},
+			wantErr: "enumerate installed files",
+		},
+		{
 			name: "entries: installs only listed entries, not others",
 			def: agents.AgentDef{
 				Name:            "cursor",
@@ -621,6 +711,207 @@ func TestAgent_Install(t *testing.T) {
 				assert.True(t, os.IsNotExist(err))
 			},
 		},
+		{
+			name: "entries: global installs into GlobalSkillsDir under home",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			global: true,
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "skills", "k8s"), 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(src, "skills", "k8s", "SKILL.md"),
+					[]byte("# K8s Skill"),
+					0o644,
+				))
+				return src
+			},
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			},
+			check: func(t *testing.T, destBase string, _ string) {
+				t.Helper()
+				k8sFile := filepath.Join(destBase, ".cursor", "skills", "k8s", "SKILL.md")
+				_, err := os.Stat(k8sFile)
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "entries: global home error propagates",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			global: true,
+			entries: []target.ContentEntry{
+				{Name: "k8s", Type: "skill", Root: "/does-not-matter"},
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			homeFunc: func(t *testing.T) func() (string, error) {
+				t.Helper()
+				return func() (string, error) { return "", errors.New("no home") }
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "entries: local cwdFunc error propagates",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			entries: []target.ContentEntry{
+				{Name: "k8s", Type: "skill", Root: "/does-not-matter"},
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "entries: local custom LocalSkillsDir is used",
+			def: agents.AgentDef{
+				Name:            "windsurf",
+				Display:         "Windsurf",
+				DetectHome:      ".codeium/windsurf",
+				GlobalSkillsDir: ".codeium/windsurf/skills",
+				LocalSkillsDir:  ".windsurf/skills",
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{
+						Name: "ws-skill",
+						Type: "skill",
+						Root: filepath.Join(src, "skills", "ws-skill"),
+					},
+				}
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "skills", "ws-skill"), 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(src, "skills", "ws-skill", "SKILL.md"),
+					[]byte("# WS Skill"),
+					0o644,
+				))
+				return src
+			},
+			check: func(t *testing.T, destBase string, _ string) {
+				t.Helper()
+				tgt := filepath.Join(destBase, ".windsurf", "skills", "ws-skill", "SKILL.md")
+				_, err := os.Stat(tgt)
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "entries: mkdirAll failure propagates",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			entries: []target.ContentEntry{
+				{Name: "k8s", Type: "skill", Root: "/does-not-matter"},
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			wantErr: "mkdir agents skills dir",
+		},
+		{
+			name: "entries: cancelled context mid-loop returns error",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			// Two entries: the first processes successfully (empty root = no-op
+			// copyTreeIfExists). time.AfterFunc fires cancel during the syscalls of
+			// entry-0 processing so that entry-1's ctx.Err() check catches it.
+			entries: []target.ContentEntry{
+				{Name: "first", Type: "skill"},
+				{Name: "second", Type: "skill"},
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			cancelAfterDelay: time.Nanosecond,
+			wantErr:          "context canceled",
+		},
+		{
+			name: "entries: unreadable file in destDir causes enumerate error",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			entries: []target.ContentEntry{
+				{Name: "k8s", Type: "skill"},
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			setupDest: func(t *testing.T, destBase string) {
+				t.Helper()
+				destDir := filepath.Join(destBase, ".agents", "skills", "k8s")
+				require.NoError(t, os.MkdirAll(destDir, 0o755))
+				unreadable := filepath.Join(destDir, "unreadable.md")
+				require.NoError(t, os.WriteFile(unreadable, []byte("secret"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(unreadable, 0o644) })
+			},
+			wantErr: "enumerate installed files",
+		},
+		{
+			name: "entries: copy skills error propagates",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				src := t.TempDir()
+				skillsK8s := filepath.Join(src, "skills", "k8s")
+				require.NoError(t, os.MkdirAll(skillsK8s, 0o755))
+				secretFile := filepath.Join(skillsK8s, "secret.md")
+				require.NoError(t, os.WriteFile(secretFile, []byte("secret"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(secretFile, 0o644) })
+				return src
+			},
+			wantErr: "copy skills: read",
+		},
 	}
 
 	for _, tt := range tests {
@@ -654,6 +945,9 @@ func TestAgent_Install(t *testing.T) {
 				t.Cleanup(func() { _ = os.Chmod(roDestDir, 0o755) })
 				cwdFunc = func() (string, error) { return destBase, nil }
 			}
+			if tt.setupDest != nil {
+				tt.setupDest(t, destBase)
+			}
 
 			a := agents.NewAgentWithFuncs(tt.def, homeFunc, cwdFunc)
 
@@ -662,6 +956,9 @@ func TestAgent_Install(t *testing.T) {
 
 			if tt.cancelCtx {
 				cancel()
+			}
+			if tt.cancelAfterDelay > 0 {
+				time.AfterFunc(tt.cancelAfterDelay, cancel)
 			}
 
 			entries := tt.entries
