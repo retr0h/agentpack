@@ -965,7 +965,7 @@ func readTarFile(t *testing.T, archivePath, name string) []byte {
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
-			require.FailNow(t, "file not found in archive", name)
+			require.FailNow(t, "")
 		}
 		if hdr.Name == name {
 			buf := make([]byte, hdr.Size)

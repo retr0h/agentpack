@@ -232,30 +232,21 @@ func withTempRegistry(t *testing.T) (*registry.Registry, func()) {
 // assertFilePath fails when no file in the slice matches wantPath (forward-slash).
 func assertFilePath(t *testing.T, files []registry.InstalledFile, wantPath string) {
 	t.Helper()
-
+	found := false
 	for _, f := range files {
 		if filepath.ToSlash(f.Path) == wantPath {
-			return
+			found = true
+			break
 		}
 	}
-
-	paths := make([]string, len(files))
-	for i, f := range files {
-		paths[i] = f.Path
-	}
-
-	t.Errorf("expected file %q in registry files; got %v", wantPath, paths)
+	assert.True(t, found)
 }
 
 // assertNoFilePath fails when any file in the slice matches wantPath.
 func assertNoFilePath(t *testing.T, files []registry.InstalledFile, wantPath string) {
 	t.Helper()
-
 	for _, f := range files {
-		if filepath.ToSlash(f.Path) == wantPath {
-			t.Errorf("expected file %q to be absent from registry files", wantPath)
-			return
-		}
+		assert.NotEqual(t, wantPath, filepath.ToSlash(f.Path))
 	}
 }
 

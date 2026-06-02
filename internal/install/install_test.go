@@ -67,8 +67,8 @@ func initBareGitRepo(t *testing.T) string {
 		t.Helper()
 		cmd := exec.Command("git", args...)
 		cmd.Env = append(os.Environ(), gitEnv...)
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, "git %v\n%s", args, out)
+		_, err := cmd.CombinedOutput()
+		require.NoError(t, err)
 	}
 
 	run("clone", "--bare", src, bare)
@@ -124,8 +124,8 @@ func initGitRepo(t *testing.T, dir string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), gitEnv...)
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, "git %v\n%s", args, out)
+		_, err := cmd.CombinedOutput()
+		require.NoError(t, err)
 	}
 
 	run("init")
@@ -924,6 +924,31 @@ skills:
 			customCtx: newCancelAfterN(13),
 			wantErr:   "context canceled",
 		},
+		{
+			name: "returns error when archive has metadata but no content dirs",
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				// Build an archive with metadata.yaml but no skills/commands/etc. dirs.
+				// Using the new YAML format so no checksums are required.
+				dir := t.TempDir()
+				vfs := osfs.NewWithNoIdm()
+				outPath := filepath.Join(dir, "nocontent.agentpack")
+
+				meta := metadata.Metadata{
+					Name:    "nocontent-plugin",
+					Version: "1.0.0",
+				}
+				metaYAML, err := yaml.Marshal(meta)
+				require.NoError(t, err)
+
+				require.NoError(t, archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+					{ArchivePath: ".agentpack/metadata.yaml", Content: metaYAML},
+				}))
+
+				return outPath, nil
+			},
+			wantErr: "has no installable content",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1414,6 +1439,70 @@ func TestFindAndReadMetadata(t *testing.T) {
 			},
 			wantErr: "read metadata.json",
 		},
+		{
+			name: "finds and reads metadata.yaml inside .agentpack dir",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				agentpackDir := filepath.Join(dir, ".agentpack")
+
+				require.NoError(t, os.MkdirAll(agentpackDir, 0o755))
+
+				meta := metadata.Metadata{
+					Name:    "yaml-plugin",
+					Version: "2.0.0",
+				}
+				data, err := yaml.Marshal(meta)
+				require.NoError(t, err)
+
+				require.NoError(t, os.WriteFile(
+					filepath.Join(agentpackDir, "metadata.yaml"), data, 0o644,
+				))
+
+				return dir
+			},
+			check: func(t *testing.T, m any) {
+				t.Helper()
+				assert.NotNil(t, m)
+			},
+		},
+		{
+			name: "returns error when metadata.yaml cannot be read",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				agentpackDir := filepath.Join(dir, ".agentpack")
+
+				require.NoError(t, os.MkdirAll(agentpackDir, 0o755))
+
+				metaPath := filepath.Join(agentpackDir, "metadata.yaml")
+
+				require.NoError(t, os.WriteFile(metaPath, []byte("name: p\n"), 0o000))
+
+				t.Cleanup(func() { _ = os.Chmod(metaPath, 0o644) })
+
+				return dir
+			},
+			wantErr: "read metadata.yaml",
+		},
+		{
+			name: "returns error when metadata.yaml has invalid YAML",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				agentpackDir := filepath.Join(dir, ".agentpack")
+
+				require.NoError(t, os.MkdirAll(agentpackDir, 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(agentpackDir, "metadata.yaml"),
+					[]byte("name: test\n\tinvalid: yaml\n"),
+					0o644,
+				))
+
+				return dir
+			},
+			wantErr: "parse metadata.yaml",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1836,6 +1925,53 @@ func TestRunFromGit(t *testing.T) {
 			},
 			wantErr: "",
 		},
+		{
+			name:       "returns error when cloned repo has no content dirs",
+			noParallel: true,
+			setup: func(t *testing.T, _ *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				// Create a bare repo with only a README (no skills/commands/etc.).
+				dir := t.TempDir()
+				src := filepath.Join(dir, "src")
+				bare := filepath.Join(dir, "repo.git")
+
+				require.NoError(t, os.MkdirAll(src, 0o755))
+
+				run := func(args ...string) {
+					t.Helper()
+					cmd := exec.Command("git", args...)
+					cmd.Dir = src
+					cmd.Env = append(os.Environ(), gitEnv...)
+					_, runErr := cmd.CombinedOutput()
+					require.NoError(t, runErr)
+				}
+
+				run("init")
+				run("checkout", "-b", "main")
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, "README.md"), []byte("hello\n"), 0o644),
+				)
+				run("add", ".")
+				run("commit", "-m", "init")
+
+				cloneCmd := exec.Command("git", "clone", "--bare", src, bare)
+				cloneCmd.Env = append(os.Environ(), gitEnv...)
+				_, cloneErr := cloneCmd.CombinedOutput()
+				require.NoError(t, cloneErr)
+
+				return bare, nil
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				archivesDir := t.TempDir()
+				restore := install.SetArchivesDir(
+					func() (string, error) { return archivesDir, nil },
+				)
+				t.Cleanup(restore)
+			},
+			wantErr: "no installable content",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1871,6 +2007,186 @@ func TestRunFromGit(t *testing.T) {
 
 			if tt.checkResult != nil {
 				tt.checkResult(t, r)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestHasMetadataYAML
+// --------------------------------------------------------------------------
+
+func TestHasMetadataYAML(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) string
+		want  bool
+	}{
+		{
+			name: "returns true when .agentpack/metadata.yaml exists at top level",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				agentpackDir := filepath.Join(dir, ".agentpack")
+				require.NoError(t, os.MkdirAll(agentpackDir, 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(agentpackDir, "metadata.yaml"),
+					[]byte("name: p\n"),
+					0o644,
+				))
+				return dir
+			},
+			want: true,
+		},
+		{
+			name: "returns false when no metadata.yaml present",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := tt.setup(t)
+			got := install.HasMetadataYAML(dir)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestHasContentDirs
+// --------------------------------------------------------------------------
+
+func TestHasContentDirs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) string
+		want  bool
+	}{
+		{
+			name: "returns true when skills dir is present",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(dir, "skills"), 0o755))
+				return dir
+			},
+			want: true,
+		},
+		{
+			name: "returns true when commands dir is present",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(dir, "commands"), 0o755))
+				return dir
+			},
+			want: true,
+		},
+		{
+			name: "returns false when no known content dirs are present",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				require.NoError(t, os.WriteFile(
+					filepath.Join(dir, "README.md"),
+					[]byte("hello\n"),
+					0o644,
+				))
+				return dir
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := tt.setup(t)
+			got := install.HasContentDirs(dir)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestMergeFiles
+// --------------------------------------------------------------------------
+
+func TestMergeFiles(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		existing []registry.InstalledFile
+		incoming []registry.InstalledFile
+		wantLen  int
+		check    func(t *testing.T, got []registry.InstalledFile)
+	}{
+		{
+			name:     "returns incoming when existing is empty",
+			existing: nil,
+			incoming: []registry.InstalledFile{
+				{Path: "skills/foo.md", Target: "claude-code", SHA256: "abc"},
+			},
+			wantLen: 1,
+		},
+		{
+			name: "appends new entries to existing",
+			existing: []registry.InstalledFile{
+				{Path: "skills/foo.md", Target: "claude-code", SHA256: "abc"},
+			},
+			incoming: []registry.InstalledFile{
+				{Path: "skills/bar.md", Target: "claude-code", SHA256: "def"},
+			},
+			wantLen: 2,
+		},
+		{
+			name: "updates existing entry with same path and target",
+			existing: []registry.InstalledFile{
+				{Path: "skills/foo.md", Target: "claude-code", SHA256: "old"},
+			},
+			incoming: []registry.InstalledFile{
+				{Path: "skills/foo.md", Target: "claude-code", SHA256: "new"},
+			},
+			wantLen: 1,
+			check: func(t *testing.T, got []registry.InstalledFile) {
+				t.Helper()
+				assert.Equal(t, "new", got[0].SHA256)
+			},
+		},
+		{
+			name: "treats same path different target as distinct entries",
+			existing: []registry.InstalledFile{
+				{Path: "skills/foo.md", Target: "claude-code", SHA256: "abc"},
+			},
+			incoming: []registry.InstalledFile{
+				{Path: "skills/foo.md", Target: "cursor", SHA256: "abc"},
+			},
+			wantLen: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := install.MergeFiles(tt.existing, tt.incoming)
+			assert.Len(t, got, tt.wantLen)
+
+			if tt.check != nil {
+				tt.check(t, got)
 			}
 		})
 	}

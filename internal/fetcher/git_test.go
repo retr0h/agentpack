@@ -55,8 +55,8 @@ func initBareRepo(t *testing.T) (bareDir string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), gitEnvVars...)
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, "git %v\n%s", args, out)
+		_, err := cmd.CombinedOutput()
+		require.NoError(t, err)
 	}
 
 	// Working repo.
@@ -89,8 +89,8 @@ func initBareRepoWithTag(t *testing.T, tag string) (bareDir string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), gitEnvVars...)
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, "git %v\n%s", args, out)
+		_, err := cmd.CombinedOutput()
+		require.NoError(t, err)
 	}
 
 	workDir := t.TempDir()
@@ -653,7 +653,7 @@ func getSHA(t *testing.T, bareDir string) string {
 	cmd.Dir = bareDir
 	cmd.Env = append(os.Environ(), gitEnvVars...)
 	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "git rev-parse HEAD\n%s", out)
+	require.NoError(t, err)
 	return strings.TrimSpace(string(out))
 }
 

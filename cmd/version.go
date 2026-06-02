@@ -22,6 +22,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+
+	"github.com/retr0h/agentpack/internal/cli"
 )
 
 var version = "dev"
@@ -35,7 +37,7 @@ var versionCmd = &cobra.Command{
 				Version string `json:"version"`
 			}{Version: version})
 		}
-		cmd.Println(version)
+		cli.Print(cmd.OutOrStdout(), version)
 		return nil
 	},
 }

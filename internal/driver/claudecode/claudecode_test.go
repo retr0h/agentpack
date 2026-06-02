@@ -393,7 +393,7 @@ func TestInstall(t *testing.T) {
 				})
 				return src, t.TempDir()
 			},
-			entriesFromSrc: func(src string) []target.ContentEntry {
+			entriesFromSrc: func(_ string) []target.ContentEntry {
 				return []target.ContentEntry{
 					{Name: "srv", Type: "mcp"},
 				}
@@ -414,7 +414,7 @@ func TestInstall(t *testing.T) {
 				})
 				return src, t.TempDir()
 			},
-			entriesFromSrc: func(src string) []target.ContentEntry {
+			entriesFromSrc: func(_ string) []target.ContentEntry {
 				return []target.ContentEntry{
 					{Name: "hooks", Type: "hook"},
 				}
@@ -435,7 +435,7 @@ func TestInstall(t *testing.T) {
 				})
 				return src, t.TempDir()
 			},
-			entriesFromSrc: func(src string) []target.ContentEntry {
+			entriesFromSrc: func(_ string) []target.ContentEntry {
 				return []target.ContentEntry{
 					{Name: "prefs", Type: "config"},
 				}
@@ -467,7 +467,7 @@ func TestInstall(t *testing.T) {
 				})
 				return src, dst
 			},
-			entriesFromSrc: func(src string) []target.ContentEntry {
+			entriesFromSrc: func(_ string) []target.ContentEntry {
 				return []target.ContentEntry{
 					{Name: "conflict-srv", Type: "mcp"},
 				}
@@ -546,7 +546,10 @@ func TestInstall(t *testing.T) {
 				src := t.TempDir()
 				skillDir := filepath.Join(src, "skills", "locked-skill")
 				require.NoError(t, os.MkdirAll(skillDir, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# x"), 0o644))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# x"), 0o644),
+				)
 				sub := filepath.Join(skillDir, "sub")
 				require.NoError(t, os.MkdirAll(sub, 0o755))
 				require.NoError(t, os.WriteFile(filepath.Join(sub, "f.md"), []byte("x"), 0o644))

@@ -53,8 +53,8 @@ func initGitRepo(t *testing.T, dir, branch string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), gitEnv...)
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, "git %v\n%s", args, out)
+		_, err := cmd.CombinedOutput()
+		require.NoError(t, err)
 	}
 
 	run("init")
@@ -83,8 +83,8 @@ func initDetachedRepo(t *testing.T, dir string) {
 	detach := exec.Command("git", "checkout", "--detach", sha)
 	detach.Dir = dir
 	detach.Env = append(os.Environ(), gitEnv...)
-	out, err := detach.CombinedOutput()
-	require.NoError(t, err, "git checkout --detach\n%s", out)
+	_, err = detach.CombinedOutput()
+	require.NoError(t, err)
 }
 
 // initEmptyGitRepo creates a git repo with no commits (so rev-parse HEAD
@@ -95,8 +95,8 @@ func initEmptyGitRepo(t *testing.T, dir string) {
 	cmd := exec.Command("git", "init")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), gitEnv...)
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "git init\n%s", out)
+	_, err := cmd.CombinedOutput()
+	require.NoError(t, err)
 }
 
 // makeFakeGitDir creates a temporary directory containing a fake "git" script

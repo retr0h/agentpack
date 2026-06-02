@@ -74,7 +74,7 @@ func TestDefs(t *testing.T) {
 					break
 				}
 			}
-			assert.True(t, found, "expected agent %q in Defs()", tt.checkName)
+			assert.True(t, found)
 		})
 	}
 }

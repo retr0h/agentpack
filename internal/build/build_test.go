@@ -182,9 +182,9 @@ func initGitRepo(t *testing.T, dir string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), gitEnv...)
-		out, err := cmd.CombinedOutput()
+		_, err := cmd.CombinedOutput()
 		if err != nil {
-			require.NoError(t, err, "git %v\n%s", args, out)
+			require.NoError(t, err)
 		}
 	}
 
@@ -873,7 +873,11 @@ func TestBuildPlugin(t *testing.T) {
 					VFS:    osfs.NewWithNoIdm(),
 					suffix: ".sha256",
 				}
-				p := manifest.Plugin{Name: "sidecar-write-err", Version: "1.0.0", Description: "desc"}
+				p := manifest.Plugin{
+					Name:        "sidecar-write-err",
+					Version:     "1.0.0",
+					Description: "desc",
+				}
 				meta := &metadata.Metadata{}
 				return vfs, dir, p, meta
 			},
@@ -889,7 +893,11 @@ func TestBuildPlugin(t *testing.T) {
 					VFS:    osfs.NewWithNoIdm(),
 					suffix: ".sha256",
 				}
-				p := manifest.Plugin{Name: "sidecar-close-err", Version: "1.0.0", Description: "desc"}
+				p := manifest.Plugin{
+					Name:        "sidecar-close-err",
+					Version:     "1.0.0",
+					Description: "desc",
+				}
 				meta := &metadata.Metadata{}
 				return vfs, dir, p, meta
 			},
