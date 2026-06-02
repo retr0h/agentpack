@@ -255,6 +255,58 @@ func TestRunWithRegistry(t *testing.T) {
 			wantCount: 1,
 		},
 		{
+			name: "version that is a 40-char hex SHA is shortened to 7 chars",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{
+						Name:    "sha-ver-pkg",
+						Version: "abcdef1234567890abcdef1234567890abcdef12",
+						Files:   []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
+					},
+				}, nil)
+			},
+			wantCount: 1,
+		},
+		{
+			name: "source with ref fragment has fragment stripped",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{
+						Name:   "frag-src-pkg",
+						Source: "https://github.com/org/repo#main",
+						Files:  []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
+					},
+				}, nil)
+			},
+			wantCount: 1,
+		},
+		{
+			name: "version that is not a SHA is returned unchanged",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{
+						Name:    "non-sha-ver-pkg",
+						Version: "this-is-not-hex!!",
+						Files:   []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
+					},
+				}, nil)
+			},
+			wantCount: 1,
+		},
+		{
+			name: "manifest with explicit global scope is preserved",
+			setupMocks: func(reg *listmocks.MockRegistry) {
+				reg.EXPECT().List().Return([]*registry.PackageManifest{
+					{
+						Name:  "global-pkg",
+						Scope: registry.ScopeGlobal,
+						Files: []registry.InstalledFile{{Path: "skills/x.md", Dir: "/tmp"}},
+					},
+				}, nil)
+			},
+			wantCount: 1,
+		},
+		{
 			name: "installed timestamp with T is trimmed to date",
 			setupMocks: func(reg *listmocks.MockRegistry) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
@@ -656,6 +708,13 @@ func TestExtractSkillsViaRunWithRegistry(t *testing.T) {
 			name: "skills segment at last position is ignored",
 			files: []registry.InstalledFile{
 				{Path: "root/skills", Target: "claude-code", Dir: "/tmp"},
+			},
+			wantSkillNames: nil,
+		},
+		{
+			name: "empty item name after skills segment is skipped",
+			files: []registry.InstalledFile{
+				{Path: "skills//SKILL.md", Target: "claude-code", Dir: "/tmp"},
 			},
 			wantSkillNames: nil,
 		},
