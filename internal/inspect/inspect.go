@@ -49,6 +49,9 @@ import (
 // osMkdirTemp is swappable for testing.
 var osMkdirTemp = os.MkdirTemp
 
+// osReadFile is swappable for testing.
+var osReadFile = os.ReadFile
+
 // Inspector opens a .agentpack archive and reports its contents.
 type Inspector struct{}
 
@@ -209,7 +212,7 @@ func (ins *Inspector) Run(ctx context.Context, opts Options) (*Result, error) {
 		if name == "metadata.json" {
 			data = metaData
 		} else {
-			data, err = os.ReadFile(absPath)
+			data, err = osReadFile(absPath)
 			if err != nil {
 				return nil, fmt.Errorf("read %s: %w", rel, err)
 			}

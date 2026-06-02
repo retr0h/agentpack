@@ -25,9 +25,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/stretchr/testify/assert"
@@ -80,6 +83,27 @@ func buildValidArchive(t *testing.T) string {
 	return outPath
 }
 
+// cancelAfterN returns nil from Err() for the first n calls, then returns a
+// "context canceled" error. This allows tests to pass early ctx checks and
+// trigger cancellation at a specific point inside the function.
+type cancelAfterN struct {
+	n    int
+	call int
+}
+
+func newCancelAfterN(n int) *cancelAfterN { return &cancelAfterN{n: n} }
+
+func (c *cancelAfterN) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *cancelAfterN) Done() <-chan struct{}       { return nil }
+func (c *cancelAfterN) Value(_ any) any             { return nil }
+func (c *cancelAfterN) Err() error {
+	c.call++
+	if c.call <= c.n {
+		return nil
+	}
+	return errors.New("context canceled")
+}
+
 // --------------------------------------------------------------------------
 // Run
 // --------------------------------------------------------------------------
@@ -91,6 +115,8 @@ func TestRun(t *testing.T) {
 		name        string
 		archivePath func(t *testing.T) string
 		ctx         func() context.Context
+		injectFuncs func(t *testing.T) // if set, swap package vars (not parallel-safe)
+		noParallel  bool               // if true, skip t.Parallel()
 		wantErr     string
 		checkResult func(t *testing.T, r *inspect.Result)
 	}{
@@ -214,11 +240,196 @@ func TestRun(t *testing.T) {
 			ctx:     func() context.Context { return context.Background() },
 			wantErr: "parse metadata.json",
 		},
+		{
+			name:       "osMkdirTemp failure returns error",
+			noParallel: true,
+			archivePath: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "unused.agentpack")
+			},
+			ctx: func() context.Context { return context.Background() },
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := inspect.SetOsMkdirTemp(inspect.MkdirTempAlwaysFails)
+				t.Cleanup(restore)
+			},
+			wantErr: "create temp dir",
+		},
+		{
+			// Call 1 (line 96) passes; calls 2-7 inside Extract; call 8 (line 110)
+			// fires after Extract returns → triggers the post-extract ctx check.
+			name:        "cancelled context returns error after extract",
+			archivePath: buildValidArchive,
+			ctx:         func() context.Context { return newCancelAfterN(7) },
+			wantErr:     "context canceled",
+		},
+		{
+			// Call 1 (line 96) + 6 (Extract) + 1 (line 110) = 8 pass;
+			// call 9 fires at line 125 after metadata is parsed.
+			name:        "cancelled context returns error after parsing metadata",
+			archivePath: buildValidArchive,
+			ctx:         func() context.Context { return newCancelAfterN(8) },
+			wantErr:     "context canceled",
+		},
+		{
+			// Calls 1-9 pass; call 10 fires at line 141 after checksums are read.
+			name:        "cancelled context returns error after reading checksums",
+			archivePath: buildValidArchive,
+			ctx:         func() context.Context { return newCancelAfterN(9) },
+			wantErr:     "context canceled",
+		},
+		{
+			// Calls 1-10 pass; call 11 fires inside the WalkDir callback (line 161)
+			// when processing the first content file.
+			name:        "cancelled context returns error inside walk callback",
+			archivePath: buildValidArchive,
+			ctx:         func() context.Context { return newCancelAfterN(10) },
+			wantErr:     "context canceled",
+		},
+		{
+			// Calls 1-11 pass; call 12 fires at line 194 after the walk completes.
+			name:        "cancelled context returns error after walk",
+			archivePath: buildValidArchive,
+			ctx:         func() context.Context { return newCancelAfterN(11) },
+			wantErr:     "context canceled",
+		},
+		{
+			// content field is populated when archive metadata carries a safety
+			// classification — verifies the nil-omitempty branch is exercised.
+			name: "content classification propagated from metadata",
+			archivePath: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				vfs := osfs.NewWithNoIdm()
+				type classification struct {
+					Level string `json:"level"`
+				}
+				type meta struct {
+					Name           string          `json:"name"`
+					Version        string          `json:"version"`
+					GitCommitSHA   string          `json:"gitCommitSHA"`
+					BuildTimestamp string          `json:"buildTimestamp"`
+					Content        *classification `json:"content,omitempty"`
+				}
+				metaContent, err := json.Marshal(meta{
+					Name:           "classified-plugin",
+					Version:        "v2.0.0",
+					GitCommitSHA:   "deadbeef",
+					BuildTimestamp: "2026-05-20T10:00:00Z",
+					Content:        &classification{Level: "safe"},
+				})
+				require.NoError(t, err)
+				checksumContent := fmt.Sprintf(
+					"%s  .agentpack/metadata.json\n",
+					sha256Hex(metaContent),
+				)
+				outPath := filepath.Join(dir, "classified.agentpack")
+				require.NoError(
+					t,
+					archive.Create(context.Background(), vfs, outPath, []archive.FileEntry{
+						{ArchivePath: ".agentpack/metadata.json", Content: metaContent},
+						{ArchivePath: ".agentpack/checksums.txt", Content: []byte(checksumContent)},
+					}),
+				)
+				return outPath
+			},
+			ctx: func() context.Context { return context.Background() },
+			checkResult: func(t *testing.T, r *inspect.Result) {
+				t.Helper()
+				require.NotNil(t, r)
+				assert.Equal(t, "classified-plugin", r.Name)
+				assert.NotNil(t, r.Content)
+			},
+		},
+		{
+			// Pre-populate the temp dir with a subdirectory the test process cannot
+			// read (chmod 000). WalkDir calls the callback with a non-nil walkErr
+			// when it fails to descend into that directory, covering the
+			// "if walkErr != nil { return walkErr }" branch and the subsequent
+			// "walk archive" error return.
+			name:        "unreadable directory in extracted temp causes walk error",
+			noParallel:  true,
+			archivePath: buildValidArchive,
+			ctx:         func() context.Context { return context.Background() },
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := inspect.SetOsMkdirTemp(func(dir, pattern string) (string, error) {
+					tmp, err := os.MkdirTemp(dir, pattern)
+					if err != nil {
+						return "", err
+					}
+					// Name starts with "aaaa" so it sorts before "skills/" and
+					// is encountered by WalkDir before any legitimate content.
+					restricted := filepath.Join(tmp, "aaaa-restricted")
+					if mkErr := os.Mkdir(restricted, 0); mkErr != nil {
+						return "", mkErr
+					}
+					// Restore permissions so the deferred RemoveAll inside Run can
+					// clean up without errors.
+					t.Cleanup(func() { _ = os.Chmod(restricted, 0o700) })
+					return tmp, nil
+				})
+				t.Cleanup(restore)
+			},
+			wantErr: "walk archive",
+		},
+		{
+			// Pre-populate the temp dir with a regular file the test process cannot
+			// open (chmod 000). WalkDir visits it as a content file; computeFileHash
+			// fails on os.Open, covering both the "return err" branch inside the
+			// walk callback and the "open" error return inside computeFileHash.
+			name:        "unreadable file in extracted temp causes hash error",
+			noParallel:  true,
+			archivePath: buildValidArchive,
+			ctx:         func() context.Context { return context.Background() },
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := inspect.SetOsMkdirTemp(func(dir, pattern string) (string, error) {
+					tmp, err := os.MkdirTemp(dir, pattern)
+					if err != nil {
+						return "", err
+					}
+					// Name starts with "aaaa" so it sorts before "skills/" and is
+					// encountered by WalkDir before any legitimate content file.
+					restricted := filepath.Join(tmp, "aaaa-restricted.txt")
+					if wErr := os.WriteFile(restricted, []byte("data"), 0); wErr != nil {
+						return "", wErr
+					}
+					// Restore read permission so the deferred RemoveAll inside Run
+					// can clean up the file.
+					t.Cleanup(func() { _ = os.Chmod(restricted, 0o600) })
+					return tmp, nil
+				})
+				t.Cleanup(restore)
+			},
+			wantErr: "walk archive",
+		},
+		{
+			// Inject a failing osReadFile to cover the error branch that fires when
+			// os.ReadFile cannot read .agentpack/checksums.txt during the meta-file
+			// append loop (the else branch for name != "metadata.json").
+			name:        "osReadFile failure for checksums.txt returns error",
+			noParallel:  true,
+			archivePath: buildValidArchive,
+			ctx:         func() context.Context { return context.Background() },
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := inspect.SetOsReadFile(inspect.ReadFileAlwaysFails)
+				t.Cleanup(restore)
+			},
+			wantErr: "read .agentpack/checksums.txt",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			if !tt.noParallel {
+				t.Parallel()
+			}
+
+			if tt.injectFuncs != nil {
+				tt.injectFuncs(t)
+			}
 
 			archivePath := tt.archivePath(t)
 			ctx := tt.ctx()
