@@ -31,7 +31,7 @@ contains — skills, commands, hooks, agents, MCP integrations, config — and e
 agent's driver installs only what it supports, wherever it belongs.
 
 ```
-.agentpack archive             Installs to
+.agentpack archive                     Installs to
 ┌───────────────────┐
 │ metadata.yaml     │
 │                   │
