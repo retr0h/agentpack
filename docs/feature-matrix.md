@@ -26,22 +26,22 @@ not yet implemented, `-` = not supported or not verified
 
 ## Tier 2 — Dedicated Drivers (Expanded)
 
-| Agent       | Skills | Commands | Hooks  | Agents | MCP    | Config | Driver                            |
-| ----------- | ------ | -------- | ------ | ------ | ------ | ------ | --------------------------------- |
-| Cortex      | driver | -        | driver | -      | driver | -      | `internal/driver/cortex/`         |
-| Crush       | driver | -        | driver | -      | -      | -      | `internal/driver/crush/`          |
-| Droid       | driver | -        | driver | -      | -      | -      | `internal/driver/droid/`          |
-| Firebender  | driver | -        | -      | -      | driver | -      | `internal/driver/firebender/`     |
-| ForgeCode   | driver | -        | -      | -      | -      | -      | `internal/driver/forgecode/`      |
-| Hermes      | driver | -        | driver | -      | -      | -      | `internal/driver/hermes/`         |
-| Junie       | driver | -        | -      | -      | driver | -      | `internal/driver/junie/`          |
-| Kimi CLI    | driver | -        | -      | -      | driver | -      | `internal/driver/kimi/`           |
-| OpenCode    | driver | -        | -      | -      | -      | -      | `internal/driver/opencode/`       |
-| OpenHands   | driver | -        | driver | -      | driver | -      | `internal/driver/openhands/`      |
-| RovoDev     | driver | -        | -      | -      | driver | -      | `internal/driver/rovodev/`        |
-| Warp        | driver | -        | -      | -      | driver | -      | `internal/driver/warp/`           |
-| CodeBuddy   | driver | -        | -      | -      | -      | -      | `internal/driver/codebuddy/`      |
-| Antigravity | driver | -        | driver | -      | driver | -      | `internal/driver/antigravity/`    |
+| Agent       | Skills | Commands | Hooks  | Agents | MCP    | Config | Driver                         |
+| ----------- | ------ | -------- | ------ | ------ | ------ | ------ | ------------------------------ |
+| Cortex      | driver | -        | driver | -      | driver | -      | `internal/driver/cortex/`      |
+| Crush       | driver | -        | driver | -      | -      | -      | `internal/driver/crush/`       |
+| Droid       | driver | -        | driver | -      | -      | -      | `internal/driver/droid/`       |
+| Firebender  | driver | -        | -      | -      | driver | -      | `internal/driver/firebender/`  |
+| ForgeCode   | driver | -        | -      | -      | -      | -      | `internal/driver/forgecode/`   |
+| Hermes      | driver | -        | driver | -      | -      | -      | `internal/driver/hermes/`      |
+| Junie       | driver | -        | -      | -      | driver | -      | `internal/driver/junie/`       |
+| Kimi CLI    | driver | -        | -      | -      | driver | -      | `internal/driver/kimi/`        |
+| OpenCode    | driver | -        | -      | -      | -      | -      | `internal/driver/opencode/`    |
+| OpenHands   | driver | -        | driver | -      | driver | -      | `internal/driver/openhands/`   |
+| RovoDev     | driver | -        | -      | -      | driver | -      | `internal/driver/rovodev/`     |
+| Warp        | driver | -        | -      | -      | driver | -      | `internal/driver/warp/`        |
+| CodeBuddy   | driver | -        | -      | -      | -      | -      | `internal/driver/codebuddy/`   |
+| Antigravity | driver | -        | driver | -      | driver | -      | `internal/driver/antigravity/` |
 
 ## Tier 3 — Generic Driver (Skills Only)
 
