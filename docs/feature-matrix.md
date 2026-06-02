@@ -8,28 +8,28 @@ not yet implemented, `-` = not supported or not verified
 
 ## Tier 1 — Dedicated Drivers
 
-| Agent       | Skills | Commands | Hooks   | Agents  | MCP     | Config  | Driver Status                  |
-| ----------- | ------ | -------- | ------- | ------- | ------- | ------- | ------------------------------ |
-| Claude Code | driver | driver   | driver  | driver  | driver  | driver  | `pkg/target/claudecode/`       |
-| Cursor      | driver | -        | -       | -       | driver  | -       | `pkg/target/cursor/`           |
-| Windsurf    | driver | -        | driver  | -       | driver  | -       | `pkg/target/windsurf/`         |
-| Codex       | driver | -        | planned | -       | -       | planned | generic (`pkg/target/agents/`) |
-| Copilot     | driver | -        | -       | -       | driver  | -       | `pkg/target/copilot/`          |
-| Cline       | driver | -        | planned | -       | planned | -       | generic (`pkg/target/agents/`) |
-| Gemini CLI  | driver | -        | -       | planned | planned | planned | generic (`pkg/target/agents/`) |
-| Devin       | driver | -        | planned | planned | planned | planned | generic (`pkg/target/agents/`) |
-| Goose       | driver | -        | planned | -       | planned | planned | generic (`pkg/target/agents/`) |
-| Continue    | driver | -        | -       | -       | planned | planned | generic (`pkg/target/agents/`) |
-| Kiro        | driver | -        | planned | planned | planned | -       | generic (`pkg/target/agents/`) |
-| Amp         | driver | -        | -       | -       | planned | planned | generic (`pkg/target/agents/`) |
-| Roo         | driver | -        | -       | -       | -       | planned | generic (`pkg/target/agents/`) |
+| Agent       | Skills | Commands | Hooks  | Agents | MCP    | Config | Driver                         |
+| ----------- | ------ | -------- | ------ | ------ | ------ | ------ | ------------------------------ |
+| Claude Code | driver | driver   | driver | driver | driver | driver | `internal/driver/claudecode/`  |
+| Cursor      | driver | -        | -      | -      | driver | -      | `internal/driver/cursor/`      |
+| Windsurf    | driver | -        | driver | -      | driver | -      | `internal/driver/windsurf/`    |
+| Codex       | driver | -        | driver | -      | -      | -      | `internal/driver/codex/`       |
+| Copilot     | driver | -        | -      | -      | driver | -      | `internal/driver/copilot/`     |
+| Cline       | driver | -        | driver | -      | driver | -      | `internal/driver/cline/`       |
+| Gemini CLI  | driver | -        | -      | -      | driver | -      | `internal/driver/gemini/`      |
+| Devin       | driver | -        | driver | -      | driver | -      | `internal/driver/devin/`       |
+| Goose       | driver | -        | -      | -      | -      | -      | `internal/driver/goose/`       |
+| Continue    | driver | -        | -      | -      | driver | -      | `internal/driver/continuedev/` |
+| Kiro        | driver | -        | -      | -      | -      | -      | `internal/driver/kiro/`        |
+| Amp         | driver | -        | -      | -      | driver | -      | `internal/driver/amp/`         |
+| Roo         | driver | -        | -      | -      | -      | -      | `internal/driver/roo/`         |
 
 ## Tier 2 — Generic Driver (Skills Only)
 
-All remaining agents use the generic data-driven driver at `pkg/target/agents/`.
-They support `skill` only via `SupportedTypes() = ["skill"]`. When an agent
-gains file-based support for additional types, it moves to Tier 1 and gets a
-dedicated driver or an expanded generic entry.
+All remaining agents use the generic data-driven driver at
+`internal/driver/agents/`. They support `skill` only via
+`SupportedTypes() = ["skill"]`. When an agent gains file-based support for
+additional types, it moves to Tier 1 and gets a dedicated driver.
 
 ## Verified File Paths
 
