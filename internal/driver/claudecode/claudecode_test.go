@@ -69,6 +69,29 @@ func TestClaudeCode_DisplayName(t *testing.T) {
 	}
 }
 
+func TestClaudeCode_SupportedTypes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		wantTypes []string
+	}{
+		{
+			name:      "returns all supported content types",
+			wantTypes: []string{"skill", "command", "hook", "agent", "mcp", "config"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cc := claudecode.New()
+			assert.Equal(t, tt.wantTypes, cc.SupportedTypes())
+		})
+	}
+}
+
 func TestClaudeCode_Detect(t *testing.T) {
 	t.Parallel()
 
@@ -312,6 +335,235 @@ func TestInstall(t *testing.T) {
 				_, err = os.Stat(filepath.Join(dir, ".claude", "commands", "scan.md"))
 				assert.True(t, os.IsNotExist(err))
 			},
+		},
+		{
+			name: "installs command entry via entries list",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "commands", "deploy", "deploy.md"), "# Deploy")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{
+						Name: "deploy",
+						Type: "command",
+						Root: filepath.Join(src, "commands", "deploy"),
+					},
+				}
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				_, err := os.Stat(filepath.Join(dir, ".claude", "commands", "deploy", "deploy.md"))
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "installs agent entry via entries list",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "agents", "my-agent", "AGENT.md"), "# Agent")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{
+						Name: "my-agent",
+						Type: "agent",
+						Root: filepath.Join(src, "agents", "my-agent"),
+					},
+				}
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				_, err := os.Stat(filepath.Join(dir, ".claude", "agents", "my-agent", "AGENT.md"))
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "installs mcp entry via entries list",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "srv.json"), map[string]any{
+					"name": "srv",
+					"type": "stdio",
+				})
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "srv", Type: "mcp"},
+				}
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				_, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "installs hook entry via entries list",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"PreToolUse": []any{map[string]any{"matcher": "Bash"}},
+				})
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "hooks", Type: "hook"},
+				}
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				_, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "installs config entry via entries list",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "prefs.json"), map[string]any{
+					"theme": "dark",
+				})
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "prefs", Type: "config"},
+				}
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				assert.Equal(t, "dark", doc["theme"])
+			},
+		},
+		{
+			name: "entries mcp install error is propagated",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				dst := t.TempDir()
+				// Write a duplicate mcp entry that conflicts with existing settings.
+				writeJSON(t, filepath.Join(src, "mcp", "conflict.json"), map[string]any{
+					"name": "conflict-srv",
+					"type": "stdio",
+				})
+				writeJSON(t, filepath.Join(dst, ".claude", "settings.json"), map[string]any{
+					"mcpServers": map[string]any{
+						"conflict-srv": map[string]any{"type": "stdio"},
+					},
+				})
+				return src, dst
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "conflict-srv", Type: "mcp"},
+				}
+			},
+			wantErr: "already exists",
+		},
+		{
+			name: "entries hook install error is propagated",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				dst := t.TempDir()
+				// Write an unreadable hooks file.
+				hooksPath := filepath.Join(src, "hooks", "hooks.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(hooksPath), 0o755))
+				require.NoError(t, os.WriteFile(hooksPath, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksPath, 0o644) })
+				return src, dst
+			},
+			entriesFromSrc: func(_ string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "hooks", Type: "hook"},
+				}
+			},
+			wantErr: "read hooks/hooks.json",
+		},
+		{
+			name: "entries config install error is propagated",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				dst := t.TempDir()
+				// Write an unreadable settings file.
+				prefsPath := filepath.Join(src, "settings", "prefs.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(prefsPath), 0o755))
+				require.NoError(t, os.WriteFile(prefsPath, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(prefsPath, 0o644) })
+				return src, dst
+			},
+			entriesFromSrc: func(_ string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "prefs", Type: "config"},
+				}
+			},
+			wantErr: "read settings/",
+		},
+		{
+			name: "entries skill copyTreeTracked error is propagated",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "fail-skill", "SKILL.md"), "# Fail")
+				return src, t.TempDir()
+			},
+			mkdirFunc: func(string, os.FileMode) error {
+				return errors.New("disk full")
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{
+						Name: "fail-skill",
+						Type: "skill",
+						Root: filepath.Join(src, "skills", "fail-skill"),
+					},
+				}
+			},
+			wantErr: `install skill "fail-skill"`,
+		},
+		{
+			name: "entries skill walkdir error on unreadable source dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				if os.Getuid() == 0 {
+					t.Skip("root bypasses permission checks")
+				}
+				src := t.TempDir()
+				skillDir := filepath.Join(src, "skills", "locked-skill")
+				require.NoError(t, os.MkdirAll(skillDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# x"), 0o644))
+				sub := filepath.Join(skillDir, "sub")
+				require.NoError(t, os.MkdirAll(sub, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(sub, "f.md"), []byte("x"), 0o644))
+				require.NoError(t, os.Chmod(sub, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(sub, 0o755) })
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{
+						Name: "locked-skill",
+						Type: "skill",
+						Root: filepath.Join(src, "skills", "locked-skill"),
+					},
+				}
+			},
+			wantErr: `install skill "locked-skill"`,
 		},
 		{
 			name: "returns error on mcp name conflict",
