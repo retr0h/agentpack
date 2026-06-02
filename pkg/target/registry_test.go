@@ -35,8 +35,8 @@ import (
 // helpers
 // --------------------------------------------------------------------------
 
-// resetRegistry clears the global registry between tests via the exported
-// Reset function (exposed by export_test.go).
+// reset clears the global registry between tests via the exported
+// ResetRegistry function (exposed by export_test.go).
 func reset(t *testing.T) {
 	t.Helper()
 	target.ResetRegistry()
@@ -47,7 +47,7 @@ func reset(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestRegister(t *testing.T) {
-	// Not parallel at the suite level — all three registry tests mutate the
+	// Not parallel at the suite level -- all registry tests mutate the
 	// global target registry and must not interleave with each other.
 	tests := []struct {
 		name      string
@@ -96,7 +96,7 @@ func TestRegister(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Not parallel — mutates the global registry.
+			// Not parallel -- mutates the global registry.
 			ctrl := gomock.NewController(t)
 			reset(t)
 
@@ -171,6 +171,107 @@ func TestAll(t *testing.T) {
 			all := target.All()
 
 			assert.Len(t, all, tt.wantLen)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestResolve
+// --------------------------------------------------------------------------
+
+func TestResolve(t *testing.T) {
+	tests := []struct {
+		name      string
+		targets   []func(ctrl *gomock.Controller) target.Target
+		names     []string
+		wantNames []string
+		wantErr   string
+	}{
+		{
+			name:      "nil names returns nil",
+			names:     nil,
+			wantNames: nil,
+		},
+		{
+			name:      "empty names returns nil",
+			names:     []string{},
+			wantNames: nil,
+		},
+		{
+			name: "resolves single known name",
+			targets: []func(ctrl *gomock.Controller) target.Target{
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("alpha").AnyTimes()
+
+					return m
+				},
+			},
+			names:     []string{"alpha"},
+			wantNames: []string{"alpha"},
+		},
+		{
+			name: "resolves multiple names in order",
+			targets: []func(ctrl *gomock.Controller) target.Target{
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("alpha").AnyTimes()
+
+					return m
+				},
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("beta").AnyTimes()
+
+					return m
+				},
+			},
+			names:     []string{"beta", "alpha"},
+			wantNames: []string{"beta", "alpha"},
+		},
+		{
+			name: "unknown name returns error",
+			targets: []func(ctrl *gomock.Controller) target.Target{
+				func(ctrl *gomock.Controller) target.Target {
+					m := mocks.NewMockTarget(ctrl)
+					m.EXPECT().Name().Return("alpha").AnyTimes()
+
+					return m
+				},
+			},
+			names:   []string{"nonexistent"},
+			wantErr: `unknown target "nonexistent"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			reset(t)
+
+			for _, mkTarget := range tt.targets {
+				target.Register(mkTarget(ctrl))
+			}
+
+			got, err := target.Resolve(tt.names)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.wantNames == nil {
+				assert.Nil(t, got)
+				return
+			}
+
+			require.Len(t, got, len(tt.wantNames))
+
+			for i, wantName := range tt.wantNames {
+				assert.Equal(t, wantName, got[i].Name())
+			}
 		})
 	}
 }
