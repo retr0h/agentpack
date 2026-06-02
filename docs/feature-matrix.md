@@ -24,12 +24,33 @@ not yet implemented, `-` = not supported or not verified
 | Amp         | driver | -        | -      | -      | driver | -      | `internal/driver/amp/`         |
 | Roo         | driver | -        | -      | -      | -      | -      | `internal/driver/roo/`         |
 
-## Tier 2 — Generic Driver (Skills Only)
+## Tier 2 — Verified Features, Driver Not Yet Built
+
+These agents have documented file-based features beyond skills but don't have
+dedicated drivers yet. They currently use the generic driver (skills only).
+
+| Agent       | Hooks   | MCP     | Agents  | Commands | Format    | Verified against     |
+| ----------- | ------- | ------- | ------- | -------- | --------- | -------------------- |
+| Cortex      | planned | planned | -       | -        | JSON      | Snowflake docs       |
+| Crush       | planned | -       | -       | -        | JSON      | open source          |
+| Droid       | planned | -       | -       | -        | JSON      | open source          |
+| Firebender  | -       | planned | planned | -        | JSON+MD   | docs                 |
+| ForgeCode   | -       | -       | planned | planned  | MD+YAML   | open source          |
+| Hermes      | planned | -       | -       | -        | YAML      | open source          |
+| Junie       | -       | planned | -       | -        | JSON      | JetBrains docs       |
+| Kimi CLI    | -       | planned | -       | -        | JSON      | open source          |
+| OpenCode    | -       | -       | planned | -        | MD+YAML   | open source          |
+| OpenHands   | planned | planned | planned | planned  | JSON+MD   | open source          |
+| RovoDev     | -       | planned | planned | -        | JSON+MD   | Atlassian docs       |
+| Warp        | -       | planned | -       | -        | JSON      | Warp docs            |
+| CodeBuddy   | -       | -       | planned | -        | MD+YAML   | Tencent docs         |
+| Antigravity | planned | planned | -       | -        | JSON      | Google docs          |
+
+## Tier 3 — Generic Driver (Skills Only)
 
 All remaining agents use the generic data-driven driver at
 `internal/driver/agents/`. They support `skill` only via
-`SupportedTypes() = ["skill"]`. When an agent gains file-based support for
-additional types, it moves to Tier 1 and gets a dedicated driver.
+`SupportedTypes() = ["skill"]`. No verified file-based features beyond skills.
 
 ## Verified File Paths
 
