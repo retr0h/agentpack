@@ -146,7 +146,10 @@ func mockTargetThatInstalls(
 	m := mocks.NewMockTarget(ctrl)
 	m.EXPECT().Name().Return(name).AnyTimes()
 	m.EXPECT().DisplayName().Return(displayName).AnyTimes()
-	m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+	m.EXPECT().
+		SupportedTypes().
+		Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+		AnyTimes()
 
 	m.EXPECT().
 		Install(gomock.Any(), gomock.Any()).
@@ -555,7 +558,10 @@ func testLifecycleNoTargets(t *testing.T) {
 	failTarget := mocks.NewMockTarget(ctrl)
 	failTarget.EXPECT().Name().Return("fail-target").AnyTimes()
 	failTarget.EXPECT().DisplayName().Return("Fail Target").AnyTimes()
-	failTarget.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+	failTarget.EXPECT().
+		SupportedTypes().
+		Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+		AnyTimes()
 	failTarget.EXPECT().
 		Install(gomock.Any(), gomock.Any()).
 		Return(nil, fmt.Errorf("simulated: no agent available"))
@@ -598,7 +604,10 @@ func testLifecycleSkillFilter(t *testing.T) {
 	m := mocks.NewMockTarget(ctrl)
 	m.EXPECT().Name().Return("claude-code").AnyTimes()
 	m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
-	m.EXPECT().SupportedTypes().Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).AnyTimes()
+	m.EXPECT().
+		SupportedTypes().
+		Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+		AnyTimes()
 	m.EXPECT().
 		Install(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
@@ -841,6 +850,11 @@ func TestLifecycleManifests(t *testing.T) {
 			name:       "whole repo add: yaml has no skills, lock has no skills, registry has all content",
 			noParallel: true,
 			run:        testManifestWholeRepo,
+		},
+		{
+			name:       "SupportedTypes filtering: skill-only target receives only skill entries",
+			noParallel: true,
+			run:        testManifestSupportedTypesFiltering,
 		},
 	}
 
@@ -1234,6 +1248,143 @@ func testManifestTwoPackages(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, allManifests, 1)
 	assert.Equal(t, "pkg-beta", allManifests[0].Name)
+}
+
+// testManifestSupportedTypesFiltering verifies ADR-009: the install pipeline
+// filters opts.Entries against each target's SupportedTypes before calling
+// Install. An all-types target receives every entry; a skill-only target
+// receives only skill entries.
+func testManifestSupportedTypesFiltering(t *testing.T) {
+	t.Helper()
+
+	archivePath := lifecycleArchive(t, "filter-types-pkg", "1.0.0")
+	installDirAll := t.TempDir()
+	installDirSkillOnly := t.TempDir()
+
+	env, restore := newManifestEnv(t)
+	defer restore()
+
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	// allTypesTarget accepts every content type — the baseline.
+	allTypesTarget := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDirAll)
+
+	// skillOnlyTarget declares support for "skill" only. We use DoAndReturn so
+	// we can capture and assert on the Entries the pipeline passes in.
+	var capturedEntries []target.ContentEntry
+
+	skillOnlyTarget := mocks.NewMockTarget(ctrl)
+	skillOnlyTarget.EXPECT().Name().Return("skill-only").AnyTimes()
+	skillOnlyTarget.EXPECT().DisplayName().Return("Skill Only").AnyTimes()
+	skillOnlyTarget.EXPECT().
+		SupportedTypes().
+		Return([]string{"skill"}).
+		AnyTimes()
+	skillOnlyTarget.EXPECT().
+		Install(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, opts target.InstallOpts) ([]target.InstalledFile, error) {
+			capturedEntries = opts.Entries
+
+			var installed []target.InstalledFile
+
+			err := filepath.WalkDir(
+				opts.SourceDir,
+				func(path string, d os.DirEntry, walkErr error) error {
+					if walkErr != nil {
+						return walkErr
+					}
+
+					if d.IsDir() {
+						return nil
+					}
+
+					rel, relErr := filepath.Rel(opts.SourceDir, path)
+					if relErr != nil {
+						return relErr
+					}
+
+					// Skip .agentpack metadata files.
+					if len(rel) >= len(".agentpack") && rel[:len(".agentpack")] == ".agentpack" {
+						return nil
+					}
+
+					// Only install files under a skills/ subtree.
+					normalized := filepath.ToSlash(rel)
+					if !strings.HasPrefix(normalized, "skills/") {
+						return nil
+					}
+
+					dst := filepath.Join(installDirSkillOnly, rel)
+					if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+						return mkErr
+					}
+
+					data, readErr := os.ReadFile(path)
+					if readErr != nil {
+						return readErr
+					}
+
+					if writeErr := os.WriteFile(dst, data, 0o644); writeErr != nil {
+						return writeErr
+					}
+
+					h := sha256.Sum256(data)
+					installed = append(installed, target.InstalledFile{
+						Path:   rel,
+						SHA256: hex.EncodeToString(h[:]),
+					})
+
+					return nil
+				},
+			)
+
+			return installed, err
+		}).
+		AnyTimes()
+
+	_, err := install.New().Run(ctx, install.Options{
+		Source:  archivePath,
+		Targets: []target.Target{allTypesTarget, skillOnlyTarget},
+		Dir:     installDirAll,
+	})
+	require.NoError(t, err)
+
+	// The skill-only target must have received only skill-typed entries.
+	require.NotEmpty(t, capturedEntries)
+
+	for _, e := range capturedEntries {
+		assert.Equal(t, "skill", e.Type)
+	}
+
+	// The all-types target's registry entries include commands and hooks.
+	manifest, loadErr := env.reg.Load("filter-types-pkg")
+	require.NoError(t, loadErr)
+	require.NotNil(t, manifest)
+
+	var allTypesFiles []registry.InstalledFile
+	var skillOnlyFiles []registry.InstalledFile
+
+	for _, f := range manifest.Files {
+		switch f.Target {
+		case "claude-code":
+			allTypesFiles = append(allTypesFiles, f)
+		case "skill-only":
+			skillOnlyFiles = append(skillOnlyFiles, f)
+		}
+	}
+
+	// All-types target must have received skills, commands, and hooks.
+	assertFilePath(t, allTypesFiles, "skills/kubernetes-specialist/SKILL.md")
+	assertFilePath(t, allTypesFiles, "skills/react-expert/SKILL.md")
+	assertFilePath(t, allTypesFiles, "commands/scan.md")
+	assertFilePath(t, allTypesFiles, "hooks/hooks.json")
+
+	// Skill-only target must have skills but no commands or hooks.
+	assertFilePath(t, skillOnlyFiles, "skills/kubernetes-specialist/SKILL.md")
+	assertFilePath(t, skillOnlyFiles, "skills/react-expert/SKILL.md")
+	assertNoFilePath(t, skillOnlyFiles, "commands/scan.md")
+	assertNoFilePath(t, skillOnlyFiles, "hooks/hooks.json")
 }
 
 // testManifestWholeRepo installs a whole repo (no skill filter) and verifies
