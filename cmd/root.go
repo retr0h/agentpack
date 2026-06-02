@@ -32,6 +32,8 @@ import (
 	"github.com/retr0h/agentpack/internal/cli"
 	_ "github.com/retr0h/agentpack/internal/driver/agents"     // register data-driven agents (includes universal)
 	_ "github.com/retr0h/agentpack/internal/driver/claudecode" // register Claude Code target
+	_ "github.com/retr0h/agentpack/internal/driver/cline"      // register Cline target
+	_ "github.com/retr0h/agentpack/internal/driver/codex"      // register Codex target
 	_ "github.com/retr0h/agentpack/internal/driver/copilot"    // register GitHub Copilot target
 	_ "github.com/retr0h/agentpack/internal/driver/cursor"     // register Cursor target
 	_ "github.com/retr0h/agentpack/internal/driver/windsurf"   // register Windsurf target

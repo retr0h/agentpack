@@ -68,7 +68,6 @@ var registry = []AgentDef{
 		GlobalSkillsDir: ".augment/skills",
 	},
 	{Name: "bob", Display: "IBM Bob", DetectHome: ".bob", GlobalSkillsDir: ".bob/skills"},
-	{Name: "cline", Display: "Cline", DetectHome: ".cline", GlobalSkillsDir: ".agents/skills"},
 	{
 		Name:            "codearts-agent",
 		Display:         "CodeArts Agent",
@@ -92,13 +91,6 @@ var registry = []AgentDef{
 		Display:         "Code Studio",
 		DetectHome:      ".codestudio",
 		GlobalSkillsDir: ".codestudio/skills",
-	},
-	{
-		Name:            "codex",
-		Display:         "Codex",
-		DetectHome:      ".codex",
-		EnvOverride:     "CODEX_HOME",
-		GlobalSkillsDir: ".codex/skills",
 	},
 	{
 		Name:            "command-code",
