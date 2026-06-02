@@ -113,12 +113,6 @@ var registry = []AgentDef{
 		GlobalSkillsDir: ".continue/skills",
 	},
 	{
-		Name:            "copilot",
-		Display:         "GitHub Copilot",
-		DetectHome:      ".copilot",
-		GlobalSkillsDir: ".copilot/skills",
-	},
-	{
 		Name:            "cortex",
 		Display:         "Cortex Code",
 		DetectHome:      ".snowflake/cortex",

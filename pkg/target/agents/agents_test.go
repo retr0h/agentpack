@@ -132,17 +132,6 @@ func TestAgent_NameAndDisplayName(t *testing.T) {
 			wantDisplay: "Cursor",
 		},
 		{
-			name: "github-copilot renamed to copilot",
-			def: agents.AgentDef{
-				Name:            "copilot",
-				Display:         "GitHub Copilot",
-				DetectHome:      ".copilot",
-				GlobalSkillsDir: ".copilot/skills",
-			},
-			wantName:    "copilot",
-			wantDisplay: "GitHub Copilot",
-		},
-		{
 			name: "opencode",
 			def: agents.AgentDef{
 				Name:            "opencode",
