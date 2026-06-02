@@ -18,7 +18,9 @@ import (
 	"github.com/retr0h/agentpack/internal/driver/goose"
 	"github.com/retr0h/agentpack/internal/driver/hermes"
 	"github.com/retr0h/agentpack/internal/driver/junie"
+	"github.com/retr0h/agentpack/internal/driver/kimi"
 	"github.com/retr0h/agentpack/internal/driver/kiro"
+	"github.com/retr0h/agentpack/internal/driver/openhands"
 	"github.com/retr0h/agentpack/internal/driver/roo"
 	"github.com/retr0h/agentpack/internal/driver/windsurf"
 	"github.com/retr0h/agentpack/pkg/target"
@@ -45,7 +47,9 @@ func RegisterAll() {
 		target.Register(goose.New())
 		target.Register(hermes.New())
 		target.Register(kiro.New())
+		target.Register(openhands.New())
 		target.Register(junie.New())
+		target.Register(kimi.New())
 		target.Register(roo.New())
 		agents.RegisterAll()
 	})

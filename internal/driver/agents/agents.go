@@ -135,12 +135,6 @@ var registry = []AgentDef{
 		DetectHome:      ".kilocode",
 		GlobalSkillsDir: ".kilocode/skills",
 	},
-	{
-		Name:            "kimi-cli",
-		Display:         "Kimi Code CLI",
-		DetectHome:      ".kimi",
-		GlobalSkillsDir: ".config/agents/skills",
-	},
 	{Name: "kode", Display: "Kode", DetectHome: ".kode", GlobalSkillsDir: ".kode/skills"},
 	{Name: "mcpjam", Display: "MCPJam", DetectHome: ".mcpjam", GlobalSkillsDir: ".mcpjam/skills"},
 	{
@@ -168,12 +162,6 @@ var registry = []AgentDef{
 		Display:         "OpenCode",
 		DetectConfig:    "opencode",
 		GlobalSkillsDir: ".config/opencode/skills",
-	},
-	{
-		Name:            "openhands",
-		Display:         "OpenHands",
-		DetectHome:      ".openhands",
-		GlobalSkillsDir: ".openhands/skills",
 	},
 	{Name: "pi", Display: "Pi", DetectHome: ".pi/agent", GlobalSkillsDir: ".pi/agent/skills"},
 	{Name: "pochi", Display: "Pochi", DetectHome: ".pochi", GlobalSkillsDir: ".pochi/skills"},
