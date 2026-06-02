@@ -26,7 +26,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,31 +36,8 @@ import (
 	"github.com/retr0h/agentpack/internal/install"
 	pkgsync "github.com/retr0h/agentpack/internal/sync"
 	syncMocks "github.com/retr0h/agentpack/internal/sync/mocks"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
-
-// cancelAfterFirstErrCtx is a context.Context whose Err() returns nil on the
-// first call and context.Canceled on all subsequent calls. This lets us pass
-// the function-entry check but fail the per-package loop check.
-type cancelAfterFirstErrCtx struct {
-	callCount int
-}
-
-func newCancelAfterFirstErrCtx() *cancelAfterFirstErrCtx {
-	return &cancelAfterFirstErrCtx{}
-}
-
-func (c *cancelAfterFirstErrCtx) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterFirstErrCtx) Done() <-chan struct{}       { return nil }
-func (c *cancelAfterFirstErrCtx) Value(_ any) any             { return nil }
-
-func (c *cancelAfterFirstErrCtx) Err() error {
-	c.callCount++
-	if c.callCount == 1 {
-		return nil
-	}
-
-	return errors.New("context canceled")
-}
 
 func writePackagesFile(t *testing.T, dir, content string) string {
 	t.Helper()
@@ -373,7 +349,7 @@ func TestRun(t *testing.T) {
 					Installer: mockInstaller,
 				}, func() {}
 			},
-			customCtx: newCancelAfterFirstErrCtx(),
+			customCtx: testutil.NewCancelAfterN(1),
 			wantErr:   "context canceled",
 		},
 		{

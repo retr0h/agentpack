@@ -25,12 +25,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/stretchr/testify/assert"
@@ -38,6 +36,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/inspect"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 // sha256Hex returns the hex-encoded SHA256 of data.
@@ -81,27 +80,6 @@ func buildValidArchive(t *testing.T) string {
 	}))
 
 	return outPath
-}
-
-// cancelAfterN returns nil from Err() for the first n calls, then returns a
-// "context canceled" error. This allows tests to pass early ctx checks and
-// trigger cancellation at a specific point inside the function.
-type cancelAfterN struct {
-	n    int
-	call int
-}
-
-func newCancelAfterN(n int) *cancelAfterN { return &cancelAfterN{n: n} }
-
-func (c *cancelAfterN) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterN) Done() <-chan struct{}       { return nil }
-func (c *cancelAfterN) Value(_ any) any             { return nil }
-func (c *cancelAfterN) Err() error {
-	c.call++
-	if c.call <= c.n {
-		return nil
-	}
-	return errors.New("context canceled")
 }
 
 // --------------------------------------------------------------------------
@@ -260,7 +238,7 @@ func TestRun(t *testing.T) {
 			// fires after Extract returns → triggers the post-extract ctx check.
 			name:        "cancelled context returns error after extract",
 			archivePath: buildValidArchive,
-			ctx:         func() context.Context { return newCancelAfterN(7) },
+			ctx:         func() context.Context { return testutil.NewCancelAfterN(7) },
 			wantErr:     "context canceled",
 		},
 		{
@@ -268,14 +246,14 @@ func TestRun(t *testing.T) {
 			// call 9 fires at line 125 after metadata is parsed.
 			name:        "cancelled context returns error after parsing metadata",
 			archivePath: buildValidArchive,
-			ctx:         func() context.Context { return newCancelAfterN(8) },
+			ctx:         func() context.Context { return testutil.NewCancelAfterN(8) },
 			wantErr:     "context canceled",
 		},
 		{
 			// Calls 1-9 pass; call 10 fires at line 141 after checksums are read.
 			name:        "cancelled context returns error after reading checksums",
 			archivePath: buildValidArchive,
-			ctx:         func() context.Context { return newCancelAfterN(9) },
+			ctx:         func() context.Context { return testutil.NewCancelAfterN(9) },
 			wantErr:     "context canceled",
 		},
 		{
@@ -283,14 +261,14 @@ func TestRun(t *testing.T) {
 			// when processing the first content file.
 			name:        "cancelled context returns error inside walk callback",
 			archivePath: buildValidArchive,
-			ctx:         func() context.Context { return newCancelAfterN(10) },
+			ctx:         func() context.Context { return testutil.NewCancelAfterN(10) },
 			wantErr:     "context canceled",
 		},
 		{
 			// Calls 1-11 pass; call 12 fires at line 194 after the walk completes.
 			name:        "cancelled context returns error after walk",
 			archivePath: buildValidArchive,
-			ctx:         func() context.Context { return newCancelAfterN(11) },
+			ctx:         func() context.Context { return testutil.NewCancelAfterN(11) },
 			wantErr:     "context canceled",
 		},
 		{

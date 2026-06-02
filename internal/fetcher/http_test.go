@@ -29,12 +29,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/internal/fetcher"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 // httpFailOnCloseWriter is an io.WriteCloser that succeeds on Write but fails on Close.
@@ -43,26 +43,6 @@ type httpFailOnCloseWriter struct{}
 func (*httpFailOnCloseWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 func (*httpFailOnCloseWriter) Close() error { return errors.New("simulated close error") }
-
-// cancelAfterHTTPResponseCtx returns nil from Err() for the first several
-// calls (to allow http.NewRequestWithContext and Do to proceed), then returns
-// context.Canceled. This lets the HTTP request complete (200 OK) but triggers
-// the ctx.Err() check at line 52 (after status check, before os.Create).
-type cancelAfterHTTPResponseCtx struct {
-	callCount int
-	triggerAt int // return error when callCount > triggerAt
-}
-
-func (c *cancelAfterHTTPResponseCtx) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterHTTPResponseCtx) Done() <-chan struct{}       { return nil }
-func (c *cancelAfterHTTPResponseCtx) Value(_ any) any             { return nil }
-func (c *cancelAfterHTTPResponseCtx) Err() error {
-	c.callCount++
-	if c.callCount <= c.triggerAt {
-		return nil
-	}
-	return errors.New("context canceled")
-}
 
 func TestHTTPFetcherFetch(t *testing.T) {
 	t.Parallel()
@@ -143,10 +123,10 @@ func TestHTTPFetcherFetch(t *testing.T) {
 				t.Helper()
 				return filepath.Join(t.TempDir(), "out.agentpack")
 			},
-			// triggerAt:0 means all Err() calls return error immediately.
+			// NewCancelAfterN(0): fires on every Err() call (calls.Add(1)=1 > 0).
 			// Since Done() returns nil, the http client won't cancel mid-flight.
-			// The explicit ctx.Err() check at line 52 (after status check) fires.
-			customCtx: &cancelAfterHTTPResponseCtx{triggerAt: 0},
+			// The explicit ctx.Err() check (after status check) fires.
+			customCtx: testutil.NewCancelAfterN(0),
 			wantErr:   "context canceled",
 		},
 		{

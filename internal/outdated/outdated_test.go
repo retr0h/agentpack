@@ -26,7 +26,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,31 +34,8 @@ import (
 	"github.com/retr0h/agentpack/internal/outdated"
 	outdatedmocks "github.com/retr0h/agentpack/internal/outdated/mocks"
 	"github.com/retr0h/agentpack/internal/registry"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
-
-// cancelAfterFirstErrCtx is a context whose Err() returns nil on the first
-// call and context.Canceled on all subsequent calls. This lets a test pass
-// the function-entry ctx.Err() check but fail the per-manifest loop check.
-type cancelAfterFirstErrCtx struct {
-	callCount int
-}
-
-func newCancelAfterFirstErrCtx() *cancelAfterFirstErrCtx {
-	return &cancelAfterFirstErrCtx{}
-}
-
-func (c *cancelAfterFirstErrCtx) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterFirstErrCtx) Done() <-chan struct{}       { return nil }
-func (c *cancelAfterFirstErrCtx) Value(_ any) any             { return nil }
-
-func (c *cancelAfterFirstErrCtx) Err() error {
-	c.callCount++
-	if c.callCount == 1 {
-		return nil
-	}
-
-	return errors.New("context canceled")
-}
 
 // --------------------------------------------------------------------------
 // TestRun
@@ -377,7 +353,7 @@ func TestRunWithOptions(t *testing.T) {
 		},
 		{
 			name:      "context cancelled between manifest iterations returns error",
-			customCtx: newCancelAfterFirstErrCtx(),
+			customCtx: testutil.NewCancelAfterN(1),
 			setupMocks: func(reg *outdatedmocks.MockRegistry, _ *outdatedmocks.MockRemoteChecker) {
 				reg.EXPECT().List().Return([]*registry.PackageManifest{
 					{Name: "plugin-x", Source: "https://example.com/x.agentpack", SHA: "sha-x"},

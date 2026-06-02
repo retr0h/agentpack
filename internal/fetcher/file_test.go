@@ -28,12 +28,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/internal/fetcher"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 // failOnCloseWriter is an io.WriteCloser that succeeds on Write but fails on Close.
@@ -42,25 +42,6 @@ type failOnCloseWriter struct{}
 func (*failOnCloseWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 func (*failOnCloseWriter) Close() error { return errors.New("simulated close error") }
-
-// cancelOnSecondCallCtx is a context.Context whose Err() returns nil on the
-// first call and context.Canceled on all subsequent calls. This allows a test
-// to pass the initial ctx.Err() check in FileFetcher.Fetch but then cancel
-// before the second check (after os.Open succeeds).
-type cancelOnSecondCallCtx struct {
-	callCount int
-}
-
-func (c *cancelOnSecondCallCtx) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelOnSecondCallCtx) Done() <-chan struct{}       { return nil }
-func (c *cancelOnSecondCallCtx) Value(_ any) any             { return nil }
-func (c *cancelOnSecondCallCtx) Err() error {
-	c.callCount++
-	if c.callCount == 1 {
-		return nil
-	}
-	return errors.New("context canceled")
-}
 
 func TestFileFetcherFetch(t *testing.T) {
 	t.Parallel()
@@ -137,7 +118,9 @@ func TestFileFetcherFetch(t *testing.T) {
 				require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
 				return src, filepath.Join(dir, "dest.agentpack")
 			},
-			customCtx: &cancelOnSecondCallCtx{},
+			// NewCancelAfterN(1): first Err() call returns nil (1 > 1 is false),
+			// second call fires cancel (2 > 1 is true) and returns context.Canceled.
+			customCtx: testutil.NewCancelAfterN(1),
 			wantErr:   "context canceled",
 		},
 		{

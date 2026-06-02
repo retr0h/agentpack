@@ -32,36 +32,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/internal/archive"
+	"github.com/retr0h/agentpack/internal/testutil"
 	"github.com/retr0h/agentpack/internal/verify"
 )
-
-// cancelAfterN returns nil from Err() for the first n calls, then returns a
-// "context canceled" error. This allows tests to pass early ctx checks and
-// trigger cancellation at a specific point inside the function.
-type cancelAfterN struct {
-	n    int
-	call int
-}
-
-func newCancelAfterN(n int) *cancelAfterN { return &cancelAfterN{n: n} }
-
-func (c *cancelAfterN) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterN) Done() <-chan struct{}       { return nil }
-func (c *cancelAfterN) Value(_ any) any             { return nil }
-func (c *cancelAfterN) Err() error {
-	c.call++
-	if c.call <= c.n {
-		return nil
-	}
-	return errors.New("context canceled")
-}
 
 // --------------------------------------------------------------------------
 // FindChecksums
@@ -393,7 +372,7 @@ func TestRun(t *testing.T) {
 			ctx: func() context.Context {
 				// Passes the first ctx.Err() check (line 53), then fails the
 				// first ctx.Err() check inside Extract's loop.
-				return newCancelAfterN(1)
+				return testutil.NewCancelAfterN(1)
 			},
 			wantErr: "context canceled",
 		},
@@ -405,7 +384,7 @@ func TestRun(t *testing.T) {
 				// tar entries. Extract calls ctx.Err() once per entry and once
 				// more for the EOF check = 7 calls. Plus call 1 at verify.Run
 				// line 53 = 8 total before reaching line 67.
-				return newCancelAfterN(8)
+				return testutil.NewCancelAfterN(8)
 			},
 			wantErr: "context canceled",
 		},
@@ -415,7 +394,7 @@ func TestRun(t *testing.T) {
 			ctx: func() context.Context {
 				// Call 1 (line 53) + 7 (Extract) + 1 (line 67) = 9 calls before
 				// reaching verify.Run line 81 (after findChecksums + ReadFile).
-				return newCancelAfterN(9)
+				return testutil.NewCancelAfterN(9)
 			},
 			wantErr: "context canceled",
 		},
@@ -425,7 +404,7 @@ func TestRun(t *testing.T) {
 			ctx: func() context.Context {
 				// 9 calls before line 81 + 1 more (line 81) = 10 total; call 11
 				// fires inside checksum.Verify (once per checksum entry).
-				return newCancelAfterN(10)
+				return testutil.NewCancelAfterN(10)
 			},
 			wantErr: "verify",
 		},
