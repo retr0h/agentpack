@@ -79,40 +79,32 @@ declares its content type — the driver for each agent installs only what it
 supports, wherever it belongs.
 
 ```
-.agentpack archive                    Installs to
-┌───────────────────┐
-│ metadata.yaml     │
-│                   │
-│  k8s     skill   ─┼──→  Claude Code  .claude/skills/k8s/
-│                  ─┼──→  Cursor       .cursor/rules/k8s/
-│                  ─┼──→  Codex        .codex/skills/k8s/
-│                   │
-│  scan    command ─┼──→  Claude Code  .claude/commands/scan/
-│                   │
-│  my-api  mcp     ─┼──→  Claude Code  .claude/settings.json (mcpServers)
-│                   │
-│  on-save hook    ─┼──→  Claude Code  .claude/settings.json (hooks)
-│                   │
-│  theme   config  ─┼──→  Claude Code  .claude/settings.json
-│                   │
-│                   │     Cursor, Codex skip unsupported types
-└───────────────────┘
+                                                          Installs to
+.agentpack archive
+┌──────────────────────┐
+│  metadata.yaml       │
+│                      │
+│  k8s       skill    ─┼───→   Claude Code   .claude/skills/k8s/
+│                     ─┼───→   Cursor        .cursor/rules/k8s/
+│                     ─┼───→   Codex         .codex/skills/k8s/
+│                      │
+│  scan      command  ─┼───→   Claude Code   .claude/commands/scan/
+│                      │
+│  k8s-bot   agent    ─┼───→   Claude Code   .claude/agents/k8s-bot/
+│                      │
+│  my-api    mcp      ─┼───→   Claude Code   .claude/settings.json
+│                      │
+│  on-save   hook     ─┼───→   Claude Code   .claude/settings.json
+│                      │
+│  theme     config   ─┼───→   Claude Code   .claude/settings.json
+│                      │
+│                      │       Cursor, Codex skip unsupported types
+└──────────────────────┘
 ```
 
-Six content types cover the AI agent ecosystem:
-
-| Type | What it is | Who supports it |
-|------|-----------|----------------|
-| **skill** | Knowledge/capability module | All agents |
-| **command** | User-invoked action | Claude Code |
-| **hook** | Event-driven automation | Claude Code |
-| **agent** | Subagent/persona definition | Claude Code |
-| **mcp** | External service integration | Claude Code |
-| **config** | Configuration the package needs | Claude Code |
-
-Package authors write content once. When an agent adds support for a new type,
-existing packages automatically start working — no changes needed. See the
-[full specification][Format].
+Package authors write content once. Drivers install only the types they support.
+When an agent adds support for a new type, existing packages work automatically.
+See the [full specification][Format].
 
 ## 🔍 Discover Skills
 
