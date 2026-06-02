@@ -69,9 +69,8 @@ See [Usage][] for full details.
 - 🌐 **Global + local** — project-level or user-level installs (`-g`)
 - ⚙️ **Config merging** — MCP servers, hooks, and settings merge into `.claude/settings.json`
 - ✈️ **Offline** — `.agentpack` archives work without git, npm, or any toolchain
-- 🔑 **Private repos** — `~/.netrc` and SSH key support
 - 📋 **JSON everywhere** — `-o json` on every command for scripting
-- 📚 **CLI + Go library** — use from the terminal or import `pkg/` in your own tools
+- 📚 **Extensible** — write custom target drivers against the `pkg/target` interface
 
 ## 📐 The .agentpack format
 
