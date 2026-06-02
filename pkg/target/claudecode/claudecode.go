@@ -79,10 +79,17 @@ func (c *ClaudeCode) Detect() bool {
 	return err == nil
 }
 
+// entryTypePlural maps singular content-type identifiers to their plural
+// directory names under .claude/.
+var entryTypePlural = map[string]string{
+	"skill":   "skills",
+	"command": "commands",
+	"agent":   "agents",
+}
+
 // Install copies content from opts.SourceDir into .claude/ under opts.Dir.
-// skills/ → .claude/skills/ (recursive, preserves subdirs)
-// commands/ → .claude/commands/
-// agents/ → .claude/agents/
+// When opts.Entries is non-empty the driver installs only the listed entries;
+// otherwise it falls back to the legacy directory-walking behaviour.
 // Returns the list of files written.
 func (c *ClaudeCode) Install(
 	ctx context.Context,
@@ -102,6 +109,70 @@ func (c *ClaudeCode) Install(
 		root = home
 	}
 
+	if len(opts.Entries) > 0 {
+		return c.installFromEntries(ctx, opts, root)
+	}
+
+	return c.installFromDirs(ctx, opts, root)
+}
+
+// installFromEntries installs only the content items listed in opts.Entries.
+func (c *ClaudeCode) installFromEntries(
+	ctx context.Context,
+	opts target.InstallOpts,
+	root string,
+) ([]target.InstalledFile, error) {
+	var allFiles []target.InstalledFile
+
+	settingsPath := filepath.Join(root, ".claude", "settings.json")
+
+	for _, entry := range opts.Entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		switch entry.Type {
+		case "skill", "command", "agent":
+			plural := entryTypePlural[entry.Type]
+			srcDir := filepath.Join(opts.SourceDir, entry.Root)
+			dstDir := filepath.Join(root, ".claude", plural, entry.Name)
+
+			written, err := copyTreeTracked(c.mkdirAllFunc, srcDir, dstDir, root)
+			if err != nil {
+				return nil, fmt.Errorf("install %s %q: %w", entry.Type, entry.Name, err)
+			}
+
+			allFiles = append(allFiles, written...)
+
+		case "mcp":
+			if err := c.installMCP(ctx, opts.SourceDir, settingsPath); err != nil {
+				return nil, err
+			}
+
+		case "hook":
+			if err := c.installHooks(ctx, opts.SourceDir, settingsPath, opts.Name); err != nil {
+				return nil, err
+			}
+
+		case "config":
+			if err := c.installSettings(ctx, opts.SourceDir, settingsPath); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return allFiles, nil
+}
+
+// installFromDirs walks convention-named directories under opts.SourceDir
+// (skills/, commands/, agents/, mcp/, hooks/, settings/) and installs
+// everything found. This is the legacy fallback when no manifest entries
+// are provided.
+func (c *ClaudeCode) installFromDirs(
+	ctx context.Context,
+	opts target.InstallOpts,
+	root string,
+) ([]target.InstalledFile, error) {
 	var allFiles []target.InstalledFile
 
 	for _, content := range []string{"skills", "commands", "agents"} {

@@ -119,6 +119,7 @@ func TestInstall(t *testing.T) {
 	tests := []struct {
 		name      string
 		setup     func(t *testing.T) (srcDir string, installDir string)
+		entries   []target.ContentEntry
 		homeFunc  func() (string, error)
 		mkdirFunc func(string, os.FileMode) error
 		wantErr   string
@@ -287,6 +288,29 @@ func TestInstall(t *testing.T) {
 			wantErr: `missing or invalid "name" field`,
 		},
 		{
+			name: "installs from entries when provided",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				writeFile(t, filepath.Join(src, "commands", "scan.md"), "# Scan")
+				return src, t.TempDir()
+			},
+			entries: []target.ContentEntry{
+				{Name: "k8s", Type: "skill", Root: "skills/k8s"},
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				// The k8s skill entry was listed — must be installed.
+				_, err := os.Stat(filepath.Join(dir, ".claude", "skills", "k8s", "SKILL.md"))
+				assert.NoError(t, err)
+
+				// The commands dir was NOT listed in entries — must be absent.
+				_, err = os.Stat(filepath.Join(dir, ".claude", "commands", "scan.md"))
+				assert.True(t, os.IsNotExist(err))
+			},
+		},
+		{
 			name: "returns error on mcp name conflict",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
@@ -326,6 +350,7 @@ func TestInstall(t *testing.T) {
 			}
 			files, err := cc.Install(ctx, target.InstallOpts{
 				Name: "test", SourceDir: srcDir, Dir: installDir,
+				Entries: tt.entries,
 			})
 			_ = files
 			if tt.wantErr != "" {
