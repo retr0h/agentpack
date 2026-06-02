@@ -56,9 +56,9 @@ func TestRunGlobal(t *testing.T) {
 				// adal agent: GlobalSkillsDir = ".adal/skills"
 				adalSkillDir := filepath.Join(home, ".adal", "skills", "my-skill")
 				require.NoError(t, os.MkdirAll(adalSkillDir, 0o755))
-				// gemini-cli agent: GlobalSkillsDir = ".gemini/skills"
-				geminiSkillDir := filepath.Join(home, ".gemini", "skills", "another-skill")
-				require.NoError(t, os.MkdirAll(geminiSkillDir, 0o755))
+				// roo agent: GlobalSkillsDir = ".roo/skills"
+				rooSkillDir := filepath.Join(home, ".roo", "skills", "another-skill")
+				require.NoError(t, os.MkdirAll(rooSkillDir, 0o755))
 			},
 			checkResult: func(t *testing.T, entries []list.GlobalEntry) {
 				t.Helper()
@@ -71,7 +71,7 @@ func TestRunGlobal(t *testing.T) {
 				assert.True(t, got[key{"adal", "my-skill"}])
 				assert.True(
 					t,
-					got[key{"gemini-cli", "another-skill"}],
+					got[key{"roo", "another-skill"}],
 				)
 			},
 		},

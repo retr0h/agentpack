@@ -51,8 +51,8 @@ func TestDefs(t *testing.T) {
 			checkName: "universal",
 		},
 		{
-			name:      "Defs contains gemini-cli",
-			checkName: "gemini-cli",
+			name:      "Defs contains goose",
+			checkName: "goose",
 		},
 	}
 
