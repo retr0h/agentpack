@@ -22,6 +22,7 @@ package roo_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/driver/roo"
 	"github.com/retr0h/agentpack/pkg/target"
@@ -38,6 +40,20 @@ func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+}
+
+func writeJSON(t *testing.T, path string, v any) {
+	t.Helper()
+	data, err := json.Marshal(v)
+	require.NoError(t, err)
+	writeFile(t, path, string(data))
+}
+
+func writeYAML(t *testing.T, path string, v any) {
+	t.Helper()
+	data, err := yaml.Marshal(v)
+	require.NoError(t, err)
+	writeFile(t, path, string(data))
 }
 
 func TestRoo_Name(t *testing.T) {
@@ -87,7 +103,7 @@ func TestRoo_SupportedTypes(t *testing.T) {
 		name string
 		want []string
 	}{
-		{name: "returns skill only", want: []string{"skill"}},
+		{name: "returns skill and config", want: []string{"skill", "config"}},
 	}
 
 	for _, tt := range tests {
@@ -325,6 +341,93 @@ func TestRoo_Install(t *testing.T) {
 			},
 			wantErr: "enumerate installed files",
 		},
+		{
+			name: "merges settings into .roomodes from dirs path",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "modes.json"), map[string]any{
+					"customModes": []any{map[string]any{"slug": "reviewer", "name": "Reviewer"}},
+				})
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".roomodes"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				assert.Contains(t, doc, "customModes")
+			},
+		},
+		{
+			name: "merges settings into .roomodes from entries path",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "modes.json"), map[string]any{
+					"customModes": []any{map[string]any{"slug": "writer", "name": "Writer"}},
+				})
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "modes", Type: "config", Root: filepath.Join(src, "settings")},
+				}
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".roomodes"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				assert.Contains(t, doc, "customModes")
+			},
+		},
+		{
+			name: "preserves existing keys in .roomodes when merging",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				dst := t.TempDir()
+				writeYAML(t, filepath.Join(dst, ".roomodes"), map[string]any{
+					"existingKey": "existingValue",
+				})
+				writeJSON(t, filepath.Join(src, "settings", "new.json"), map[string]any{
+					"newKey": "newValue",
+				})
+				return src, dst
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".roomodes"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				assert.Equal(t, "existingValue", doc["existingKey"])
+				assert.Equal(t, "newValue", doc["newKey"])
+			},
+		},
+		{
+			name: "config entry getwd error propagates",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "modes.json"), map[string]any{
+					"customModes": []any{},
+				})
+				return src, ""
+			},
+			cwdFunc: func() (string, error) {
+				return "", errors.New("getwd failed")
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "modes", Type: "config", Root: filepath.Join(src, "settings")},
+				}
+			},
+			wantErr: "getwd",
+		},
 	}
 
 	for _, tt := range tests {
@@ -364,6 +467,141 @@ func TestRoo_Install(t *testing.T) {
 				Entries:   entries,
 			})
 			_ = files
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, installDir)
+			}
+		})
+	}
+}
+
+func TestRoo_InstallConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir string, installDir string)
+		cwdFunc func() (string, error)
+		wantErr string
+		check   func(t *testing.T, installDir string)
+	}{
+		{
+			name: "creates .roomodes from settings json when absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "modes.json"), map[string]any{
+					"customModes": []any{map[string]any{"slug": "coder", "name": "Coder"}},
+				})
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".roomodes"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				assert.Contains(t, doc, "customModes")
+			},
+		},
+		{
+			name: "merges multiple json files into .roomodes",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(
+					t,
+					filepath.Join(src, "settings", "a.json"),
+					map[string]any{"keyA": "valA"},
+				)
+				writeJSON(
+					t,
+					filepath.Join(src, "settings", "b.json"),
+					map[string]any{"keyB": "valB"},
+				)
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".roomodes"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				assert.Equal(t, "valA", doc["keyA"])
+				assert.Equal(t, "valB", doc["keyB"])
+			},
+		},
+		{
+			name: "skips non-json files in settings dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "settings", "notes.txt"), "ignore me")
+				writeJSON(
+					t,
+					filepath.Join(src, "settings", "real.json"),
+					map[string]any{"key": "val"},
+				)
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".roomodes"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				assert.Equal(t, "val", doc["key"])
+			},
+		},
+		{
+			name: "no-op when settings dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				_, err := os.Stat(filepath.Join(dir, ".roomodes"))
+				assert.True(t, os.IsNotExist(err))
+			},
+		},
+		{
+			name: "invalid json returns parse error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "settings", "bad.json"), "{not json}")
+				return src, t.TempDir()
+			},
+			wantErr: "parse settings/bad.json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, installDir := tt.setup(t)
+			r := roo.New()
+
+			if tt.cwdFunc != nil {
+				roo.SetCwd(r, tt.cwdFunc)
+			}
+
+			ctx := context.Background()
+
+			_, err := r.Install(ctx, target.InstallOpts{
+				Name:      "test-plugin",
+				SourceDir: srcDir,
+				Dir:       installDir,
+			})
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

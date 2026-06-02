@@ -20,16 +20,19 @@
 
 // Package roo is the agentpack target driver for Roo Code.
 // It installs skills into .agents/skills/ (local) or ~/.roo/skills/
-// (global). Config support is deferred because Roo uses YAML .roomodes files.
+// (global), and merges config values into .roomodes YAML at the project root.
 package roo
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -58,7 +61,7 @@ func (r *Roo) DisplayName() string { return "Roo Code" }
 
 // SupportedTypes returns the content types this driver can install.
 func (r *Roo) SupportedTypes() []string {
-	return []string{"skill"}
+	return []string{"skill", "config"}
 }
 
 // Detect returns true if the Roo config directory exists.
@@ -104,13 +107,24 @@ func (r *Roo) installFromEntries(
 			return nil, err
 		}
 
-		if entry.Type == "skill" {
+		switch entry.Type {
+		case "skill":
 			written, err := r.installSkillEntry(ctx, opts, entry)
 			if err != nil {
 				return nil, err
 			}
 
 			allFiles = append(allFiles, written...)
+
+		case "config":
+			roomodesPath, err := r.roomodesPath(opts)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := r.installConfig(opts.SourceDir, roomodesPath); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -147,6 +161,15 @@ func (r *Roo) installFromDirs(
 	files, err := enumerateFiles(ctx, destDir, baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate installed files: %w", err)
+	}
+
+	roomodesPath, roomodesErr := r.roomodesPath(opts)
+	if roomodesErr != nil {
+		return nil, roomodesErr
+	}
+
+	if err := r.installConfig(opts.SourceDir, roomodesPath); err != nil {
+		return nil, err
 	}
 
 	return files, nil
@@ -200,6 +223,117 @@ func (r *Roo) resolveDirs(opts target.InstallOpts) (string, string, error) {
 	}
 
 	return dir, filepath.Join(dir, ".agents", "skills"), nil
+}
+
+// roomodesPath returns the path to .roomodes for the install root.
+func (r *Roo) roomodesPath(opts target.InstallOpts) (string, error) {
+	dir := opts.Dir
+	if dir == "" {
+		cwd, err := r.cwdFunc()
+		if err != nil {
+			return "", fmt.Errorf("getwd: %w", err)
+		}
+
+		dir = cwd
+	}
+
+	return filepath.Join(dir, ".roomodes"), nil
+}
+
+// installConfig reads all settings/*.json files from srcDir, parses them, and
+// merges each top-level key into the .roomodes YAML config at roomodesPath.
+// The config file is created when absent. Existing keys are preserved.
+func (r *Roo) installConfig(srcDir, roomodesPath string) error {
+	settingsDir := filepath.Join(srcDir, "settings")
+	if _, err := os.Stat(settingsDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(settingsDir)
+	if err != nil {
+		return fmt.Errorf("read settings dir: %w", err)
+	}
+
+	for _, de := range entries {
+		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(settingsDir, de.Name()))
+		if err != nil {
+			return fmt.Errorf("read settings/%s: %w", de.Name(), err)
+		}
+
+		var raw map[string]any
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return fmt.Errorf("parse settings/%s: %w", de.Name(), err)
+		}
+
+		if err := mergeRoomodes(roomodesPath, raw); err != nil {
+			return fmt.Errorf("merge settings/%s: %w", de.Name(), err)
+		}
+	}
+
+	return nil
+}
+
+// mergeRoomodes reads the .roomodes YAML at path, merges all top-level keys
+// from patch, and writes back. The file and parent directories are created when
+// absent. Existing keys outside patch are preserved.
+func mergeRoomodes(path string, patch map[string]any) error {
+	cfg, err := readYAMLConfig(path)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range patch {
+		cfg[k] = v
+	}
+
+	return writeYAMLConfig(path, cfg)
+}
+
+// readYAMLConfig reads and unmarshals the YAML file at path into a map.
+// When the file does not exist it returns an empty map.
+func readYAMLConfig(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]any{}, nil
+		}
+
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var doc map[string]any
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	if doc == nil {
+		doc = map[string]any{}
+	}
+
+	return doc, nil
+}
+
+// writeYAMLConfig marshals doc as YAML and writes it to path. Parent
+// directories are created as needed.
+func writeYAMLConfig(path string, doc map[string]any) error {
+	data, err := yaml.Marshal(doc)
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", path, err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
+	}
+
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+
+	return nil
 }
 
 // List returns nil; Roo does not store managed-plugin metadata.
