@@ -661,6 +661,22 @@ func TestExtractSkillsViaRunWithRegistry(t *testing.T) {
 			},
 			wantSkillNames: nil,
 		},
+		{
+			name: "settings directory is recognised as content type",
+			files: []registry.InstalledFile{
+				{Path: "settings/theme.json", Target: "claude-code", Dir: "/tmp"},
+			},
+			wantSkillNames: []string{"theme"},
+			wantTargets:    map[string][]string{"theme": {"claude-code"}},
+		},
+		{
+			name: "config directory is recognised as content type (ADR-009 rename)",
+			files: []registry.InstalledFile{
+				{Path: "config/theme.json", Target: "claude-code", Dir: "/tmp"},
+			},
+			wantSkillNames: []string{"theme"},
+			wantTargets:    map[string][]string{"theme": {"claude-code"}},
+		},
 	}
 
 	for _, tt := range tests {

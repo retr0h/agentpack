@@ -251,10 +251,17 @@ func collectTargets(m *registry.PackageManifest) []TargetInfo {
 	return infos
 }
 
-// extractContentItems scans file paths for the pattern */skills/{skill-name}/* and
+// extractContentItems infers content type and name from archive file paths by
+// scanning for a known content-type directory segment followed by an item name
+// segment. This path-based inference works because the archive layout (ADR-009)
+// preserves conventional directories — skills/, commands/, hooks/, agents/,
+// mcp/, settings/ — even as metadata becomes the authoritative type contract.
+// Both "settings" and "config" are recognised: "settings" is the legacy
+// directory name from ADR-001; "config" is the canonical type introduced in
+// ADR-009.
 var contentDirs = map[string]bool{
 	"skills": true, "commands": true, "agents": true,
-	"hooks": true, "mcp": true, "settings": true,
+	"hooks": true, "mcp": true, "settings": true, "config": true,
 }
 
 func extractContentItems(m *registry.PackageManifest) []ContentItem {
