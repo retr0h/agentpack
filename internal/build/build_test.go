@@ -88,6 +88,62 @@ func (v createErrorForPathVFS) Create(name string) (avfs.File, error) {
 	return v.VFS.Create(name)
 }
 
+// writeErrorSidecarFile wraps avfs.File so that Write fails, simulating a
+// disk-full condition when writing the sidecar file content.
+type writeErrorSidecarFile struct {
+	avfs.File
+}
+
+func (writeErrorSidecarFile) Write([]byte) (int, error) {
+	return 0, errors.New("simulated write error")
+}
+
+func (writeErrorSidecarFile) Close() error { return nil }
+
+// writeErrorSidecarVFS wraps a VFS and returns a writeErrorSidecarFile from
+// Create only when the path has the given suffix.
+type writeErrorSidecarVFS struct {
+	avfs.VFS
+	suffix string
+}
+
+func (v writeErrorSidecarVFS) Create(name string) (avfs.File, error) {
+	if strings.HasSuffix(name, v.suffix) {
+		f, err := v.VFS.Create(name)
+		if err != nil {
+			return nil, err
+		}
+		_ = f.Close()
+		return writeErrorSidecarFile{}, nil
+	}
+	return v.VFS.Create(name)
+}
+
+// closeErrorSidecarFile wraps avfs.File so that Write succeeds but Close fails.
+type closeErrorSidecarFile struct {
+	avfs.File
+}
+
+func (closeErrorSidecarFile) Close() error { return errors.New("simulated close error") }
+
+// closeErrorSidecarVFS returns a closeErrorSidecarFile from Create for paths
+// with the given suffix.
+type closeErrorSidecarVFS struct {
+	avfs.VFS
+	suffix string
+}
+
+func (v closeErrorSidecarVFS) Create(name string) (avfs.File, error) {
+	if strings.HasSuffix(name, v.suffix) {
+		f, err := v.VFS.Create(name)
+		if err != nil {
+			return nil, err
+		}
+		return closeErrorSidecarFile{File: f}, nil
+	}
+	return v.VFS.Create(name)
+}
+
 // statAlwaysErrorVFS returns an error from every Stat call.
 type statAlwaysErrorVFS struct {
 	avfs.VFS
@@ -367,6 +423,39 @@ version: "1.0.0"
 description: Plugin with skills
 skills:
   - skills/*.md
+`)
+				return dir, func() {}
+			},
+			opts: func(dir string) build.Options {
+				return build.Options{Dir: dir}
+			},
+			checkResult: func(t *testing.T, results []build.Result) {
+				t.Helper()
+				require.Len(t, results, 1)
+				assert.NotZero(t, results[0].FileCount)
+			},
+		},
+		{
+			name: "builds plugin with commands",
+			setup: func(t *testing.T) (string, func()) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+
+				cmdDir := filepath.Join(dir, "commands")
+				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(cmdDir, "scan.md"),
+					[]byte("# Scan"),
+					0o644,
+				))
+
+				writeManifest(t, dir, `
+name: cmd-plugin
+version: "1.0.0"
+description: Plugin with commands
+commands:
+  - commands/scan.md
 `)
 				return dir, func() {}
 			},
@@ -773,6 +862,38 @@ func TestBuildPlugin(t *testing.T) {
 				return vfs, dir, p, meta
 			},
 			wantErr: "creating sidecar",
+		},
+		{
+			name: "fails when sidecar Write returns error",
+			setup: func(t *testing.T) (avfs.VFS, string, manifest.Plugin, *metadata.Metadata) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+				vfs := writeErrorSidecarVFS{
+					VFS:    osfs.NewWithNoIdm(),
+					suffix: ".sha256",
+				}
+				p := manifest.Plugin{Name: "sidecar-write-err", Version: "1.0.0", Description: "desc"}
+				meta := &metadata.Metadata{}
+				return vfs, dir, p, meta
+			},
+			wantErr: "writing sidecar",
+		},
+		{
+			name: "fails when sidecar Close returns error",
+			setup: func(t *testing.T) (avfs.VFS, string, manifest.Plugin, *metadata.Metadata) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+				vfs := closeErrorSidecarVFS{
+					VFS:    osfs.NewWithNoIdm(),
+					suffix: ".sha256",
+				}
+				p := manifest.Plugin{Name: "sidecar-close-err", Version: "1.0.0", Description: "desc"}
+				meta := &metadata.Metadata{}
+				return vfs, dir, p, meta
+			},
+			wantErr: "closing sidecar",
 		},
 		{
 			name: "fails when buildMCPEntries returns error",
