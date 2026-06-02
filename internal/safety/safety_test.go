@@ -30,6 +30,85 @@ import (
 )
 
 // --------------------------------------------------------------------------
+// TestIsExecutable
+// --------------------------------------------------------------------------
+
+func TestIsExecutable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{
+			name: "sh extension returns true",
+			path: "hooks/lint.sh",
+			want: true,
+		},
+		{
+			name: "py extension returns true",
+			path: "scripts/agent.py",
+			want: true,
+		},
+		{
+			name: "js extension returns true",
+			path: "scripts/run.js",
+			want: true,
+		},
+		{
+			name: "ts extension returns true",
+			path: "scripts/run.ts",
+			want: true,
+		},
+		{
+			name: "rb extension returns true",
+			path: "scripts/run.rb",
+			want: true,
+		},
+		{
+			name: "pl extension returns true",
+			path: "scripts/run.pl",
+			want: true,
+		},
+		{
+			name: "lua extension returns true",
+			path: "scripts/run.lua",
+			want: true,
+		},
+		{
+			name: "md extension returns false",
+			path: "skills/review/SKILL.md",
+			want: false,
+		},
+		{
+			name: "no extension returns false",
+			path: "hooks/helper",
+			want: false,
+		},
+		{
+			name: "uppercase extension is case-insensitive",
+			path: "hooks/SCRIPT.SH",
+			want: true,
+		},
+		{
+			name: "yaml extension returns false",
+			path: "config.yaml",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := safety.IsExecutable(tt.path)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
 // TestClassifyFile
 // --------------------------------------------------------------------------
 
@@ -271,6 +350,20 @@ func TestClassify(t *testing.T) {
 				"helpers/mac-tool": {0xfe, 0xed, 0xfa, 0xce, 0x00},
 			},
 			wantErr: "binary file detected: helpers/mac-tool (Mach-O executable)",
+		},
+		{
+			name: "Mach-O 64-bit binary returns error",
+			files: map[string][]byte{
+				"helpers/mac-tool64": {0xfe, 0xed, 0xfa, 0xcf, 0x00},
+			},
+			wantErr: "binary file detected: helpers/mac-tool64 (Mach-O executable)",
+		},
+		{
+			name: "Mach-O fat binary returns error",
+			files: map[string][]byte{
+				"helpers/mac-fat": {0xca, 0xfe, 0xba, 0xbe, 0x00},
+			},
+			wantErr: "binary file detected: helpers/mac-fat (Mach-O fat binary)",
 		},
 		{
 			name:  "empty file map returns empty classification",
