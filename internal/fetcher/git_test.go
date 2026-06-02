@@ -749,6 +749,23 @@ func TestGitFetcher_FetchWithResult(t *testing.T) {
 			},
 			wantErr: "resolve branch nonexistent-branch",
 		},
+		{
+			name: "copy worktree to read-only dest returns error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				if os.Getuid() == 0 {
+					t.Skip("root bypasses permission checks")
+				}
+				bareDir := initBareRepo(t)
+				// Dest is a read-only directory so copyWorktree fails when
+				// trying to create subdirectories inside it.
+				dst := t.TempDir()
+				require.NoError(t, os.Chmod(dst, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(dst, 0o755) })
+				return bareDir, dst
+			},
+			wantErr: "copy worktree",
+		},
 	}
 
 	for _, tt := range tests {
