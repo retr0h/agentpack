@@ -22,6 +22,7 @@ package kiro_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -38,6 +39,13 @@ func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+}
+
+func writeJSON(t *testing.T, path string, v any) {
+	t.Helper()
+	data, err := json.Marshal(v)
+	require.NoError(t, err)
+	writeFile(t, path, string(data))
 }
 
 func TestKiro_Name(t *testing.T) {
@@ -87,7 +95,7 @@ func TestKiro_SupportedTypes(t *testing.T) {
 		name string
 		want []string
 	}{
-		{name: "returns skill only", want: []string{"skill"}},
+		{name: "returns skill mcp and hook", want: []string{"skill", "mcp", "hook"}},
 	}
 
 	for _, tt := range tests {
@@ -158,7 +166,7 @@ func TestKiro_Install(t *testing.T) {
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
 		wantErr        string
-		check          func(t *testing.T, installDir string)
+		check          func(t *testing.T, installDir string, homeDir string)
 	}{
 		{
 			name: "copies skills to correct directory",
@@ -168,7 +176,7 @@ func TestKiro_Install(t *testing.T) {
 				writeFile(t, filepath.Join(src, "skills", "review", "SKILL.md"), "# Review")
 				return src, t.TempDir()
 			},
-			check: func(t *testing.T, dir string) {
+			check: func(t *testing.T, dir string, _ string) {
 				t.Helper()
 				p := filepath.Join(dir, ".agents", "skills", "test-plugin", "review", "SKILL.md")
 				_, err := os.Stat(p)
@@ -184,10 +192,134 @@ func TestKiro_Install(t *testing.T) {
 				return src, ""
 			},
 			global: true,
-			homeFunc: func() (string, error) {
-				return t.TempDir(), nil
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			check: func(t *testing.T, _ string, home string) {
+				t.Helper()
+				p := filepath.Join(
+					home,
+					".kiro",
+					"skills",
+					"test-plugin",
+					"my-skill.md",
+				)
+				_, err := os.Stat(p)
+				assert.NoError(t, err)
 			},
-			check: func(_ *testing.T, _ string) {},
+		},
+		{
+			name: "merges MCP config into .kiro/mcp.json",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "my-api.json"), map[string]any{
+					"name": "my-api",
+					"type": "remote",
+					"url":  "https://mcp.example.com/v1",
+				})
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string, _ string) {
+				t.Helper()
+				data, err := os.ReadFile(
+					filepath.Join(dir, ".kiro", "mcp.json"),
+				)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				servers, ok := doc["mcpServers"].(map[string]any)
+				require.True(t, ok)
+				srv, ok := servers["my-api"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "remote", srv["type"])
+			},
+		},
+		{
+			name: "merges hooks into .kiro/hooks.json locally",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"on_save": []any{
+						map[string]any{
+							"command":    "echo saved",
+							"showOutput": true,
+						},
+					},
+				})
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string, _ string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".kiro", "hooks.json"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				hooks, ok := doc["hooks"].(map[string]any)
+				require.True(t, ok)
+				entries, ok := hooks["on_save"].([]any)
+				require.True(t, ok)
+				require.Len(t, entries, 1)
+				entry, ok := entries[0].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "echo saved", entry["command"])
+			},
+		},
+		{
+			name: "installs from entries with skill + mcp + hook",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				writeJSON(t, filepath.Join(src, "mcp", "srv.json"), map[string]any{
+					"name": "srv",
+					"type": "stdio",
+				})
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"on_open": []any{
+						map[string]any{
+							"command":    "echo opened",
+							"showOutput": false,
+						},
+					},
+				})
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+					{Name: "srv", Type: "mcp", Root: filepath.Join(src, "mcp")},
+					{Name: "hooks", Type: "hook", Root: filepath.Join(src, "hooks")},
+				}
+			},
+			check: func(t *testing.T, dir string, _ string) {
+				t.Helper()
+				// Skill must be installed to .agents/skills/k8s/.
+				_, err := os.Stat(filepath.Join(dir, ".agents", "skills", "k8s", "SKILL.md"))
+				assert.NoError(t, err)
+				// MCP must be merged into .kiro/mcp.json.
+				data, readErr := os.ReadFile(
+					filepath.Join(dir, ".kiro", "mcp.json"),
+				)
+				require.NoError(t, readErr)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				servers, ok := doc["mcpServers"].(map[string]any)
+				require.True(t, ok)
+				_, ok = servers["srv"]
+				assert.True(t, ok)
+				// Hooks must be merged into .kiro/hooks.json.
+				hooksData, hooksErr := os.ReadFile(filepath.Join(dir, ".kiro", "hooks.json"))
+				require.NoError(t, hooksErr)
+				var hooksDoc map[string]any
+				require.NoError(t, json.Unmarshal(hooksData, &hooksDoc))
+				hooks, ok := hooksDoc["hooks"].(map[string]any)
+				require.True(t, ok)
+				_, ok = hooks["on_open"]
+				assert.True(t, ok)
+			},
 		},
 		{
 			name: "installs from entries when provided",
@@ -202,7 +334,7 @@ func TestKiro_Install(t *testing.T) {
 					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
 				}
 			},
-			check: func(t *testing.T, dir string) {
+			check: func(t *testing.T, dir string, _ string) {
 				t.Helper()
 				_, err := os.Stat(filepath.Join(dir, ".agents", "skills", "k8s", "SKILL.md"))
 				assert.NoError(t, err)
@@ -250,6 +382,41 @@ func TestKiro_Install(t *testing.T) {
 			wantErr: "mkdir skills dir",
 		},
 		{
+			name: "returns error when mcp json has no name field",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "bad.json"), map[string]any{
+					"type": "remote",
+				})
+				return src, t.TempDir()
+			},
+			wantErr: `missing or invalid "name" field`,
+		},
+		{
+			name: "returns error on mcp name conflict",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "dup.json"), map[string]any{
+					"name": "dup-srv",
+					"type": "stdio",
+				})
+				installDir := t.TempDir()
+				writeJSON(
+					t,
+					filepath.Join(installDir, ".kiro", "mcp.json"),
+					map[string]any{
+						"mcpServers": map[string]any{
+							"dup-srv": map[string]any{"type": "stdio"},
+						},
+					},
+				)
+				return src, installDir
+			},
+			wantErr: "already exists",
+		},
+		{
 			name: "cwdFunc error propagates for local install",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
@@ -257,6 +424,74 @@ func TestKiro_Install(t *testing.T) {
 			},
 			cwdFunc: func() (string, error) {
 				return "", errors.New("getwd failed")
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "mcpConfigPath cwdFunc error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, ""
+			},
+			cwdFunc: func() func() (string, error) {
+				calls := 0
+				return func() (string, error) {
+					calls++
+					if calls == 1 {
+						return t.TempDir(), nil
+					}
+					return "", errors.New("getwd second call failed")
+				}
+			}(),
+			wantErr: "getwd",
+		},
+		{
+			name: "hooksPath cwdFunc error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, ""
+			},
+			cwdFunc: func() func() (string, error) {
+				calls := 0
+				return func() (string, error) {
+					calls++
+					if calls <= 2 {
+						return t.TempDir(), nil
+					}
+					return "", errors.New("getwd third call failed")
+				}
+			}(),
+			wantErr: "getwd",
+		},
+		{
+			name: "mcpConfigPath error propagates in installFromEntries mcp case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			cwdFunc: func() (string, error) {
+				return "", errors.New("getwd for mcp entry")
+			},
+			entries: []target.ContentEntry{
+				{Name: "srv", Type: "mcp"},
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "hooksPath error propagates in installFromEntries hook case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			cwdFunc: func() (string, error) {
+				return "", errors.New("getwd for hooks entry")
+			},
+			entries: []target.ContentEntry{
+				{Name: "hooks", Type: "hook"},
 			},
 			wantErr: "getwd",
 		},
@@ -325,6 +560,69 @@ func TestKiro_Install(t *testing.T) {
 			},
 			wantErr: "enumerate installed files",
 		},
+		{
+			name: "installMCP error propagates in installFromEntries mcp case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "dup-e.json"), map[string]any{
+					"name": "dup-e",
+					"type": "stdio",
+				})
+				installDir := t.TempDir()
+				writeJSON(
+					t,
+					filepath.Join(installDir, ".kiro", "mcp.json"),
+					map[string]any{
+						"mcpServers": map[string]any{
+							"dup-e": map[string]any{"type": "stdio"},
+						},
+					},
+				)
+				return src, installDir
+			},
+			entries: []target.ContentEntry{
+				{Name: "dup-e", Type: "mcp"},
+			},
+			wantErr: "already exists",
+		},
+		{
+			name: "installHooks error propagates in installFromEntries hook case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"on_save": []any{map[string]any{"command": "echo lint", "showOutput": true}},
+				})
+				installDir := t.TempDir()
+				hooksFile := filepath.Join(installDir, ".kiro", "hooks.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(hooksFile), 0o755))
+				require.NoError(t, os.WriteFile(hooksFile, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksFile, 0o644) })
+				return src, installDir
+			},
+			entries: []target.ContentEntry{
+				{Name: "hooks", Type: "hook"},
+			},
+			wantErr: "merge hooks",
+		},
+		{
+			name: "installHooks error propagates in installFromDirs when hooksPath unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"on_save": []any{map[string]any{"command": "echo lint", "showOutput": true}},
+				})
+				installDir := t.TempDir()
+				hooksFile := filepath.Join(installDir, ".kiro", "hooks.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(hooksFile), 0o755))
+				require.NoError(t, os.WriteFile(hooksFile, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksFile, 0o644) })
+				return src, installDir
+			},
+			wantErr: "merge hooks",
+		},
 	}
 
 	for _, tt := range tests {
@@ -334,8 +632,14 @@ func TestKiro_Install(t *testing.T) {
 			srcDir, installDir := tt.setup(t)
 			k := kiro.New()
 
+			// Track the home directory for check functions.
+			var homeDir string
 			if tt.homeFunc != nil {
-				kiro.SetUserHome(k, tt.homeFunc)
+				kiro.SetUserHome(k, func() (string, error) {
+					h, err := tt.homeFunc()
+					homeDir = h
+					return h, err
+				})
 			}
 			if tt.cwdFunc != nil {
 				kiro.SetCwd(k, tt.cwdFunc)
@@ -373,7 +677,7 @@ func TestKiro_Install(t *testing.T) {
 			require.NoError(t, err)
 
 			if tt.check != nil {
-				tt.check(t, installDir)
+				tt.check(t, installDir, homeDir)
 			}
 		})
 	}
@@ -398,6 +702,179 @@ func TestKiro_List(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Len(t, got, tt.wantLen)
+		})
+	}
+}
+
+func TestKiro_InstallMCP(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, mcpPath string)
+		wantErr string
+	}{
+		{
+			name: "no-op when mcp dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), filepath.Join(t.TempDir(), "mcp.json")
+			},
+		},
+		{
+			name: "returns error when mcp dir is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				d := filepath.Join(src, "mcp")
+				require.NoError(t, os.MkdirAll(d, 0o755))
+				require.NoError(t, os.Chmod(d, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(d, 0o755) })
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "read mcp dir",
+		},
+		{
+			name: "returns error when mcp json file is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "mcp", "srv.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{"name":"srv"}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "read mcp/",
+		},
+		{
+			name: "returns error when mcp json contains invalid JSON",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "mcp", "srv.json"), `{invalid`)
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "parse mcp/",
+		},
+		{
+			name: "skips directories and non-json entries in mcp dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "mcp", "subdir"), 0o755))
+				writeFile(t, filepath.Join(src, "mcp", "readme.txt"), "skip me")
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, mcpPath := tt.setup(t)
+			k := kiro.New()
+			err := kiro.InstallMCP(context.Background(), k, srcDir, mcpPath)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestKiro_InstallHooks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, hooksPath string)
+		wantErr string
+	}{
+		{
+			name: "no-op when hooks dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), filepath.Join(t.TempDir(), "hooks.json")
+			},
+		},
+		{
+			name: "returns error when hooks.json is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "hooks", "hooks.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, filepath.Join(t.TempDir(), "hooks.json")
+			},
+			wantErr: "read hooks/hooks.json",
+		},
+		{
+			name: "returns error when hooks.json contains invalid JSON",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "hooks", "hooks.json"), `{invalid`)
+				return src, filepath.Join(t.TempDir(), "hooks.json")
+			},
+			wantErr: "parse hooks/hooks.json",
+		},
+		{
+			name: "merges hooks into target file",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"on_save": []any{
+						map[string]any{
+							"command":    "echo lint",
+							"showOutput": true,
+						},
+					},
+				})
+				return src, filepath.Join(t.TempDir(), "hooks.json")
+			},
+		},
+		{
+			name: "returns error when existing hooksPath is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"on_save": []any{
+						map[string]any{"command": "echo lint", "showOutput": true},
+					},
+				})
+				destDir := t.TempDir()
+				hooksPath := filepath.Join(destDir, "hooks.json")
+				require.NoError(t, os.WriteFile(hooksPath, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksPath, 0o644) })
+				return src, hooksPath
+			},
+			wantErr: "merge hooks",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, hooksPath := tt.setup(t)
+			k := kiro.New()
+			err := kiro.InstallHooks(context.Background(), k, srcDir, hooksPath, "test-plugin")
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
 		})
 	}
 }

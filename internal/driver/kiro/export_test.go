@@ -20,7 +20,10 @@
 
 package kiro
 
-import "os"
+import (
+	"context"
+	"os"
+)
 
 // SetUserHome replaces userHomeFunc for testing.
 func SetUserHome(k *Kiro, fn func() (string, error)) {
@@ -35,4 +38,18 @@ func SetCwd(k *Kiro, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(k *Kiro, fn func(string, os.FileMode) error) {
 	k.mkdirAllFunc = fn
+}
+
+// InstallMCP exposes installMCP for testing.
+func InstallMCP(ctx context.Context, k *Kiro, srcDir, mcpPath string) error {
+	return k.installMCP(ctx, srcDir, mcpPath)
+}
+
+// InstallHooks exposes installHooks for testing.
+func InstallHooks(
+	ctx context.Context,
+	k *Kiro,
+	srcDir, hooksPath, pluginName string,
+) error {
+	return k.installHooks(ctx, srcDir, hooksPath, pluginName)
 }

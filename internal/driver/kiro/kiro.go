@@ -20,17 +20,20 @@
 
 // Package kiro is the agentpack target driver for Kiro CLI.
 // It installs skills into .agents/skills/ (local) or ~/.kiro/skills/
-// (global). MCP support is deferred until the merge target path is verified.
+// (global), merges MCP server configs into .kiro/mcp.json (project-level),
+// and merges hooks into .kiro/hooks.json (project-level).
 package kiro
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
@@ -58,7 +61,7 @@ func (k *Kiro) DisplayName() string { return "Kiro CLI" }
 
 // SupportedTypes returns the content types this driver can install.
 func (k *Kiro) SupportedTypes() []string {
-	return []string{"skill"}
+	return []string{"skill", "mcp", "hook"}
 }
 
 // Detect returns true if the Kiro config directory exists.
@@ -75,8 +78,8 @@ func (k *Kiro) Detect() bool {
 
 // Install copies content from opts.SourceDir into the correct locations for
 // Kiro. When opts.Entries is non-empty the driver installs only the listed
-// skill entries; otherwise it falls back to the legacy directory-walking
-// behaviour. Returns the list of files written.
+// entries; otherwise it falls back to the legacy directory-walking behaviour
+// (skills, MCP, and hooks). Returns the list of files written.
 func (k *Kiro) Install(
 	ctx context.Context,
 	opts target.InstallOpts,
@@ -104,13 +107,34 @@ func (k *Kiro) installFromEntries(
 			return nil, err
 		}
 
-		if entry.Type == "skill" {
+		switch entry.Type {
+		case "skill":
 			written, err := k.installSkillEntry(ctx, opts, entry)
 			if err != nil {
 				return nil, err
 			}
 
 			allFiles = append(allFiles, written...)
+
+		case "mcp":
+			mcpPath, err := k.mcpConfigPath(opts)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := k.installMCP(ctx, opts.SourceDir, mcpPath); err != nil {
+				return nil, err
+			}
+
+		case "hook":
+			hooksPath, err := k.hooksPath(opts)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := k.installHooks(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -119,7 +143,7 @@ func (k *Kiro) installFromEntries(
 
 // installFromDirs walks convention-named directories under opts.SourceDir
 // and installs everything found. This is the legacy fallback when no manifest
-// entries are provided.
+// entries are provided. Skills, MCP, and hooks are handled.
 func (k *Kiro) installFromDirs(
 	ctx context.Context,
 	opts target.InstallOpts,
@@ -147,6 +171,24 @@ func (k *Kiro) installFromDirs(
 	files, err := enumerateFiles(ctx, destDir, baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate installed files: %w", err)
+	}
+
+	mcpPath, mcpErr := k.mcpConfigPath(opts)
+	if mcpErr != nil {
+		return nil, mcpErr
+	}
+
+	if err := k.installMCP(ctx, opts.SourceDir, mcpPath); err != nil {
+		return nil, err
+	}
+
+	hooksPath, hooksErr := k.hooksPath(opts)
+	if hooksErr != nil {
+		return nil, hooksErr
+	}
+
+	if err := k.installHooks(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+		return nil, err
 	}
 
 	return files, nil
@@ -200,6 +242,125 @@ func (k *Kiro) resolveDirs(opts target.InstallOpts) (string, string, error) {
 	}
 
 	return dir, filepath.Join(dir, ".agents", "skills"), nil
+}
+
+// mcpConfigPath returns the project-level MCP config path. Kiro MCP config
+// lives at .kiro/mcp.json within the project directory.
+func (k *Kiro) mcpConfigPath(opts target.InstallOpts) (string, error) {
+	if opts.Global {
+		home, err := k.userHomeFunc()
+		if err != nil {
+			return "", fmt.Errorf("home dir: %w", err)
+		}
+
+		return filepath.Join(home, ".kiro", "mcp.json"), nil
+	}
+
+	dir := opts.Dir
+	if dir == "" {
+		cwd, err := k.cwdFunc()
+		if err != nil {
+			return "", fmt.Errorf("getwd: %w", err)
+		}
+
+		dir = cwd
+	}
+
+	return filepath.Join(dir, ".kiro", "mcp.json"), nil
+}
+
+// hooksPath returns the hooks.json path for the install scope. Project
+// installs use .kiro/hooks.json; global installs use ~/.kiro/hooks.json.
+func (k *Kiro) hooksPath(opts target.InstallOpts) (string, error) {
+	if opts.Global {
+		home, err := k.userHomeFunc()
+		if err != nil {
+			return "", fmt.Errorf("home dir: %w", err)
+		}
+
+		return filepath.Join(home, ".kiro", "hooks.json"), nil
+	}
+
+	dir := opts.Dir
+	if dir == "" {
+		cwd, err := k.cwdFunc()
+		if err != nil {
+			return "", fmt.Errorf("getwd: %w", err)
+		}
+
+		dir = cwd
+	}
+
+	return filepath.Join(dir, ".kiro", "hooks.json"), nil
+}
+
+// installMCP merges all mcp/*.json files from srcDir into mcpPath.
+func (k *Kiro) installMCP(_ context.Context, srcDir, mcpPath string) error {
+	mcpDir := filepath.Join(srcDir, "mcp")
+	if _, err := os.Stat(mcpDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(mcpDir)
+	if err != nil {
+		return fmt.Errorf("read mcp dir: %w", err)
+	}
+
+	for _, de := range entries {
+		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(mcpDir, de.Name()))
+		if err != nil {
+			return fmt.Errorf("read mcp/%s: %w", de.Name(), err)
+		}
+
+		var raw map[string]any
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return fmt.Errorf("parse mcp/%s: %w", de.Name(), err)
+		}
+
+		name, ok := raw["name"].(string)
+		if !ok || name == "" {
+			return fmt.Errorf("mcp/%s: missing or invalid \"name\" field", de.Name())
+		}
+
+		delete(raw, "name")
+
+		if err := configmerge.MergeMCP(mcpPath, name, raw); err != nil {
+			return fmt.Errorf("merge mcp %q: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+// installHooks merges hooks/hooks.json from srcDir into hooksPath.
+func (k *Kiro) installHooks(
+	_ context.Context,
+	srcDir, hooksPath, pluginName string,
+) error {
+	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
+	if _, err := os.Stat(hooksFile); os.IsNotExist(err) {
+		return nil
+	}
+
+	data, err := os.ReadFile(hooksFile)
+	if err != nil {
+		return fmt.Errorf("read hooks/hooks.json: %w", err)
+	}
+
+	var hooks map[string]any
+	if err := json.Unmarshal(data, &hooks); err != nil {
+		return fmt.Errorf("parse hooks/hooks.json: %w", err)
+	}
+
+	if err := configmerge.MergeHooks(hooksPath, pluginName, hooks); err != nil {
+		return fmt.Errorf("merge hooks: %w", err)
+	}
+
+	return nil
 }
 
 // List returns nil; Kiro does not store managed-plugin metadata.
