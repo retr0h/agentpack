@@ -46,10 +46,6 @@ func TestDefs(t *testing.T) {
 			checkName: "",
 		},
 		{
-			name:      "Defs contains cursor",
-			checkName: "cursor",
-		},
-		{
 			name:      "Defs contains universal",
 			checkName: "universal",
 		},

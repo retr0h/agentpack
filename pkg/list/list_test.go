@@ -53,9 +53,9 @@ func TestRunGlobal(t *testing.T) {
 			name: "returns skill entries for agents whose GlobalSkillsDir contains subdirectories",
 			setup: func(t *testing.T, home string) {
 				t.Helper()
-				// cursor agent: GlobalSkillsDir = ".cursor/skills"
-				cursorSkillDir := filepath.Join(home, ".cursor", "skills", "my-skill")
-				require.NoError(t, os.MkdirAll(cursorSkillDir, 0o755))
+				// adal agent: GlobalSkillsDir = ".adal/skills"
+				adalSkillDir := filepath.Join(home, ".adal", "skills", "my-skill")
+				require.NoError(t, os.MkdirAll(adalSkillDir, 0o755))
 				// gemini-cli agent: GlobalSkillsDir = ".gemini/skills"
 				geminiSkillDir := filepath.Join(home, ".gemini", "skills", "another-skill")
 				require.NoError(t, os.MkdirAll(geminiSkillDir, 0o755))
@@ -68,11 +68,10 @@ func TestRunGlobal(t *testing.T) {
 				for _, e := range entries {
 					got[key{e.Agent, e.Skill}] = true
 				}
-				assert.True(t, got[key{"cursor", "my-skill"}], "expected cursor/my-skill entry")
+				assert.True(t, got[key{"adal", "my-skill"}])
 				assert.True(
 					t,
 					got[key{"gemini-cli", "another-skill"}],
-					"expected gemini-cli/another-skill entry",
 				)
 			},
 		},
@@ -80,7 +79,7 @@ func TestRunGlobal(t *testing.T) {
 			name: "files inside a GlobalSkillsDir are not returned, only directories",
 			setup: func(t *testing.T, home string) {
 				t.Helper()
-				skillsDir := filepath.Join(home, ".cursor", "skills")
+				skillsDir := filepath.Join(home, ".adal", "skills")
 				require.NoError(t, os.MkdirAll(skillsDir, 0o755))
 				// Write a plain file that should be ignored.
 				require.NoError(t, os.WriteFile(
@@ -94,12 +93,11 @@ func TestRunGlobal(t *testing.T) {
 			checkResult: func(t *testing.T, entries []list.GlobalEntry) {
 				t.Helper()
 				for _, e := range entries {
-					if e.Agent == "cursor" {
+					if e.Agent == "adal" {
 						assert.Equal(
 							t,
 							"real-skill",
 							e.Skill,
-							"only directories should be returned as skills",
 						)
 					}
 				}

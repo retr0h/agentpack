@@ -130,7 +130,6 @@ var registry = []AgentDef{
 		DetectConfig:    "crush",
 		GlobalSkillsDir: ".config/crush/skills",
 	},
-	{Name: "cursor", Display: "Cursor", DetectHome: ".cursor", GlobalSkillsDir: ".cursor/skills"},
 	{
 		Name:            "deepagents",
 		Display:         "Deep Agents",
