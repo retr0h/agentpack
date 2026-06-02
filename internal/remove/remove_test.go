@@ -571,15 +571,22 @@ func TestRunWithDefaultRegistry(t *testing.T) {
 	}
 }
 
-// TestRunDefaultRegistryRemove covers defaultRegistry.Remove by performing
-// a full successful remove using the real registry (with redirected home).
+// TestRunDefaultRegistryRemove covers defaultRegistry.Remove and
+// defaultRegistry.Save by performing full and partial removes using the real
+// registry (with redirected home).
 func TestRunDefaultRegistryRemove(t *testing.T) {
 	tests := []struct {
 		name       string
+		skill      string
 		wantRemLen int
 	}{
 		{
-			name:       "defaultRegistry.Remove is called on successful run",
+			name:       "defaultRegistry.Remove is called on successful full run",
+			wantRemLen: 0,
+		},
+		{
+			name:       "defaultRegistry.Save is called on partial skill removal",
+			skill:      "nonexistent-skill",
 			wantRemLen: 0,
 		},
 	}
@@ -601,6 +608,7 @@ func TestRunDefaultRegistryRemove(t *testing.T) {
 			r := remove.New()
 			result, err := r.Run(context.Background(), remove.Options{
 				Name:     "real-pkg",
+				Skill:    tt.skill,
 				Registry: nil,
 			})
 
