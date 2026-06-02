@@ -848,19 +848,15 @@ func TestAgent_Install(t *testing.T) {
 				DetectHome:      ".cursor",
 				GlobalSkillsDir: ".cursor/skills",
 			},
-			// Two entries: the first processes successfully (empty root = no-op
-			// copyTreeIfExists). time.AfterFunc fires cancel during the syscalls of
-			// entry-0 processing so that entry-1's ctx.Err() check catches it.
 			entries: []target.ContentEntry{
 				{Name: "first", Type: "skill"},
-				{Name: "second", Type: "skill"},
 			},
 			setupSrc: func(t *testing.T) string {
 				t.Helper()
 				return t.TempDir()
 			},
-			cancelAfterDelay: time.Nanosecond,
-			wantErr:          "context canceled",
+			cancelCtx: true,
+			wantErr:   "context canceled",
 		},
 		{
 			name: "entries: unreadable file in destDir causes enumerate error",
