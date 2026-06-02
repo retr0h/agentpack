@@ -18,33 +18,33 @@ not yet implemented, `-` = not supported or not verified
 | Cline       | driver | -        | driver | -      | driver | -      | `internal/driver/cline/`       |
 | Gemini CLI  | driver | -        | -      | -      | driver | -      | `internal/driver/gemini/`      |
 | Devin       | driver | -        | driver | -      | driver | -      | `internal/driver/devin/`       |
-| Goose       | driver | -        | -      | -      | -      | -      | `internal/driver/goose/`       |
+| Goose       | driver | -        | -      | -      | driver | -      | `internal/driver/goose/`       |
 | Continue    | driver | -        | -      | -      | driver | -      | `internal/driver/continuedev/` |
-| Kiro        | driver | -        | -      | -      | -      | -      | `internal/driver/kiro/`        |
+| Kiro        | driver | -        | driver | -      | driver | -      | `internal/driver/kiro/`        |
 | Amp         | driver | -        | -      | -      | driver | -      | `internal/driver/amp/`         |
-| Roo         | driver | -        | -      | -      | -      | -      | `internal/driver/roo/`         |
+| Roo         | driver | -        | -      | -      | -      | driver | `internal/driver/roo/`         |
 
 ## Tier 2 — Verified Features, Driver Not Yet Built
 
 These agents have documented file-based features beyond skills but don't have
 dedicated drivers yet. They currently use the generic driver (skills only).
 
-| Agent       | Hooks   | MCP     | Agents  | Commands | Format    | Verified against     |
-| ----------- | ------- | ------- | ------- | -------- | --------- | -------------------- |
-| Cortex      | planned | planned | -       | -        | JSON      | Snowflake docs       |
-| Crush       | planned | -       | -       | -        | JSON      | open source          |
-| Droid       | planned | -       | -       | -        | JSON      | open source          |
-| Firebender  | -       | planned | planned | -        | JSON+MD   | docs                 |
-| ForgeCode   | -       | -       | planned | planned  | MD+YAML   | open source          |
-| Hermes      | planned | -       | -       | -        | YAML      | open source          |
-| Junie       | -       | planned | -       | -        | JSON      | JetBrains docs       |
-| Kimi CLI    | -       | planned | -       | -        | JSON      | open source          |
-| OpenCode    | -       | -       | planned | -        | MD+YAML   | open source          |
-| OpenHands   | planned | planned | planned | planned  | JSON+MD   | open source          |
-| RovoDev     | -       | planned | planned | -        | JSON+MD   | Atlassian docs       |
-| Warp        | -       | planned | -       | -        | JSON      | Warp docs            |
-| CodeBuddy   | -       | -       | planned | -        | MD+YAML   | Tencent docs         |
-| Antigravity | planned | planned | -       | -        | JSON      | Google docs          |
+| Agent       | Hooks   | MCP     | Agents  | Commands | Format  | Verified against |
+| ----------- | ------- | ------- | ------- | -------- | ------- | ---------------- |
+| Cortex      | planned | planned | -       | -        | JSON    | Snowflake docs   |
+| Crush       | planned | -       | -       | -        | JSON    | open source      |
+| Droid       | planned | -       | -       | -        | JSON    | open source      |
+| Firebender  | -       | planned | planned | -        | JSON+MD | docs             |
+| ForgeCode   | -       | -       | planned | planned  | MD+YAML | open source      |
+| Hermes      | planned | -       | -       | -        | YAML    | open source      |
+| Junie       | -       | planned | -       | -        | JSON    | JetBrains docs   |
+| Kimi CLI    | -       | planned | -       | -        | JSON    | open source      |
+| OpenCode    | -       | -       | planned | -        | MD+YAML | open source      |
+| OpenHands   | planned | planned | planned | planned  | JSON+MD | open source      |
+| RovoDev     | -       | planned | planned | -        | JSON+MD | Atlassian docs   |
+| Warp        | -       | planned | -       | -        | JSON    | Warp docs        |
+| CodeBuddy   | -       | -       | planned | -        | MD+YAML | Tencent docs     |
+| Antigravity | planned | planned | -       | -        | JSON    | Google docs      |
 
 ## Tier 3 — Generic Driver (Skills Only)
 
