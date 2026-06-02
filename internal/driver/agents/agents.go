@@ -55,12 +55,6 @@ var registry = []AgentDef{
 		GlobalSkillsDir: ".aider-desk/skills",
 	},
 	{
-		Name:            "antigravity",
-		Display:         "Antigravity",
-		DetectHome:      ".gemini/antigravity",
-		GlobalSkillsDir: ".gemini/antigravity/skills",
-	},
-	{
 		Name:            "augment",
 		Display:         "Augment",
 		DetectHome:      ".augment",
@@ -72,12 +66,6 @@ var registry = []AgentDef{
 		Display:         "CodeArts Agent",
 		DetectHome:      ".codeartsdoer",
 		GlobalSkillsDir: ".codeartsdoer/skills",
-	},
-	{
-		Name:            "codebuddy",
-		Display:         "CodeBuddy",
-		DetectHome:      ".codebuddy",
-		GlobalSkillsDir: ".codebuddy/skills",
 	},
 	{
 		Name:            "codemaker",
@@ -98,31 +86,12 @@ var registry = []AgentDef{
 		GlobalSkillsDir: ".commandcode/skills",
 	},
 	{
-		Name:            "cortex",
-		Display:         "Cortex Code",
-		DetectHome:      ".snowflake/cortex",
-		GlobalSkillsDir: ".snowflake/cortex/skills",
-	},
-	{
-		Name:            "crush",
-		Display:         "Crush",
-		DetectConfig:    "crush",
-		GlobalSkillsDir: ".config/crush/skills",
-	},
-	{
 		Name:            "deepagents",
 		Display:         "Deep Agents",
 		DetectHome:      ".deepagents",
 		GlobalSkillsDir: ".deepagents/agent/skills",
 	},
 	{Name: "dexto", Display: "Dexto", DetectHome: ".dexto", GlobalSkillsDir: ".dexto/skills"},
-	{Name: "droid", Display: "Droid", DetectHome: ".factory", GlobalSkillsDir: ".factory/skills"},
-	{
-		Name:            "firebender",
-		Display:         "Firebender",
-		DetectHome:      ".firebender",
-		GlobalSkillsDir: ".firebender/skills",
-	},
 	{
 		Name:            "iflow-cli",
 		Display:         "iFlow CLI",
@@ -157,12 +126,6 @@ var registry = []AgentDef{
 		DetectHome:      ".openclaw",
 		GlobalSkillsDir: ".openclaw/skills",
 	},
-	{
-		Name:            "opencode",
-		Display:         "OpenCode",
-		DetectConfig:    "opencode",
-		GlobalSkillsDir: ".config/opencode/skills",
-	},
 	{Name: "pi", Display: "Pi", DetectHome: ".pi/agent", GlobalSkillsDir: ".pi/agent/skills"},
 	{Name: "pochi", Display: "Pochi", DetectHome: ".pochi", GlobalSkillsDir: ".pochi/skills"},
 	{Name: "qoder", Display: "Qoder", DetectHome: ".qoder", GlobalSkillsDir: ".qoder/skills"},
@@ -172,12 +135,6 @@ var registry = []AgentDef{
 		Display:         "Replit",
 		DetectHome:      ".replit",
 		GlobalSkillsDir: ".config/agents/skills",
-	},
-	{
-		Name:            "rovodev",
-		Display:         "Rovo Dev",
-		DetectHome:      ".rovodev",
-		GlobalSkillsDir: ".rovodev/skills",
 	},
 	{
 		Name:            "tabnine-cli",

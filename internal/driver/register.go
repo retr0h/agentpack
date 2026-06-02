@@ -6,13 +6,19 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/agents"
 	"github.com/retr0h/agentpack/internal/driver/amp"
+	"github.com/retr0h/agentpack/internal/driver/antigravity"
 	"github.com/retr0h/agentpack/internal/driver/claudecode"
 	"github.com/retr0h/agentpack/internal/driver/cline"
+	"github.com/retr0h/agentpack/internal/driver/codebuddy"
 	"github.com/retr0h/agentpack/internal/driver/codex"
 	"github.com/retr0h/agentpack/internal/driver/continuedev"
 	"github.com/retr0h/agentpack/internal/driver/copilot"
+	"github.com/retr0h/agentpack/internal/driver/cortex"
+	"github.com/retr0h/agentpack/internal/driver/crush"
 	"github.com/retr0h/agentpack/internal/driver/cursor"
 	"github.com/retr0h/agentpack/internal/driver/devin"
+	"github.com/retr0h/agentpack/internal/driver/droid"
+	"github.com/retr0h/agentpack/internal/driver/firebender"
 	"github.com/retr0h/agentpack/internal/driver/forgecode"
 	"github.com/retr0h/agentpack/internal/driver/gemini"
 	"github.com/retr0h/agentpack/internal/driver/goose"
@@ -20,8 +26,10 @@ import (
 	"github.com/retr0h/agentpack/internal/driver/junie"
 	"github.com/retr0h/agentpack/internal/driver/kimi"
 	"github.com/retr0h/agentpack/internal/driver/kiro"
+	"github.com/retr0h/agentpack/internal/driver/opencode"
 	"github.com/retr0h/agentpack/internal/driver/openhands"
 	"github.com/retr0h/agentpack/internal/driver/roo"
+	"github.com/retr0h/agentpack/internal/driver/rovodev"
 	"github.com/retr0h/agentpack/internal/driver/windsurf"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -44,12 +52,20 @@ func RegisterAll() {
 		target.Register(forgecode.New())
 		target.Register(continuedev.New())
 		target.Register(amp.New())
+		target.Register(antigravity.New())
 		target.Register(goose.New())
 		target.Register(hermes.New())
 		target.Register(kiro.New())
 		target.Register(openhands.New())
 		target.Register(junie.New())
 		target.Register(kimi.New())
+		target.Register(cortex.New())
+		target.Register(crush.New())
+		target.Register(droid.New())
+		target.Register(firebender.New())
+		target.Register(rovodev.New())
+		target.Register(codebuddy.New())
+		target.Register(opencode.New())
 		target.Register(roo.New())
 		agents.RegisterAll()
 	})
