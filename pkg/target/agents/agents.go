@@ -254,13 +254,6 @@ var registry = []AgentDef{
 	},
 	{Name: "warp", Display: "Warp", DetectHome: ".warp", GlobalSkillsDir: ".warp/skills"},
 	{
-		Name:            "windsurf",
-		Display:         "Windsurf",
-		DetectHome:      ".codeium/windsurf",
-		GlobalSkillsDir: ".codeium/windsurf/skills",
-		LocalSkillsDir:  ".windsurf/skills",
-	},
-	{
 		Name:            "zencoder",
 		Display:         "Zencoder",
 		DetectHome:      ".zencoder",
