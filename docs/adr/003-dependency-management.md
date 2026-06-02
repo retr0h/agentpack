@@ -1,26 +1,11 @@
+---
+status: 'accepted'
+date: 2026-05-25
+---
+
 # ADR-003: Dependency Management Architecture
 
-## Status
-
-Accepted
-
-## Decision Drivers
-
-- Reproducible installs across machines (CI, teammates)
-- Project-local scope (no global state)
-- Bun-like UX (add updates manifest, install from manifest)
-- Existing users expect lockfile semantics from npm/Bun/Cargo
-
-## Considered Alternatives
-
-- **Global lockfile only** — simpler but not project-local, can't be checked
-  into git, no reproducibility across machines
-- **No lockfile (always resolve fresh)** — simplest but no reproducibility,
-  different installs on different machines
-- **npm-style node_modules** — heavyweight, not appropriate for config files and
-  markdown skills
-
-## Context
+## Context and Problem Statement
 
 agentpack needs a clear model for how packages are tracked, resolved, and
 reproduced. The current implementation has overlapping concerns: a registry
@@ -31,7 +16,23 @@ unclear roles and boundaries.
 Users expect Bun-like behavior: `add` updates a manifest, `install` reproduces
 what's in the manifest, and a lockfile pins exact versions.
 
-## Decision
+## Decision Drivers
+
+- Reproducible installs across machines (CI, teammates)
+- Project-local scope (no global state)
+- Bun-like UX (add updates manifest, install from manifest)
+- Existing users expect lockfile semantics from npm/Bun/Cargo
+
+## Considered Options
+
+- **Global lockfile only** — simpler but not project-local, can't be checked
+  into git, no reproducibility across machines
+- **No lockfile (always resolve fresh)** — simplest but no reproducibility,
+  different installs on different machines
+- **npm-style node_modules** — heavyweight, not appropriate for config files and
+  markdown skills
+
+## Decision Outcome
 
 ### Source of truth hierarchy
 
@@ -148,7 +149,9 @@ packages:
 - Config merging is a new capability that needs careful design
 - The `sync` command name is retired in favor of `install`
 
-## Influences
+## More Information
+
+Influences on this decision:
 
 - **Bun**: `add` updates manifest, `install` from manifest, lockfile for
   reproducibility

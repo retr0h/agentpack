@@ -1,8 +1,17 @@
+---
+status: accepted
+date: 2026-05-25
+---
+
 # ADR-005: Content Safety and Executable Prompts
 
-## Status
+## Context and Problem Statement
 
-Accepted
+ADR-001 states "no binary executables" but the archive format allows shell
+scripts in `hooks/` and plugins in practice contain Python and shell scripts
+(e.g. `scripts/agent.py`, `hooks/lint.sh`). The policy needs to distinguish
+between compiled binaries (never allowed) and text-based scripts (allowed with
+user consent).
 
 ## Decision Drivers
 
@@ -13,7 +22,7 @@ Accepted
 - Safety classification should be a first-class package property, not a runtime
   scan
 
-## Considered Alternatives
+## Considered Options
 
 - **Block all executables** — safe but prevents hooks with shell scripts, skills
   with reference scripts, and other legitimate use cases
@@ -25,15 +34,7 @@ Accepted
   classification isn't tracked or checksummed, can't be inspected before
   installing
 
-## Context
-
-ADR-001 states "no binary executables" but the archive format allows shell
-scripts in `hooks/` and plugins in practice contain Python and shell scripts
-(e.g. `scripts/agent.py`, `hooks/lint.sh`). The policy needs to distinguish
-between compiled binaries (never allowed) and text-based scripts (allowed with
-user consent).
-
-## Decision
+## Decision Outcome
 
 ### Content classification is a build-time property
 

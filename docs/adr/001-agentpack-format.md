@@ -1,8 +1,16 @@
+---
+status: 'superseded by [ADR-009](009-metadata-driven-format.md)'
+date: 2026-05-25
+---
+
 # ADR-001: .agentpack Package Format
 
-## Status
+## Context and Problem Statement
 
-Accepted (security model extended by [ADR-005](005-content-safety.md))
+AI coding agents (Claude Code, Cursor, Copilot, Gemini CLI, Codex, OpenCode,
+Windsurf) need a standard way to distribute and install skills, commands, hooks,
+agents, MCP configs, and settings. There is no existing package format for this
+— agentskills.io defines content conventions but not packaging.
 
 ## Decision Drivers
 
@@ -12,7 +20,7 @@ Accepted (security model extended by [ADR-005](005-content-safety.md))
 - Format must be agent-agnostic — one archive, many targets
 - Non-technical users shouldn't need git, Go, or npm to install
 
-## Considered Alternatives
+## Considered Options
 
 - **npm packages** — requires Node.js runtime, heavyweight for markdown files
   and JSON config
@@ -22,14 +30,7 @@ Accepted (security model extended by [ADR-005](005-content-safety.md))
 - **Container images (OCI)** — massive overkill for config files and markdown
   skills
 
-## Context
-
-AI coding agents (Claude Code, Cursor, Copilot, Gemini CLI, Codex, OpenCode,
-Windsurf) need a standard way to distribute and install skills, commands, hooks,
-agents, MCP configs, and settings. There is no existing package format for this
-— agentskills.io defines content conventions but not packaging.
-
-## Decision
+## Decision Outcome
 
 ### Archive format
 

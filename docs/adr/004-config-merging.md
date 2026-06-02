@@ -1,25 +1,11 @@
+---
+status: 'accepted'
+date: 2026-05-25
+---
+
 # ADR-004: Config Merging for MCP, Hooks, and Settings
 
-## Status
-
-Accepted
-
-## Decision Drivers
-
-- Plugins declare MCP servers, hooks, and settings that must be active
-- Config files (`.claude/settings.json`) are shared — can't overwrite
-- Merges must be reversible so `del` can undo them cleanly
-- Only Claude Code has structured config — other targets just copy files
-
-## Considered Alternatives
-
-- **Copy-only (no merging)** — simple but MCP/hooks would be silently ignored,
-  plugins couldn't fully configure agents
-- **Separate config file per plugin** — avoids merge conflicts but Claude Code
-  reads one `settings.json`, not per-plugin files
-- **Full settings.json replacement** — destructive, loses user settings
-
-## Context
+## Context and Problem Statement
 
 Plugins can declare MCP servers, hooks, and settings fragments in their
 archives. Currently these content types are silently ignored during install —
@@ -29,7 +15,22 @@ MCP servers and hooks must be merged into the target's config file (e.g.
 `.claude/settings.json` for Claude Code) rather than copied as standalone files.
 This merge must be reversible so `del` can undo it.
 
-## Decision
+## Decision Drivers
+
+- Plugins declare MCP servers, hooks, and settings that must be active
+- Config files (`.claude/settings.json`) are shared — can't overwrite
+- Merges must be reversible so `del` can undo them cleanly
+- Only Claude Code has structured config — other targets just copy files
+
+## Considered Options
+
+- **Copy-only (no merging)** — simple but MCP/hooks would be silently ignored,
+  plugins couldn't fully configure agents
+- **Separate config file per plugin** — avoids merge conflicts but Claude Code
+  reads one `settings.json`, not per-plugin files
+- **Full settings.json replacement** — destructive, loses user settings
+
+## Decision Outcome
 
 ### Merge targets
 

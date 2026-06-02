@@ -1,8 +1,16 @@
+---
+status: accepted
+date: 2026-05-25
+---
+
 # ADR-008: Content Type Filtering in Manifest
 
-## Status
+## Context and Problem Statement
 
-Accepted
+When a repo ships hooks or MCP configs alongside skills, `add repo@skill`
+installs the skill but ALSO installs all hooks and MCP configs. Users have no
+way to say "give me the skills but not the hooks." The CLI shorthand should stay
+simple (`@skill` = skills only). The manifest should provide full control.
 
 ## Decision Drivers
 
@@ -12,7 +20,7 @@ Accepted
 - The manifest (`agentpack-packages.yaml`) is the right place for declarative
   control
 
-## Considered Alternatives
+## Considered Options
 
 - **CLI flags per content type** (`--no-hooks`, `--include commands`) — clutters
   the CLI, hard to remember, not reproducible across machines
@@ -20,14 +28,7 @@ Accepted
 - **Always install everything** — current behavior, no control over side effects
   like config merging from unwanted hooks/MCP
 
-## Context
-
-When a repo ships hooks or MCP configs alongside skills, `add repo@skill`
-installs the skill but ALSO installs all hooks and MCP configs. Users have no
-way to say "give me the skills but not the hooks." The CLI shorthand should stay
-simple (`@skill` = skills only). The manifest should provide full control.
-
-## Decision
+## Decision Outcome
 
 ### CLI behavior (no change)
 

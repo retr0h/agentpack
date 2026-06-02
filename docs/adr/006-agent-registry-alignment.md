@@ -1,27 +1,11 @@
+---
+status: accepted
+date: 2026-05-25
+---
+
 # ADR-006: Agent Registry Alignment with agentskills.io
 
-## Status
-
-Accepted
-
-## Decision Drivers
-
-- vercel-labs/skills is the de facto standard for agent skill installation
-- Most agents read from `.agents/skills/` (the universal convention)
-- Only a few agents have unique install directories
-- Our current per-agent targets have incorrect detection and install paths
-- One Go package per agent doesn't scale to 50+ agents
-- Skills ecosystem inspired the agentskills.io format this project supports
-
-## Considered Alternatives
-
-- **Keep per-agent Go packages** — doesn't scale, each new agent needs a new
-  package with boilerplate
-- **Copy vercel-labs/skills agent list verbatim** — brittle, their list changes
-  frequently
-- **Only support universal target** — loses detection for specific agents
-
-## Context
+## Context and Problem Statement
 
 The vercel-labs/skills project (agentskills.io) maintains a registry of 50+ AI
 coding agents with their detection paths and skill directories. Most agents read
@@ -38,7 +22,24 @@ Our current implementation has 6 separate Go packages with hardcoded paths,
 several of which are wrong (Copilot detects on `.github/` in cwd, Windsurf
 detects on `~/.windsurf/`).
 
-## Decision
+## Decision Drivers
+
+- vercel-labs/skills is the de facto standard for agent skill installation
+- Most agents read from `.agents/skills/` (the universal convention)
+- Only a few agents have unique install directories
+- Our current per-agent targets have incorrect detection and install paths
+- One Go package per agent doesn't scale to 50+ agents
+- Skills ecosystem inspired the agentskills.io format this project supports
+
+## Considered Options
+
+- **Keep per-agent Go packages** — doesn't scale, each new agent needs a new
+  package with boilerplate
+- **Copy vercel-labs/skills agent list verbatim** — brittle, their list changes
+  frequently
+- **Only support universal target** — loses detection for specific agents
+
+## Decision Outcome
 
 ### Two tiers of targets
 
@@ -109,7 +110,7 @@ install support is deferred to a future ADR.
 - Windsurf detection fix prevents false negatives
 - Copilot detection fix prevents false positives
 
-## Influences
+## More Information
 
 - [vercel-labs/skills](https://github.com/vercel-labs/skills) — agent registry,
   detection paths, install conventions

@@ -1,8 +1,16 @@
+---
+status: accepted
+date: 2026-05-25
+---
+
 # ADR-007: Skill Search and Discovery
 
-## Status
+## Context and Problem Statement
 
-Accepted
+Currently users must know the exact git URL to add a skill:
+`agentpack add github.com/org/repo`. There is no way to browse or search for
+available skills. The agentskills.io ecosystem maintains a registry at skills.sh
+that can be queried.
 
 ## Decision Drivers
 
@@ -11,7 +19,7 @@ Accepted
 - APK has `apk search` — our CLI vocabulary should include search
 - Discoverability is critical for ecosystem adoption
 
-## Considered Alternatives
+## Considered Options
 
 - **No search (add by URL only)** — requires users to know the exact repo URL,
   no discoverability, limits adoption
@@ -22,14 +30,7 @@ Accepted
 - **Search skills.sh API** — query the agentskills.io registry at runtime,
   always fresh, no local state
 
-## Context
-
-Currently users must know the exact git URL to add a skill:
-`agentpack add github.com/org/repo`. There is no way to browse or search for
-available skills. The agentskills.io ecosystem maintains a registry at skills.sh
-that can be queried.
-
-## Decision
+## Decision Outcome
 
 ### New `search` command
 

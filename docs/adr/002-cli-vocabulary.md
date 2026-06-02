@@ -1,9 +1,17 @@
+---
+status:
+  'accepted, partially superseded by [ADR-003](003-dependency-management.md)'
+date: 2026-05-25
+---
+
 # ADR-002: CLI Command Vocabulary
 
-## Status
+## Context and Problem Statement
 
-Accepted (partially superseded by [ADR-003](003-dependency-management.md):
-`sync` renamed to `install`)
+agentpack needs a consistent, intuitive CLI vocabulary. Early versions used
+traditional package manager verbs (`install`, `remove`, `update`, `show`,
+`outdated`) drawn from apt and npm. As the tool matured, these felt misaligned
+with agentpack's project-local, declarative model.
 
 ## Decision Drivers
 
@@ -12,7 +20,7 @@ Accepted (partially superseded by [ADR-003](003-dependency-management.md):
 - Declarative-first — config is the upgrade mechanism, not a command
 - Familiarity for APK/Bun/Yarn users
 
-## Considered Alternatives
+## Considered Options
 
 - **apt/npm naming** (`install`, `remove`, `update`, `show`) — traditional but
   implies system-wide operations and has `update` vs `upgrade` confusion
@@ -21,14 +29,7 @@ Accepted (partially superseded by [ADR-003](003-dependency-management.md):
 - **`outdated` as a standalone command** — APK folds it into
   `list --upgradable`, reducing top-level commands
 
-## Context
-
-agentpack needs a consistent, intuitive CLI vocabulary. Early versions used
-traditional package manager verbs (`install`, `remove`, `update`, `show`,
-`outdated`) drawn from apt and npm. As the tool matured, these felt misaligned
-with agentpack's project-local, declarative model.
-
-## Decision
+## Decision Outcome
 
 Adopt a vocabulary inspired by APK (Alpine Package Keeper) and Bun, with
 adjustments for agentpack's two-persona design.
@@ -73,7 +74,9 @@ the command surface small and discoverable.
 - `add` as a verb signals project-local semantics over system-wide install
 - No `upgrade` command means users edit config + `install` to update
 
-## Influences
+## More Information
+
+Influences on this decision:
 
 - **APK**: `add`, `del`, `info`, `list`, `verify` vocabulary
 - **Bun**: declarative-first model where config is the upgrade mechanism
