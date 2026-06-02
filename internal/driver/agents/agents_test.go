@@ -88,7 +88,7 @@ func TestAgents_AllRegistered(t *testing.T) {
 		registeredNames[tgt.Name()] = true
 	}
 
-	tests := []struct {
+	tests := []struct { //nolint:prealloc // rows are built dynamically from Registry
 		name     string
 		wantName string
 	}{}
