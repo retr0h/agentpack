@@ -97,6 +97,11 @@ func TestThemeRenders(t *testing.T) {
 			render: func(w *bytes.Buffer) string { return cli.Info(w, "2026-05-23") },
 			want:   "2026-05-23",
 		},
+		{
+			name:   "Tag contains input text",
+			render: func(w *bytes.Buffer) string { return cli.Tag(w, "category") },
+			want:   "category",
+		},
 	}
 
 	for _, tt := range tests {
@@ -607,6 +612,76 @@ func TestField(t *testing.T) {
 	}
 }
 
+func TestFieldAccent(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		label      string
+		value      string
+		wantSubstr string
+	}{
+		{
+			name:       "contains label with colon",
+			label:      "Name",
+			value:      "my-plugin",
+			wantSubstr: "Name:",
+		},
+		{
+			name:       "contains value",
+			label:      "Plugin",
+			value:      "cool-skill",
+			wantSubstr: "cool-skill",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cli.FieldAccent(&buf, tt.label, tt.value)
+			got := buf.String()
+			assert.Contains(t, got, tt.wantSubstr)
+		})
+	}
+}
+
+func TestFieldInfo(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		label      string
+		value      string
+		wantSubstr string
+	}{
+		{
+			name:       "contains label with colon",
+			label:      "Version",
+			value:      "v1.2.3",
+			wantSubstr: "Version:",
+		},
+		{
+			name:       "contains value in output",
+			label:      "Date",
+			value:      "2026-05-27",
+			wantSubstr: "2026-05-27",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cli.FieldInfo(&buf, tt.label, tt.value)
+			got := buf.String()
+			assert.Contains(t, got, tt.wantSubstr)
+		})
+	}
+}
+
 func TestFieldMuted(t *testing.T) {
 	t.Parallel()
 
@@ -679,6 +754,37 @@ func TestTable(t *testing.T) {
 			name:       "empty columns renders nothing",
 			cols:       []cli.TableColumn{},
 			wantSubstr: "",
+		},
+		{
+			name: "renders Info-styled column",
+			cols: []cli.TableColumn{
+				{Header: "DATE", Values: []string{"2026-05-27"}, Info: true},
+				{Header: "NOTE", Values: []string{"released"}},
+			},
+			wantSubstr: "2026-05-27",
+		},
+		{
+			name: "renders Tag-styled column",
+			cols: []cli.TableColumn{
+				{Header: "CAT", Values: []string{"skill"}, Tag: true},
+				{Header: "NAME", Values: []string{"k8s"}},
+			},
+			wantSubstr: "skill",
+		},
+		{
+			name: "renders Muted-styled column",
+			cols: []cli.TableColumn{
+				{Header: "PATH", Values: []string{"/tmp/file.md"}, Muted: true},
+				{Header: "SIZE", Values: []string{"4 KB"}},
+			},
+			wantSubstr: "/tmp/file.md",
+		},
+		{
+			name: "renders default-styled column",
+			cols: []cli.TableColumn{
+				{Header: "RAW", Values: []string{"plain text"}},
+			},
+			wantSubstr: "plain text",
 		},
 	}
 
