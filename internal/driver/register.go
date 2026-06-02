@@ -16,6 +16,7 @@ import (
 	"github.com/retr0h/agentpack/internal/driver/forgecode"
 	"github.com/retr0h/agentpack/internal/driver/gemini"
 	"github.com/retr0h/agentpack/internal/driver/goose"
+	"github.com/retr0h/agentpack/internal/driver/hermes"
 	"github.com/retr0h/agentpack/internal/driver/junie"
 	"github.com/retr0h/agentpack/internal/driver/kiro"
 	"github.com/retr0h/agentpack/internal/driver/roo"
@@ -42,6 +43,7 @@ func RegisterAll() {
 		target.Register(continuedev.New())
 		target.Register(amp.New())
 		target.Register(goose.New())
+		target.Register(hermes.New())
 		target.Register(kiro.New())
 		target.Register(junie.New())
 		target.Register(roo.New())
