@@ -99,12 +99,6 @@ var registry = []AgentDef{
 		GlobalSkillsDir: ".commandcode/skills",
 	},
 	{
-		Name:            "continue",
-		Display:         "Continue",
-		DetectHome:      ".continue",
-		GlobalSkillsDir: ".continue/skills",
-	},
-	{
 		Name:            "cortex",
 		Display:         "Cortex Code",
 		DetectHome:      ".snowflake/cortex",
@@ -122,12 +116,6 @@ var registry = []AgentDef{
 		DetectHome:      ".deepagents",
 		GlobalSkillsDir: ".deepagents/agent/skills",
 	},
-	{
-		Name:            "devin",
-		Display:         "Devin",
-		DetectConfig:    "devin",
-		GlobalSkillsDir: ".config/devin/skills",
-	},
 	{Name: "dexto", Display: "Dexto", DetectHome: ".dexto", GlobalSkillsDir: ".dexto/skills"},
 	{Name: "droid", Display: "Droid", DetectHome: ".factory", GlobalSkillsDir: ".factory/skills"},
 	{
@@ -141,12 +129,6 @@ var registry = []AgentDef{
 		Display:         "ForgeCode",
 		DetectHome:      ".forge",
 		GlobalSkillsDir: ".forge/skills",
-	},
-	{
-		Name:            "gemini-cli",
-		Display:         "Gemini CLI",
-		DetectHome:      ".gemini",
-		GlobalSkillsDir: ".gemini/skills",
 	},
 	{
 		Name:            "goose",
