@@ -234,25 +234,25 @@ plugins:
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			vfs, dir := tc.setupVFS(t)
+			vfs, dir := tt.setupVFS(t)
 			m, err := manifest.Load(ctx, vfs, dir)
 
-			if tc.wantErr != "" {
-				require.ErrorContains(t, err, tc.wantErr)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
 			require.NoError(t, err)
 
-			if tc.wantName != "" {
-				assert.Equal(t, tc.wantName, m.Name)
+			if tt.wantName != "" {
+				assert.Equal(t, tt.wantName, m.Name)
 			}
-			if tc.wantPlugs > 0 {
-				assert.Len(t, m.Plugins, tc.wantPlugs)
+			if tt.wantPlugs > 0 {
+				assert.Len(t, m.Plugins, tt.wantPlugs)
 			}
 		})
 	}
@@ -367,16 +367,16 @@ func TestNormalize(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := manifest.Normalize(tc.input)
+			got := manifest.Normalize(tt.input)
 
-			require.Len(t, got, tc.wantLen)
+			require.Len(t, got, tt.wantLen)
 
-			if tc.check != nil {
-				tc.check(t, got)
+			if tt.check != nil {
+				tt.check(t, got)
 			}
 		})
 	}
@@ -414,17 +414,17 @@ func TestEntryUnmarshalYAML(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			var e manifest.Entry
-			err := yaml.Unmarshal([]byte(tc.input), &e)
+			err := yaml.Unmarshal([]byte(tt.input), &e)
 			require.NoError(t, err)
 
-			assert.Equal(t, tc.wantGlob, e.Glob)
-			assert.Equal(t, tc.wantSrc, e.Src)
-			assert.Equal(t, tc.wantDest, e.Dest)
+			assert.Equal(t, tt.wantGlob, e.Glob)
+			assert.Equal(t, tt.wantSrc, e.Src)
+			assert.Equal(t, tt.wantDest, e.Dest)
 		})
 	}
 }

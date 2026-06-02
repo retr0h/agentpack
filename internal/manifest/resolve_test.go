@@ -304,32 +304,32 @@ func TestResolveEntries(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			vfs, base := tc.setup(t)
-			got, err := manifest.ResolveEntries(ctx, vfs, base, tc.entries)
+			vfs, base := tt.setup(t)
+			got, err := manifest.ResolveEntries(ctx, vfs, base, tt.entries)
 
-			if tc.wantErr != "" {
+			if tt.wantErr != "" {
 				require.Error(t, err)
-				if tc.exactErr {
-					assert.Equal(t, tc.wantErr, err.Error())
+				if tt.exactErr {
+					assert.Equal(t, tt.wantErr, err.Error())
 				} else {
-					require.ErrorContains(t, err, tc.wantErr)
+					require.ErrorContains(t, err, tt.wantErr)
 				}
 				return
 			}
 
 			require.NoError(t, err)
-			require.Len(t, got, tc.wantN)
+			require.Len(t, got, tt.wantN)
 
-			if len(tc.wantDests) > 0 {
+			if len(tt.wantDests) > 0 {
 				actual := make(map[string]bool, len(got))
 				for _, fp := range got {
 					actual[fp.Dest] = true
 				}
-				for _, want := range tc.wantDests {
+				for _, want := range tt.wantDests {
 					assert.True(t, actual[want])
 				}
 				for _, fp := range got {

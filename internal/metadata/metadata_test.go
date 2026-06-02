@@ -198,28 +198,28 @@ func TestCapture(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if tc.setupEnv != nil {
-				tc.setupEnv(t)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupEnv != nil {
+				tt.setupEnv(t)
 			}
 
 			dir := t.TempDir()
-			if tc.setupDir != nil {
-				tc.setupDir(t, dir)
+			if tt.setupDir != nil {
+				tt.setupDir(t, dir)
 			}
 
 			m, err := metadata.Capture(ctx, dir, "my-plugin", "1.0.0")
 
-			if tc.wantErr != "" {
-				require.ErrorContains(t, err, tc.wantErr)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
 			require.NoError(t, err)
 
-			if tc.checkResult != nil {
-				tc.checkResult(t, m)
+			if tt.checkResult != nil {
+				tt.checkResult(t, m)
 			}
 		})
 	}
@@ -259,20 +259,20 @@ func TestMetadataEntriesYAMLRoundTrip(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			original := metadata.Metadata{
 				Name:    "test-plugin",
 				Version: "0.1.0",
-				Entries: tc.entries,
+				Entries: tt.entries,
 			}
 
 			data, err := yaml.Marshal(original)
 			require.NoError(t, err)
 
-			if tc.wantKey {
+			if tt.wantKey {
 				assert.Contains(t, string(data), "entries:")
 			} else {
 				assert.NotContains(t, string(data), "entries:")
