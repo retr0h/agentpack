@@ -339,6 +339,188 @@ func TestCursor_Install(t *testing.T) {
 			},
 			wantErr: "getwd",
 		},
+		{
+			name: "entry skill with home error propagates through installSkillEntry",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			global: true,
+			homeFunc: func() (string, error) {
+				return "", errors.New("home unavailable")
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "entry skill mkdirAll error propagates through installSkillEntry",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			mkdirFunc: func(string, os.FileMode) error {
+				return errors.New("disk full")
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			wantErr: "mkdir skills dir",
+		},
+		{
+			name: "entry mcp cwdFunc error propagates for mcpSettingsPath",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "srv.json"), map[string]any{
+					"name": "srv",
+					"type": "stdio",
+				})
+				return src, ""
+			},
+			cwdFunc: func() (string, error) {
+				return "", errors.New("getwd failed")
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "srv", Type: "mcp", Root: filepath.Join(src, "mcp")},
+				}
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "entry mcp name conflict returns error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				dst := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "dup.json"), map[string]any{
+					"name": "dup-srv",
+					"type": "stdio",
+				})
+				writeJSON(t, filepath.Join(dst, ".cursor", "mcp.json"), map[string]any{
+					"mcpServers": map[string]any{
+						"dup-srv": map[string]any{"type": "stdio"},
+					},
+				})
+				return src, dst
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "dup-srv", Type: "mcp", Root: filepath.Join(src, "mcp")},
+				}
+			},
+			wantErr: "already exists",
+		},
+		{
+			name: "local install with cwdFunc failing on second call covers mcpSettingsPath error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			cwdFunc: func() func() (string, error) {
+				tmp, _ := os.MkdirTemp("", "cursor-test-*")
+				calls := 0
+				return func() (string, error) {
+					calls++
+					if calls == 1 {
+						return tmp, nil
+					}
+					return "", errors.New("getwd second call failed")
+				}
+			}(),
+			wantErr: "getwd",
+		},
+		{
+			name: "copyTreeIfExists error from unreadable file in skills dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "skills", "secret.md")
+				writeFile(t, p, "# Secret")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, t.TempDir()
+			},
+			wantErr: "copy skills",
+		},
+		{
+			name: "copyTreeIfExists walkErr from unreadable subdir in skills",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				sub := filepath.Join(src, "skills", "locked")
+				require.NoError(t, os.MkdirAll(sub, 0o755))
+				require.NoError(t, os.Chmod(sub, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(sub, 0o755) })
+				return src, t.TempDir()
+			},
+			wantErr: "copy skills",
+		},
+		{
+			name: "installSkillEntry copyTreeIfExists error from unreadable file in entry root",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "skills", "k8s", "SKILL.md")
+				writeFile(t, p, "# K8s")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			wantErr: "copy skills",
+		},
+		{
+			name: "enumerateFiles error from pre-existing unreadable file in destDir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				dst := t.TempDir()
+				// Pre-populate destDir with an unreadable file so enumerateFiles fails.
+				destDir := filepath.Join(dst, ".agents", "skills", "test-plugin")
+				p := filepath.Join(destDir, "secret.md")
+				writeFile(t, p, "# Secret")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, dst
+			},
+			wantErr: "enumerate installed files",
+		},
+		{
+			name: "copyFile write error when destDir is read-only",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			mkdirFunc: func(path string, mode os.FileMode) error {
+				if err := os.MkdirAll(path, mode); err != nil {
+					return err
+				}
+				return os.Chmod(path, 0o555)
+			},
+			wantErr: "copy skills",
+		},
 	}
 
 	for _, tt := range tests {
