@@ -71,10 +71,11 @@ func TestFindChecksums(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T) string // returns dir
-		wantErr string
-		check   func(t *testing.T, path string)
+		name      string
+		setup     func(t *testing.T) string // returns dir
+		wantErr   string
+		checkErr  func(t *testing.T, err error) // optional extra assertions on error
+		checkPath func(t *testing.T, path string)
 	}{
 		{
 			name: "finds checksums.txt inside .agentpack dir",
@@ -90,18 +91,25 @@ func TestFindChecksums(t *testing.T) {
 				))
 				return dir
 			},
-			check: func(t *testing.T, path string) {
+			checkPath: func(t *testing.T, path string) {
 				t.Helper()
 				assert.True(t, strings.HasSuffix(path, "checksums.txt"))
 			},
 		},
 		{
-			name: "returns error when checksums.txt not found",
+			name: "returns errChecksumsNotFound sentinel when checksums.txt absent",
 			setup: func(t *testing.T) string {
 				t.Helper()
 				return t.TempDir()
 			},
 			wantErr: "checksums.txt not found",
+			// The sentinel must be detectable via errors.Is so Run can
+			// distinguish a missing checksums.txt (new-format archive,
+			// ADR-009) from a real I/O failure and skip gracefully.
+			checkErr: func(t *testing.T, err error) {
+				t.Helper()
+				assert.True(t, errors.Is(err, verify.ErrChecksumsNotFound))
+			},
 		},
 		{
 			name: "returns error when dir entry callback gets an error",
@@ -115,6 +123,12 @@ func TestFindChecksums(t *testing.T) {
 				return dir
 			},
 			wantErr: "searching for checksums.txt",
+			// The walk I/O error must NOT match the not-found sentinel — Run
+			// must surface it as a real error rather than silently skipping.
+			checkErr: func(t *testing.T, err error) {
+				t.Helper()
+				assert.False(t, errors.Is(err, verify.ErrChecksumsNotFound))
+			},
 		},
 	}
 
@@ -127,13 +141,16 @@ func TestFindChecksums(t *testing.T) {
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
+				if tt.checkErr != nil {
+					tt.checkErr(t, err)
+				}
 				return
 			}
 
 			require.NoError(t, err)
 
-			if tt.check != nil {
-				tt.check(t, path)
+			if tt.checkPath != nil {
+				tt.checkPath(t, path)
 			}
 		})
 	}
@@ -313,10 +330,19 @@ func TestRun(t *testing.T) {
 			},
 		},
 		{
-			name:        "archive without checksums.txt returns error",
+			// New-format archives (ADR-009) omit checksums.txt. Run must return
+			// a success result with an empty Files slice rather than an error.
+			// Archive-level integrity is handled by the .sha256 sidecar at the
+			// command layer, before Run is called.
+			name:        "archive without checksums.txt skips internal verification",
 			archivePath: buildArchiveWithoutChecksums,
 			ctx:         func() context.Context { return context.Background() },
-			wantErr:     "checksums.txt not found",
+			checkResult: func(t *testing.T, r *verify.Result) {
+				t.Helper()
+				require.NotNil(t, r)
+				assert.NotEmpty(t, r.ArchiveName)
+				assert.Empty(t, r.Files)
+			},
 		},
 		{
 			name:        "malformed archive returns extract error",

@@ -29,14 +29,25 @@
 //	    if !f.OK { fmt.Printf("FAIL %s: %s\n", f.Path, f.Err) }
 //	}
 //
-// Verify extracts the archive to a temp directory, reads
-// .agentpack/checksums.txt, and recomputes the SHA256 of every listed file.
+// Two archive formats are supported (ADR-009):
+//
+//   - Old format: archive contains .agentpack/checksums.txt. Verify extracts the
+//     archive to a temp directory, reads checksums.txt, and recomputes the SHA256
+//     of every listed file. Per-file failures are surfaced through Result.Files.
+//
+//   - New format (ADR-009): archive has no checksums.txt. Archive-level integrity
+//     is provided by a .sha256 sidecar file written by `agentpack build`. When no
+//     checksums.txt is found, Run returns a Result with an empty Files slice
+//     (no error). Sidecar verification is handled at the command layer before
+//     calling Run.
+//
 // A non-nil error is returned only for I/O failures that prevent verification
-// from running. Per-file failures are surfaced through Result.Files.
+// from running.
 package verify
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,6 +56,11 @@ import (
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/checksum"
 )
+
+// errChecksumsNotFound is returned by findChecksums when the archive contains
+// no checksums.txt (new-format archive per ADR-009). It is intentionally
+// distinct from I/O errors so Run can skip internal verification gracefully.
+var errChecksumsNotFound = errors.New("checksums.txt not found in archive")
 
 // Options configures a verify run.
 type Options struct {
@@ -100,6 +116,16 @@ func (v *Verifier) Run(ctx context.Context, opts Options) (*Result, error) {
 
 	checksumFile, err := findChecksums(tmpDir)
 	if err != nil {
+		// New-format archives (ADR-009) omit checksums.txt. Archive-level
+		// integrity is verified via the .sha256 sidecar before Run is called.
+		// Treat the missing file as a successful no-op rather than an error.
+		if errors.Is(err, errChecksumsNotFound) {
+			return &Result{
+				ArchiveName: filepath.Base(archivePath),
+				Files:       []FileResult{},
+			}, nil
+		}
+
 		return nil, err
 	}
 
@@ -152,7 +178,7 @@ func findChecksums(dir string) (string, error) {
 	}
 
 	if found == "" {
-		return "", fmt.Errorf("checksums.txt not found in archive")
+		return "", errChecksumsNotFound
 	}
 
 	return found, nil

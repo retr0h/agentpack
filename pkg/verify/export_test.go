@@ -23,6 +23,9 @@ package verify
 
 import "errors"
 
+// ErrChecksumsNotFound exposes errChecksumsNotFound for testing.
+var ErrChecksumsNotFound = errChecksumsNotFound
+
 // FindChecksums exposes findChecksums for testing.
 func FindChecksums(dir string) (string, error) {
 	return findChecksums(dir)
