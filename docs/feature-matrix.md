@@ -24,31 +24,28 @@ not yet implemented, `-` = not supported or not verified
 | Amp         | driver | -        | -      | -      | driver | -      | `internal/driver/amp/`         |
 | Roo         | driver | -        | -      | -      | -      | driver | `internal/driver/roo/`         |
 
-## Tier 2 — Verified Features, Driver Not Yet Built
+## Tier 2 — Dedicated Drivers (Expanded)
 
-These agents have documented file-based features beyond skills but don't have
-dedicated drivers yet. They currently use the generic driver (skills only).
-
-| Agent       | Hooks   | MCP     | Agents  | Commands | Format  | Verified against |
-| ----------- | ------- | ------- | ------- | -------- | ------- | ---------------- |
-| Cortex      | planned | planned | -       | -        | JSON    | Snowflake docs   |
-| Crush       | planned | -       | -       | -        | JSON    | open source      |
-| Droid       | planned | -       | -       | -        | JSON    | open source      |
-| Firebender  | -       | planned | planned | -        | JSON+MD | docs             |
-| ForgeCode   | -       | -       | planned | planned  | MD+YAML | open source      |
-| Hermes      | planned | -       | -       | -        | YAML    | open source      |
-| Junie       | -       | planned | -       | -        | JSON    | JetBrains docs   |
-| Kimi CLI    | -       | planned | -       | -        | JSON    | open source      |
-| OpenCode    | -       | -       | planned | -        | MD+YAML | open source      |
-| OpenHands   | planned | planned | planned | planned  | JSON+MD | open source      |
-| RovoDev     | -       | planned | planned | -        | JSON+MD | Atlassian docs   |
-| Warp        | -       | planned | -       | -        | JSON    | Warp docs        |
-| CodeBuddy   | -       | -       | planned | -        | MD+YAML | Tencent docs     |
-| Antigravity | planned | planned | -       | -        | JSON    | Google docs      |
+| Agent       | Skills | Commands | Hooks  | Agents | MCP    | Config | Driver                            |
+| ----------- | ------ | -------- | ------ | ------ | ------ | ------ | --------------------------------- |
+| Cortex      | driver | -        | driver | -      | driver | -      | `internal/driver/cortex/`         |
+| Crush       | driver | -        | driver | -      | -      | -      | `internal/driver/crush/`          |
+| Droid       | driver | -        | driver | -      | -      | -      | `internal/driver/droid/`          |
+| Firebender  | driver | -        | -      | -      | driver | -      | `internal/driver/firebender/`     |
+| ForgeCode   | driver | -        | -      | -      | -      | -      | `internal/driver/forgecode/`      |
+| Hermes      | driver | -        | driver | -      | -      | -      | `internal/driver/hermes/`         |
+| Junie       | driver | -        | -      | -      | driver | -      | `internal/driver/junie/`          |
+| Kimi CLI    | driver | -        | -      | -      | driver | -      | `internal/driver/kimi/`           |
+| OpenCode    | driver | -        | -      | -      | -      | -      | `internal/driver/opencode/`       |
+| OpenHands   | driver | -        | driver | -      | driver | -      | `internal/driver/openhands/`      |
+| RovoDev     | driver | -        | -      | -      | driver | -      | `internal/driver/rovodev/`        |
+| Warp        | driver | -        | -      | -      | driver | -      | `internal/driver/warp/`           |
+| CodeBuddy   | driver | -        | -      | -      | -      | -      | `internal/driver/codebuddy/`      |
+| Antigravity | driver | -        | driver | -      | driver | -      | `internal/driver/antigravity/`    |
 
 ## Tier 3 — Generic Driver (Skills Only)
 
-All remaining agents use the generic data-driven driver at
+28 remaining agents use the generic data-driven driver at
 `internal/driver/agents/`. They support `skill` only via
 `SupportedTypes() = ["skill"]`. No verified file-based features beyond skills.
 
