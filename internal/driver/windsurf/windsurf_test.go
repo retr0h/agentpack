@@ -424,6 +424,249 @@ func TestWindsurf_Install(t *testing.T) {
 			},
 			wantErr: "getwd",
 		},
+		{
+			name: "mcpConfigPath home error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, t.TempDir()
+			},
+			homeFunc: func() (string, error) {
+				return "", errors.New("no home for mcp")
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "hooksPath cwdFunc error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, ""
+			},
+			cwdFunc: func() func() (string, error) {
+				calls := 0
+				return func() (string, error) {
+					calls++
+					if calls == 1 {
+						return t.TempDir(), nil
+					}
+					return "", errors.New("getwd second call failed")
+				}
+			}(),
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "mcpConfigPath home error propagates in installFromEntries mcp case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			homeFunc: func() (string, error) {
+				return "", errors.New("no home for mcp entry")
+			},
+			entries: []target.ContentEntry{
+				{Name: "srv", Type: "mcp"},
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "hooksPath home error propagates in installFromEntries hook case when global",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			global: true,
+			homeFunc: func() (string, error) {
+				return "", errors.New("no home for hooks entry")
+			},
+			entries: []target.ContentEntry{
+				{Name: "hooks", Type: "hook"},
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "installSkillEntry mkdirAll failure propagates error via entries",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			mkdirFunc: func(string, os.FileMode) error {
+				return errors.New("disk full on skill entry")
+			},
+			wantErr: "mkdir skills dir",
+		},
+		{
+			name: "cwdFunc success resolves dir for local install with empty Dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			cwdFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+		},
+		{
+			name: "installSkillEntry resolveDirs error propagates via skill entry",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, ""
+			},
+			global: true,
+			homeFunc: func() (string, error) {
+				return "", errors.New("no home for skill entry resolveDirs")
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "installHooks error propagates in installFromDirs when hooksPath unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"on_save": []any{map[string]any{"command": "echo lint", "showOutput": true}},
+				})
+				installDir := t.TempDir()
+				hooksFile := filepath.Join(installDir, ".windsurf", "hooks.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(hooksFile), 0o755))
+				require.NoError(t, os.WriteFile(hooksFile, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksFile, 0o644) })
+				return src, installDir
+			},
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			wantErr: "merge hooks",
+		},
+		{
+			name: "installMCP error propagates in installFromEntries mcp case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "dup-e.json"), map[string]any{
+					"name": "dup-e",
+					"type": "stdio",
+				})
+				return src, t.TempDir()
+			},
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				writeJSON(
+					t,
+					filepath.Join(home, ".codeium", "windsurf", "mcp_config.json"),
+					map[string]any{
+						"mcpServers": map[string]any{
+							"dup-e": map[string]any{"type": "stdio"},
+						},
+					},
+				)
+				return func() (string, error) { return home, nil }
+			}(),
+			entries: []target.ContentEntry{
+				{Name: "dup-e", Type: "mcp"},
+			},
+			wantErr: "already exists",
+		},
+		{
+			name: "installHooks error propagates in installFromEntries hook case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"on_save": []any{map[string]any{"command": "echo lint", "showOutput": true}},
+				})
+				installDir := t.TempDir()
+				hooksFile := filepath.Join(installDir, ".windsurf", "hooks.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(hooksFile), 0o755))
+				require.NoError(t, os.WriteFile(hooksFile, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksFile, 0o644) })
+				return src, installDir
+			},
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			entries: []target.ContentEntry{
+				{Name: "hooks", Type: "hook"},
+			},
+			wantErr: "merge hooks",
+		},
+		{
+			name: "copyTreeIfExists walkErr propagates when source subdir is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				subdir := filepath.Join(src, "subdir")
+				require.NoError(t, os.MkdirAll(subdir, 0o755))
+				require.NoError(t, os.Chmod(subdir, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(subdir, 0o755) })
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "unreadable-skill", Type: "skill", Root: src},
+				}
+			},
+			wantErr: "copy skills",
+		},
+		{
+			name: "copyFile write error propagates when skills destDir is unwritable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "SKILL.md"), "# Skill")
+				return src, t.TempDir()
+			},
+			mkdirFunc: func(path string, mode os.FileMode) error {
+				if err := os.MkdirAll(path, mode); err != nil {
+					return err
+				}
+				return os.Chmod(path, 0o555)
+			},
+			wantErr: "copy skills",
+		},
+		{
+			name: "enumerateFiles walkErr propagates when destDir has unreadable subdir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				installDir := t.TempDir()
+				destDir := filepath.Join(installDir, ".windsurf", "skills", "test-plugin")
+				unreadable := filepath.Join(destDir, "unreadable")
+				require.NoError(t, os.MkdirAll(unreadable, 0o755))
+				require.NoError(t, os.Chmod(unreadable, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(unreadable, 0o755) })
+				return src, installDir
+			},
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			wantErr: "enumerate installed files",
+		},
 	}
 
 	for _, tt := range tests {
@@ -641,6 +884,24 @@ func TestWindsurf_InstallHooks(t *testing.T) {
 				})
 				return src, filepath.Join(t.TempDir(), "hooks.json")
 			},
+		},
+		{
+			name: "returns error when existing hooksPath is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "hooks", "hooks.json"), map[string]any{
+					"on_save": []any{
+						map[string]any{"command": "echo lint", "showOutput": true},
+					},
+				})
+				destDir := t.TempDir()
+				hooksPath := filepath.Join(destDir, "hooks.json")
+				require.NoError(t, os.WriteFile(hooksPath, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksPath, 0o644) })
+				return src, hooksPath
+			},
+			wantErr: "merge hooks",
 		},
 	}
 
