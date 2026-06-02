@@ -62,14 +62,14 @@ the _function_ of the content, not what any specific agent calls it. Drivers
 translate types to their platform-specific concepts (e.g., a "skill" becomes a
 "rule" in Cursor, an "instruction" in Codex).
 
-| Type      | Description                        | Example agents that support it       |
-| --------- | ---------------------------------- | ------------------------------------ |
-| `skill`   | Knowledge/capability module        | All (Claude Code, Cursor, Codex ...) |
-| `command` | User-invoked action                | Claude Code, Cline                   |
-| `hook`    | Event-driven automation            | Claude Code, Cline, Codex            |
-| `agent`   | Subagent/persona definition        | Claude Code, Cline                   |
-| `mcp`     | External service integration (MCP) | All (protocol standard)              |
-| `config`  | Configuration the package needs    | Claude Code, Codex, Amp              |
+| Type      | Description                        | Drivers that support it today |
+| --------- | ---------------------------------- | ----------------------------- |
+| `skill`   | Knowledge/capability module        | All (Claude Code + 50 agents) |
+| `command` | User-invoked action                | Claude Code                   |
+| `hook`    | Event-driven automation            | Claude Code                   |
+| `agent`   | Subagent/persona definition        | Claude Code                   |
+| `mcp`     | External service integration (MCP) | Claude Code                   |
+| `config`  | Configuration the package needs    | Claude Code                   |
 
 The `setting` type from ADR-001 is renamed to `config` for generality. Types are
 intentionally agent-agnostic — if Codex calls skills "instructions", the Codex

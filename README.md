@@ -31,7 +31,7 @@ contains — skills, commands, hooks, agents, MCP integrations, config — and e
 agent's driver installs only what it supports, wherever it belongs.
 
 ```
-.agentpack archive                     Installs to
+.agentpack archive                    Installs to
 ┌───────────────────┐
 │ metadata.yaml     │
 │                   │
@@ -42,15 +42,12 @@ agent's driver installs only what it supports, wherever it belongs.
 │  scan    command ─┼──→  Claude Code  .claude/commands/scan/
 │                   │
 │  my-api  mcp     ─┼──→  Claude Code  .claude/settings.json (mcpServers)
-│                  ─┼──→  Codex        .codex/config.toml
 │                   │
 │  on-save hook    ─┼──→  Claude Code  .claude/settings.json (hooks)
-│                  ─┼──→  Cline        .cline/hooks/
 │                   │
 │  theme   config  ─┼──→  Claude Code  .claude/settings.json
-│                  ─┼──→  Codex        .codex/config.toml
 │                   │
-│                   │     Cursor skips unsupported types
+│                   │     Cursor, Codex skip unsupported types
 └───────────────────┘
 ```
 
@@ -64,11 +61,11 @@ cover the AI agent ecosystem:
 | Type | What it is | Who supports it |
 |------|-----------|----------------|
 | **skill** | Knowledge/capability module | All agents |
-| **command** | User-invoked action | Claude Code, Cline |
-| **hook** | Event-driven automation | Claude Code, Cline, Codex |
-| **agent** | Subagent/persona definition | Claude Code, Cline |
-| **mcp** | External service integration | All agents (protocol standard) |
-| **config** | Configuration the package needs | Claude Code, Codex, Amp |
+| **command** | User-invoked action | Claude Code |
+| **hook** | Event-driven automation | Claude Code |
+| **agent** | Subagent/persona definition | Claude Code |
+| **mcp** | External service integration | Claude Code |
+| **config** | Configuration the package needs | Claude Code |
 
 Each agent driver declares which types it supports. When an agent adds support
 for a new type, existing packages automatically start working — no package
