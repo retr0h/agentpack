@@ -68,7 +68,7 @@ See [Usage][] for full details.
 - 🔄 **Reproducible installs** — lockfile pins exact SHAs, `install` from manifest
 - 🌐 **Global + local** — project-level or user-level installs (`-g`)
 - ⚙️ **Config merging** — MCP servers, hooks, and settings merge into `.claude/settings.json`
-- ✈️ **Offline** — `.agentpack` archives work without git, npm, or any toolchain
+- ✈️ **No toolchain required** — `.agentpack` files install without git, npm, or Go
 - 📋 **JSON everywhere** — `-o json` on every command for scripting
 - 📚 **Extensible** — write custom target drivers against the `pkg/target` interface
 
