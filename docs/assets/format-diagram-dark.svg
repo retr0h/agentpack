@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 440" font-family="'SF Mono', 'Fira Code', 'JetBrains Mono', monospace" font-size="13">
-  <rect width="820" height="440" fill="#1a1b26"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 408" font-family="'SF Mono', 'Fira Code', 'JetBrains Mono', monospace" font-size="13">
+  <rect width="820" height="408" fill="#1a1b26"/>
 
   <!-- Title — bumped to 13px to match body -->
   <text x="55" y="40" fill="#c678dd" font-size="13">.agentpack content types</text>
