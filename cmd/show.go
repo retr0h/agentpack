@@ -27,6 +27,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/inspect"
 	"github.com/retr0h/agentpack/internal/registry"
@@ -46,16 +47,12 @@ var (
 	pkgInspector      inspector      = inspect.New()
 )
 
-func isArchiveFile(arg string) bool {
-	return strings.HasSuffix(arg, ".agentpack")
-}
-
 var infoCmd = &cobra.Command{
 	Use:   "info <name | archive.agentpack>",
 	Short: "Show details of an installed package or archive contents",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if isArchiveFile(args[0]) {
+		if archive.IsArchiveFile(args[0]) {
 			return showArchive(cmd, args[0])
 		}
 
@@ -209,7 +206,7 @@ func showArchive(cmd *cobra.Command, path string) error {
 		if safety.IsExecutable(f.Path) {
 			padded = cli.Err(out, padded)
 		}
-		size := humanSize(f.Size)
+		size := cli.HumanSize(f.Size)
 		short := cli.ShortSHA(f.SHA256)
 
 		cli.Printf(
@@ -227,20 +224,11 @@ func showArchive(cmd *cobra.Command, path string) error {
 			"%d %s, %s total",
 			len(result.Files),
 			cli.Plural(len(result.Files), "file", "files"),
-			humanSize(result.Total),
+			cli.HumanSize(result.Total),
 		)),
 	)
 
 	return nil
-}
-
-func humanSize(bytes int64) string {
-	const kb = 1024
-	if bytes < kb {
-		return fmt.Sprintf("%d B", bytes)
-	}
-
-	return fmt.Sprintf("%.1f KB", float64(bytes)/kb)
 }
 
 func init() {

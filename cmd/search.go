@@ -22,7 +22,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -81,7 +80,7 @@ var searchCmd = &cobra.Command{
 		)
 		for _, r := range results {
 			installCmd := r.Source + "@" + r.Name
-			installs := cli.Info(out, formatInstalls(r.Installs))
+			installs := cli.Info(out, cli.FormatInstalls(r.Installs))
 			link := cli.Mute(out, "https://skills.sh/"+r.Source+"/"+r.Name)
 			cli.Printf(
 				out,
@@ -95,19 +94,6 @@ var searchCmd = &cobra.Command{
 
 		return nil
 	},
-}
-
-// formatInstalls formats an install count for display.
-// <1000 → "N installs", >=1000 → "N.NK installs", >=1000000 → "N.NM installs".
-func formatInstalls(n int) string {
-	switch {
-	case n >= 1_000_000:
-		return fmt.Sprintf("%.1fM installs", float64(n)/1_000_000)
-	case n >= 1_000:
-		return fmt.Sprintf("%.1fK installs", float64(n)/1_000)
-	default:
-		return fmt.Sprintf("%d installs", n)
-	}
 }
 
 func init() {

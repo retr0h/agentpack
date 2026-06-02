@@ -156,6 +156,20 @@ func HumanSize(bytes int64) string {
 	return fmt.Sprintf("%d KB", bytes/kb)
 }
 
+// FormatInstalls formats an install count for display.
+// <1000 returns "N installs", >=1000 returns "N.NK installs",
+// >=1000000 returns "N.NM installs".
+func FormatInstalls(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM installs", float64(n)/1_000_000)
+	case n >= 1_000:
+		return fmt.Sprintf("%.1fK installs", float64(n)/1_000)
+	default:
+		return fmt.Sprintf("%d installs", n)
+	}
+}
+
 // Plural returns singular when n == 1, otherwise pluralForm.
 func Plural(n int, singular, pluralForm string) string {
 	if n == 1 {

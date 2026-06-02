@@ -25,18 +25,14 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/install"
-	"github.com/retr0h/agentpack/internal/lock"
-	"github.com/retr0h/agentpack/internal/packages"
 	"github.com/retr0h/agentpack/internal/safety"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -64,7 +60,7 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		source, atSkill := parseAtSkill(args[0])
+		source, atSkill := install.ParseAtSkill(args[0])
 		skills := installSkills
 		if atSkill != "" {
 			skills = append(skills, atSkill)
@@ -80,7 +76,7 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 			}
 		}
 
-		targets, targetErr := resolveTargets(installTargets)
+		targets, targetErr := target.Resolve(installTargets)
 		if targetErr != nil {
 			return targetErr
 		}
@@ -97,7 +93,7 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 			return err
 		}
 
-		if updateErr := updateManifests(source, skills, result); updateErr != nil {
+		if updateErr := install.UpdateManifests(source, skills, installTargets, result); updateErr != nil {
 			return updateErr
 		}
 
@@ -156,120 +152,6 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 	},
 }
 
-// gitHosts lists the domain fragments that indicate a git-hosted source.
-var gitHosts = []string{"github.com", "gitlab.com", "bitbucket.org"}
-
-// updateManifests writes the installed package into agentpack-packages.yaml
-// and agentpack.lock in the current working directory.
-func updateManifests(source string, skills []string, result *install.Result) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get cwd: %w", err)
-	}
-
-	// Update agentpack-packages.yaml.
-	pkgPath := filepath.Join(cwd, "agentpack-packages.yaml")
-
-	cfg, err := packages.Load(pkgPath)
-	if err != nil {
-		return fmt.Errorf("load packages: %w", err)
-	}
-
-	pkg := buildPackage(result.Name, source, skills, installTargets)
-	cfg.Add(pkg)
-
-	if err := packages.Save(pkgPath, cfg); err != nil {
-		return fmt.Errorf("save packages: %w", err)
-	}
-
-	// Update agentpack.lock.
-	lockPath := filepath.Join(cwd, "agentpack.lock")
-
-	lf, err := lock.Load(lockPath)
-	if err != nil {
-		return fmt.Errorf("load lock: %w", err)
-	}
-
-	// Strip the #ref fragment for the source field in the lock.
-	lockSource := source
-	if idx := strings.LastIndex(lockSource, "#"); idx >= 0 {
-		lockSource = lockSource[:idx]
-	}
-
-	var lockedFiles []lock.LockedFile
-	var lockedTargets []string
-
-	if result.Dirs != nil {
-		for _, tgtName := range result.Dirs {
-			lockedTargets = append(lockedTargets, tgtName)
-		}
-	}
-
-	lp := lock.LockedPackage{
-		Name:     result.Name,
-		Source:   lockSource,
-		SHA:      result.SHA,
-		Resolved: time.Now().UTC().Format(time.RFC3339),
-		Skills:   skills,
-		Targets:  lockedTargets,
-		Files:    lockedFiles,
-	}
-
-	if pkg.Ref != "" {
-		lp.Ref = pkg.Ref
-	}
-
-	lf.Set(lp)
-
-	if err := lock.Save(lockPath, lf); err != nil {
-		return fmt.Errorf("save lock: %w", err)
-	}
-
-	return nil
-}
-
-// buildPackage constructs a packages.Package from the install source URL.
-// Git-hosted sources populate the Git (and optionally Ref) fields; everything
-// else populates the Source field.
-func buildPackage(name, source string, skills, targets []string) packages.Package {
-	pkg := packages.Package{Name: name}
-
-	isGit := false
-
-	for _, host := range gitHosts {
-		if strings.Contains(source, host) {
-			isGit = true
-
-			break
-		}
-	}
-
-	if isGit {
-		gitURL := source
-		ref := ""
-
-		if idx := strings.LastIndex(gitURL, "#"); idx >= 0 {
-			ref = gitURL[idx+1:]
-			gitURL = gitURL[:idx]
-		}
-
-		pkg.Git = gitURL
-		pkg.Ref = ref
-	} else {
-		pkg.Source = source
-	}
-
-	if len(skills) > 0 {
-		pkg.Skills = skills
-	}
-
-	if len(targets) > 0 {
-		pkg.Targets = targets
-	}
-
-	return pkg
-}
-
 // buildContentCheck returns a ContentCheck callback for install.Options.
 // When trust is true or the terminal is not a TTY, it returns nil (no check).
 // Otherwise it prompts the user for confirmation when executable files exist.
@@ -314,44 +196,6 @@ func buildContentCheck(cmd *cobra.Command, trust bool) func(*safety.Classificati
 
 		return nil
 	}
-}
-
-// parseAtSkill splits "owner/repo@skill" into ("owner/repo", "skill").
-// If no @ is present, returns (source, "").
-func parseAtSkill(source string) (string, string) {
-	if idx := strings.LastIndex(source, "@"); idx > 0 {
-		before := source[:idx]
-		after := source[idx+1:]
-		if after != "" && !strings.Contains(after, "/") {
-			return before, after
-		}
-	}
-
-	return source, ""
-}
-
-func resolveTargets(names []string) ([]target.Target, error) {
-	if len(names) == 0 {
-		return nil, nil
-	}
-
-	all := target.All()
-	byName := make(map[string]target.Target, len(all))
-	for _, t := range all {
-		byName[t.Name()] = t
-	}
-
-	resolved := make([]target.Target, 0, len(names))
-	for _, name := range names {
-		t, ok := byName[name]
-		if !ok {
-			return nil, fmt.Errorf("unknown target %q (see agentpack list --targets)", name)
-		}
-
-		resolved = append(resolved, t)
-	}
-
-	return resolved, nil
 }
 
 func init() {

@@ -22,15 +22,11 @@ package cmd
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/internal/configmerge"
-	"github.com/retr0h/agentpack/internal/lock"
-	"github.com/retr0h/agentpack/internal/packages"
+	"github.com/retr0h/agentpack/internal/install"
 	pkgremove "github.com/retr0h/agentpack/internal/remove"
 )
 
@@ -56,7 +52,7 @@ append @skill to the package name: agentpack del my-package@my-skill`,
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		name, skill := parseAtSkill(args[0])
+		name, skill := install.ParseAtSkill(args[0])
 
 		displayName := name
 		if skill != "" {
@@ -85,7 +81,7 @@ append @skill to the package name: agentpack del my-package@my-skill`,
 			return err
 		}
 
-		removeManifests(name, skill)
+		install.RemoveManifests(name, skill)
 
 		if outputFormat == "json" {
 			return jsonOutput(out, result)
@@ -101,57 +97,6 @@ append @skill to the package name: agentpack del my-package@my-skill`,
 
 		return nil
 	},
-}
-
-// removeManifests removes the named package from agentpack-packages.yaml,
-// agentpack.lock, and the hooks section of .claude/settings.json. All
-// operations are best-effort: a missing file or missing entry is not an error,
-// because users may have installed a package without a managed yaml/lock.
-func removeManifests(name, skill string) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	pkgPath := filepath.Join(cwd, "agentpack-packages.yaml")
-	lockPath := filepath.Join(cwd, "agentpack.lock")
-
-	if skill != "" {
-		if cfg, loadErr := packages.Load(pkgPath); loadErr == nil {
-			if p := cfg.Find(name); p != nil {
-				remaining := make([]string, 0, len(p.Skills))
-				for _, s := range p.Skills {
-					if s != skill {
-						remaining = append(remaining, s)
-					}
-				}
-
-				p.Skills = remaining
-			}
-
-			_ = packages.Save(pkgPath, cfg)
-		}
-
-		if lf, loadErr := lock.Load(lockPath); loadErr == nil {
-			lf.RemoveSkill(name, skill)
-			_ = lock.Save(lockPath, lf)
-		}
-
-		return
-	}
-
-	if cfg, loadErr := packages.Load(pkgPath); loadErr == nil {
-		cfg.Remove(name)
-		_ = packages.Save(pkgPath, cfg)
-	}
-
-	if lf, loadErr := lock.Load(lockPath); loadErr == nil {
-		lf.Remove(name)
-		_ = lock.Save(lockPath, lf)
-	}
-
-	settingsPath := filepath.Join(cwd, ".claude", "settings.json")
-	_ = configmerge.RemoveHooks(settingsPath, name)
 }
 
 func init() {

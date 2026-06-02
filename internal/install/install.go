@@ -49,8 +49,11 @@ import (
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/checksum"
+	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/fetcher"
+	"github.com/retr0h/agentpack/internal/lock"
 	"github.com/retr0h/agentpack/internal/metadata"
+	"github.com/retr0h/agentpack/internal/packages"
 	"github.com/retr0h/agentpack/internal/registry"
 	"github.com/retr0h/agentpack/internal/safety"
 	"github.com/retr0h/agentpack/pkg/target"
@@ -410,6 +413,140 @@ func nameFromSource(source string) string {
 	}
 
 	return base
+}
+
+// UpdateManifests writes the installed package into agentpack-packages.yaml
+// and agentpack.lock in the current working directory.
+func UpdateManifests(source string, skills, targets []string, result *Result) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get cwd: %w", err)
+	}
+
+	// Update agentpack-packages.yaml.
+	pkgPath := filepath.Join(cwd, "agentpack-packages.yaml")
+
+	cfg, err := packages.Load(pkgPath)
+	if err != nil {
+		return fmt.Errorf("load packages: %w", err)
+	}
+
+	pkg := packages.BuildFromSource(result.Name, source, skills, targets)
+	cfg.Add(pkg)
+
+	if err := packages.Save(pkgPath, cfg); err != nil {
+		return fmt.Errorf("save packages: %w", err)
+	}
+
+	// Update agentpack.lock.
+	lockPath := filepath.Join(cwd, "agentpack.lock")
+
+	lf, err := lock.Load(lockPath)
+	if err != nil {
+		return fmt.Errorf("load lock: %w", err)
+	}
+
+	// Strip the #ref fragment for the source field in the lock.
+	lockSource := source
+	if idx := strings.LastIndex(lockSource, "#"); idx >= 0 {
+		lockSource = lockSource[:idx]
+	}
+
+	var lockedFiles []lock.LockedFile
+	var lockedTargets []string
+
+	if result.Dirs != nil {
+		for _, tgtName := range result.Dirs {
+			lockedTargets = append(lockedTargets, tgtName)
+		}
+	}
+
+	lp := lock.LockedPackage{
+		Name:     result.Name,
+		Source:   lockSource,
+		SHA:      result.SHA,
+		Resolved: time.Now().UTC().Format(time.RFC3339),
+		Skills:   skills,
+		Targets:  lockedTargets,
+		Files:    lockedFiles,
+	}
+
+	if pkg.Ref != "" {
+		lp.Ref = pkg.Ref
+	}
+
+	lf.Set(lp)
+
+	if err := lock.Save(lockPath, lf); err != nil {
+		return fmt.Errorf("save lock: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveManifests removes the named package from agentpack-packages.yaml,
+// agentpack.lock, and the hooks section of .claude/settings.json. All
+// operations are best-effort: a missing file or missing entry is not an error,
+// because users may have installed a package without a managed yaml/lock.
+func RemoveManifests(name, skill string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	pkgPath := filepath.Join(cwd, "agentpack-packages.yaml")
+	lockPath := filepath.Join(cwd, "agentpack.lock")
+
+	if skill != "" {
+		if cfg, loadErr := packages.Load(pkgPath); loadErr == nil {
+			if p := cfg.Find(name); p != nil {
+				remaining := make([]string, 0, len(p.Skills))
+				for _, s := range p.Skills {
+					if s != skill {
+						remaining = append(remaining, s)
+					}
+				}
+
+				p.Skills = remaining
+			}
+
+			_ = packages.Save(pkgPath, cfg)
+		}
+
+		if lf, loadErr := lock.Load(lockPath); loadErr == nil {
+			lf.RemoveSkill(name, skill)
+			_ = lock.Save(lockPath, lf)
+		}
+
+		return
+	}
+
+	if cfg, loadErr := packages.Load(pkgPath); loadErr == nil {
+		cfg.Remove(name)
+		_ = packages.Save(pkgPath, cfg)
+	}
+
+	if lf, loadErr := lock.Load(lockPath); loadErr == nil {
+		lf.Remove(name)
+		_ = lock.Save(lockPath, lf)
+	}
+
+	settingsPath := filepath.Join(cwd, ".claude", "settings.json")
+	_ = configmerge.RemoveHooks(settingsPath, name)
+}
+
+// ParseAtSkill splits "owner/repo@skill" into ("owner/repo", "skill").
+// If no @ is present, returns (source, "").
+func ParseAtSkill(source string) (string, string) {
+	if idx := strings.LastIndex(source, "@"); idx > 0 {
+		before := source[:idx]
+		after := source[idx+1:]
+		if after != "" && !strings.Contains(after, "/") {
+			return before, after
+		}
+	}
+
+	return source, ""
 }
 
 // emitStep calls opts.OnStep when the callback is set.

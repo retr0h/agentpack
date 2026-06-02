@@ -20,6 +20,8 @@
 
 package target
 
+import "fmt"
+
 // registry holds all known targets, populated via init() in each driver
 // package.
 var registry []Target //nolint:gochecknoglobals
@@ -37,6 +39,33 @@ func All() []Target {
 	copy(out, registry)
 
 	return out
+}
+
+// Resolve maps a list of target names to their registered Target values.
+// It returns an error when any name is not found in the registry.
+// When names is empty, nil is returned.
+func Resolve(names []string) ([]Target, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+
+	all := All()
+	byName := make(map[string]Target, len(all))
+	for _, t := range all {
+		byName[t.Name()] = t
+	}
+
+	resolved := make([]Target, 0, len(names))
+	for _, name := range names {
+		t, ok := byName[name]
+		if !ok {
+			return nil, fmt.Errorf("unknown target %q (see agentpack list --targets)", name)
+		}
+
+		resolved = append(resolved, t)
+	}
+
+	return resolved, nil
 }
 
 // Detected returns the subset of registered targets whose Detect() method

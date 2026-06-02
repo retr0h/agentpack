@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -52,6 +53,51 @@ type Package struct {
 
 	// Targets restricts which agent targets to install to. Optional.
 	Targets []string `yaml:"targets,omitempty"`
+}
+
+// gitHosts lists the domain fragments that indicate a git-hosted source.
+var gitHosts = []string{"github.com", "gitlab.com", "bitbucket.org"}
+
+// BuildFromSource constructs a Package from the install source URL.
+// Git-hosted sources populate the Git (and optionally Ref) fields; everything
+// else populates the Source field.
+func BuildFromSource(name, source string, skills, targets []string) Package {
+	pkg := Package{Name: name}
+
+	isGit := false
+
+	for _, host := range gitHosts {
+		if strings.Contains(source, host) {
+			isGit = true
+
+			break
+		}
+	}
+
+	if isGit {
+		gitURL := source
+		ref := ""
+
+		if idx := strings.LastIndex(gitURL, "#"); idx >= 0 {
+			ref = gitURL[idx+1:]
+			gitURL = gitURL[:idx]
+		}
+
+		pkg.Git = gitURL
+		pkg.Ref = ref
+	} else {
+		pkg.Source = source
+	}
+
+	if len(skills) > 0 {
+		pkg.Skills = skills
+	}
+
+	if len(targets) > 0 {
+		pkg.Targets = targets
+	}
+
+	return pkg
 }
 
 // Config is the parsed contents of agentpack-packages.yaml.
