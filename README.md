@@ -81,6 +81,7 @@ supports, wherever it belongs.
 <p align="center">
   <picture>
     <source srcset="docs/assets/format-diagram-dark.svg" media="(prefers-color-scheme: dark)">
+    <source srcset="docs/assets/format-diagram-light.svg" media="(prefers-color-scheme: light)">
     <img src="docs/assets/format-diagram-dark.svg" alt="agentpack content types" width="700">
   </picture>
 </p>
