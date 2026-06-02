@@ -151,6 +151,46 @@ func TestRun(t *testing.T) {
 			},
 			wantErr: "create skill dir",
 		},
+		{
+			name:      "error when SKILL.md cannot be written",
+			skillName: "my-skill",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				skillDir := filepath.Join(dir, "skills", "my-skill")
+				require.NoError(t, os.MkdirAll(skillDir, 0o755))
+				// Place a directory where SKILL.md would be written so WriteFile fails.
+				require.NoError(t, os.Mkdir(filepath.Join(skillDir, "SKILL.md"), 0o755))
+
+				return dir
+			},
+			wantErr: "write SKILL.md",
+		},
+		{
+			name:      "error when agentpack.yaml cannot be written",
+			skillName: "my-skill",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				// Pre-create the skill dir and SKILL.md so those steps succeed,
+				// then make dir read-only so WriteFile for agentpack.yaml fails.
+				skillDir := filepath.Join(dir, "skills", "my-skill")
+				require.NoError(t, os.MkdirAll(skillDir, 0o755))
+				require.NoError(
+					t,
+					os.WriteFile(
+						filepath.Join(skillDir, "SKILL.md"),
+						[]byte("existing"),
+						0o644,
+					),
+				)
+				require.NoError(t, os.Chmod(dir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+				return dir
+			},
+			wantErr: "write agentpack.yaml",
+		},
 	}
 
 	for _, tt := range tests {
