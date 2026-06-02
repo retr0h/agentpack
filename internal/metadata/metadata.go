@@ -41,15 +41,15 @@ type ContentEntry struct {
 
 // Metadata holds build and source-control information for a plugin archive.
 type Metadata struct {
-	Name           string                 `json:"name"                      yaml:"name"`
-	Version        string                 `json:"version"                   yaml:"version"`
-	GitCommitSHA   string                 `json:"gitCommitSHA"              yaml:"gitCommitSHA"`
-	GitBranch      string                 `json:"gitBranch"                 yaml:"gitBranch"`
-	BuildTimestamp string                 `json:"buildTimestamp"            yaml:"buildTimestamp"`
-	BuilderVersion string                 `json:"builderVersion"            yaml:"builderVersion"`
-	Platform       string                 `json:"platform"                  yaml:"platform"`
-	Content        *safety.Classification `json:"content,omitempty"         yaml:"content,omitempty"`
-	Entries        []ContentEntry         `json:"entries,omitempty"         yaml:"entries,omitempty"`
+	Name           string                 `json:"name"              yaml:"name"`
+	Version        string                 `json:"version"           yaml:"version"`
+	GitCommitSHA   string                 `json:"gitCommitSHA"      yaml:"gitCommitSHA"`
+	GitBranch      string                 `json:"gitBranch"         yaml:"gitBranch"`
+	BuildTimestamp string                 `json:"buildTimestamp"    yaml:"buildTimestamp"`
+	BuilderVersion string                 `json:"builderVersion"    yaml:"builderVersion"`
+	Platform       string                 `json:"platform"          yaml:"platform"`
+	Content        *safety.Classification `json:"content,omitempty" yaml:"content,omitempty"`
+	Entries        []ContentEntry         `json:"entries,omitempty" yaml:"entries,omitempty"`
 }
 
 // Capture collects git state and build information from dir and returns a

@@ -238,7 +238,7 @@ func TestMetadataEntriesYAMLRoundTrip(t *testing.T) {
 		wantKey bool // whether "entries:" should appear in the YAML output
 	}{
 		{
-			name: "nil entries omitted from YAML",
+			name:    "nil entries omitted from YAML",
 			entries: nil,
 			wantKey: false,
 		},
