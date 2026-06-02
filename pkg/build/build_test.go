@@ -316,6 +316,34 @@ plugins:
 			wantErr: "context canceled",
 		},
 		{
+			name: "creates sha256 sidecar alongside archive",
+			setup: func(t *testing.T) (string, func()) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+				writeManifest(t, dir, `
+name: sidecar-plugin
+version: "1.0.0"
+description: A sidecar test plugin
+`)
+				return dir, func() {}
+			},
+			opts: func(dir string) build.Options {
+				return build.Options{Dir: dir}
+			},
+			checkResult: func(t *testing.T, results []build.Result) {
+				t.Helper()
+				require.Len(t, results, 1)
+				r := results[0]
+				sidecarPath := r.ArchivePath + ".sha256"
+				data, err := os.ReadFile(sidecarPath)
+				require.NoError(t, err)
+				content := strings.TrimSpace(string(data))
+				assert.Equal(t, r.SHA256, content)
+				assert.Len(t, content, 64)
+			},
+		},
+		{
 			name: "builds plugin with skills",
 			setup: func(t *testing.T) (string, func()) {
 				t.Helper()
@@ -729,6 +757,22 @@ func TestBuildPlugin(t *testing.T) {
 				return vfs, dir, p, meta
 			},
 			wantErr: "hashing archive",
+		},
+		{
+			name: "fails when sidecar Create returns error",
+			setup: func(t *testing.T) (avfs.VFS, string, manifest.Plugin, *metadata.Metadata) {
+				t.Helper()
+				dir := t.TempDir()
+				initGitRepo(t, dir)
+				vfs := createErrorForPathVFS{
+					VFS:    osfs.NewWithNoIdm(),
+					suffix: ".sha256",
+				}
+				p := manifest.Plugin{Name: "sidecar-err", Version: "1.0.0", Description: "desc"}
+				meta := &metadata.Metadata{}
+				return vfs, dir, p, meta
+			},
+			wantErr: "creating sidecar",
 		},
 		{
 			name: "fails when buildMCPEntries returns error",
