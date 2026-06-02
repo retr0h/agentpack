@@ -31,6 +31,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/cli"
 	_ "github.com/retr0h/agentpack/internal/driver/agents"      // register data-driven agents (includes universal)
+	_ "github.com/retr0h/agentpack/internal/driver/amp"         // register Amp target
 	_ "github.com/retr0h/agentpack/internal/driver/claudecode"  // register Claude Code target
 	_ "github.com/retr0h/agentpack/internal/driver/cline"       // register Cline target
 	_ "github.com/retr0h/agentpack/internal/driver/codex"       // register Codex target
@@ -39,6 +40,9 @@ import (
 	_ "github.com/retr0h/agentpack/internal/driver/cursor"      // register Cursor target
 	_ "github.com/retr0h/agentpack/internal/driver/devin"       // register Devin target
 	_ "github.com/retr0h/agentpack/internal/driver/gemini"      // register Gemini CLI target
+	_ "github.com/retr0h/agentpack/internal/driver/goose"       // register Goose target
+	_ "github.com/retr0h/agentpack/internal/driver/kiro"        // register Kiro CLI target
+	_ "github.com/retr0h/agentpack/internal/driver/roo"         // register Roo Code target
 	_ "github.com/retr0h/agentpack/internal/driver/windsurf"    // register Windsurf target
 )
 

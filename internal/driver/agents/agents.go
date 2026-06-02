@@ -54,7 +54,6 @@ var registry = []AgentDef{
 		DetectHome:      ".aider-desk",
 		GlobalSkillsDir: ".aider-desk/skills",
 	},
-	{Name: "amp", Display: "Amp", DetectConfig: "amp", GlobalSkillsDir: ".config/agents/skills"},
 	{
 		Name:            "antigravity",
 		Display:         "Antigravity",
@@ -131,12 +130,6 @@ var registry = []AgentDef{
 		GlobalSkillsDir: ".forge/skills",
 	},
 	{
-		Name:            "goose",
-		Display:         "Goose",
-		DetectConfig:    "goose",
-		GlobalSkillsDir: ".config/goose/skills",
-	},
-	{
 		Name:            "hermes-agent",
 		Display:         "Hermes Agent",
 		DetectHome:      ".hermes",
@@ -161,7 +154,6 @@ var registry = []AgentDef{
 		DetectHome:      ".kimi",
 		GlobalSkillsDir: ".config/agents/skills",
 	},
-	{Name: "kiro-cli", Display: "Kiro CLI", DetectHome: ".kiro", GlobalSkillsDir: ".kiro/skills"},
 	{Name: "kode", Display: "Kode", DetectHome: ".kode", GlobalSkillsDir: ".kode/skills"},
 	{Name: "mcpjam", Display: "MCPJam", DetectHome: ".mcpjam", GlobalSkillsDir: ".mcpjam/skills"},
 	{
@@ -206,7 +198,6 @@ var registry = []AgentDef{
 		DetectHome:      ".replit",
 		GlobalSkillsDir: ".config/agents/skills",
 	},
-	{Name: "roo", Display: "Roo Code", DetectHome: ".roo", GlobalSkillsDir: ".roo/skills"},
 	{
 		Name:            "rovodev",
 		Display:         "Rovo Dev",

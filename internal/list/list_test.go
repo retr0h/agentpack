@@ -56,9 +56,9 @@ func TestRunGlobal(t *testing.T) {
 				// adal agent: GlobalSkillsDir = ".adal/skills"
 				adalSkillDir := filepath.Join(home, ".adal", "skills", "my-skill")
 				require.NoError(t, os.MkdirAll(adalSkillDir, 0o755))
-				// roo agent: GlobalSkillsDir = ".roo/skills"
-				rooSkillDir := filepath.Join(home, ".roo", "skills", "another-skill")
-				require.NoError(t, os.MkdirAll(rooSkillDir, 0o755))
+				// bob agent: GlobalSkillsDir = ".bob/skills"
+				bobSkillDir := filepath.Join(home, ".bob", "skills", "another-skill")
+				require.NoError(t, os.MkdirAll(bobSkillDir, 0o755))
 			},
 			checkResult: func(t *testing.T, entries []list.GlobalEntry) {
 				t.Helper()
@@ -71,7 +71,7 @@ func TestRunGlobal(t *testing.T) {
 				assert.True(t, got[key{"adal", "my-skill"}])
 				assert.True(
 					t,
-					got[key{"roo", "another-skill"}],
+					got[key{"bob", "another-skill"}],
 				)
 			},
 		},

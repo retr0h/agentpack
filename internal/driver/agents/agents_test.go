@@ -51,8 +51,8 @@ func TestDefs(t *testing.T) {
 			checkName: "universal",
 		},
 		{
-			name:      "Defs contains goose",
-			checkName: "goose",
+			name:      "Defs contains adal",
+			checkName: "adal",
 		},
 	}
 
