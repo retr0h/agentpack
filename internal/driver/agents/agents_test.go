@@ -211,11 +211,11 @@ func TestAgent_Detect(t *testing.T) {
 		{
 			name: "EnvOverride set to existing dir returns true",
 			def: agents.AgentDef{
-				Name:            "codex",
-				Display:         "Codex",
-				DetectHome:      ".codex",
-				EnvOverride:     "CODEX_HOME",
-				GlobalSkillsDir: ".codex/skills",
+				Name:            "vibe",
+				Display:         "Mistral Vibe",
+				DetectHome:      ".vibe",
+				EnvOverride:     "VIBE_HOME",
+				GlobalSkillsDir: ".vibe/skills",
 			},
 			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
@@ -225,7 +225,7 @@ func TestAgent_Detect(t *testing.T) {
 				t.Helper()
 				dir := t.TempDir()
 				return func(key string) string {
-					if key == "CODEX_HOME" {
+					if key == "VIBE_HOME" {
 						return dir
 					}
 					return ""
@@ -236,11 +236,11 @@ func TestAgent_Detect(t *testing.T) {
 		{
 			name: "EnvOverride set to missing dir returns false",
 			def: agents.AgentDef{
-				Name:            "codex",
-				Display:         "Codex",
-				DetectHome:      ".codex",
-				EnvOverride:     "CODEX_HOME",
-				GlobalSkillsDir: ".codex/skills",
+				Name:            "vibe",
+				Display:         "Mistral Vibe",
+				DetectHome:      ".vibe",
+				EnvOverride:     "VIBE_HOME",
+				GlobalSkillsDir: ".vibe/skills",
 			},
 			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
@@ -249,7 +249,7 @@ func TestAgent_Detect(t *testing.T) {
 			getenvFunc: func(t *testing.T) func(string) string {
 				t.Helper()
 				return func(key string) string {
-					if key == "CODEX_HOME" {
+					if key == "VIBE_HOME" {
 						return "/nonexistent/path/for/agentpack/test"
 					}
 					return ""
@@ -345,16 +345,16 @@ func TestAgent_Detect(t *testing.T) {
 		{
 			name: "EnvOverride set but env var empty falls through to DetectHome missing",
 			def: agents.AgentDef{
-				Name:            "codex",
-				Display:         "Codex",
-				DetectHome:      ".codex",
-				EnvOverride:     "CODEX_HOME",
-				GlobalSkillsDir: ".codex/skills",
+				Name:            "vibe",
+				Display:         "Mistral Vibe",
+				DetectHome:      ".vibe",
+				EnvOverride:     "VIBE_HOME",
+				GlobalSkillsDir: ".vibe/skills",
 			},
 			homeFunc: func(t *testing.T) func() (string, error) {
 				t.Helper()
 				home := t.TempDir()
-				// .codex does NOT exist so DetectHome check fails.
+				// .vibe does NOT exist so DetectHome check fails.
 				return func() (string, error) { return home, nil }
 			},
 			getenvFunc: func(t *testing.T) func(string) string {
