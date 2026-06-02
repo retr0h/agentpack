@@ -31,9 +31,9 @@ import (
 
 func TestVersionCmd(t *testing.T) {
 	tests := []struct {
-		name       string
-		output     string
-		assertOut  func(t *testing.T, buf *bytes.Buffer)
+		name      string
+		output    string
+		assertOut func(t *testing.T, buf *bytes.Buffer)
 	}{
 		{
 			name: "version prints version string",
