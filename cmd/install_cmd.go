@@ -29,7 +29,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/lock"
-	pkgsync "github.com/retr0h/agentpack/pkg/sync"
+	pkgsync "github.com/retr0h/agentpack/internal/sync"
 )
 
 type syncer interface {

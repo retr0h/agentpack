@@ -31,7 +31,7 @@ import (
 	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/lock"
 	"github.com/retr0h/agentpack/internal/packages"
-	pkgremove "github.com/retr0h/agentpack/pkg/remove"
+	pkgremove "github.com/retr0h/agentpack/internal/remove"
 )
 
 type remover interface {

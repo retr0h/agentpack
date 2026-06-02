@@ -28,9 +28,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/retr0h/agentpack/internal/inspect"
+	"github.com/retr0h/agentpack/internal/registry"
 	"github.com/retr0h/agentpack/internal/safety"
-	"github.com/retr0h/agentpack/pkg/inspect"
-	"github.com/retr0h/agentpack/pkg/registry"
 )
 
 type registryLoader interface {

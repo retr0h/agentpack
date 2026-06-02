@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/pkg/search"
+	"github.com/retr0h/agentpack/internal/search"
 )
 
 type searcher interface {
