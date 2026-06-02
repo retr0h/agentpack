@@ -149,7 +149,6 @@ var registry = []AgentDef{
 		DetectHome:      ".trae-cn",
 		GlobalSkillsDir: ".trae-cn/skills",
 	},
-	{Name: "warp", Display: "Warp", DetectHome: ".warp", GlobalSkillsDir: ".warp/skills"},
 	{
 		Name:            "zencoder",
 		Display:         "Zencoder",

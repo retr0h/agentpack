@@ -30,6 +30,7 @@ import (
 	"github.com/retr0h/agentpack/internal/driver/openhands"
 	"github.com/retr0h/agentpack/internal/driver/roo"
 	"github.com/retr0h/agentpack/internal/driver/rovodev"
+	"github.com/retr0h/agentpack/internal/driver/warp"
 	"github.com/retr0h/agentpack/internal/driver/windsurf"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -66,6 +67,7 @@ func RegisterAll() {
 		target.Register(rovodev.New())
 		target.Register(codebuddy.New())
 		target.Register(opencode.New())
+		target.Register(warp.New())
 		target.Register(roo.New())
 		agents.RegisterAll()
 	})
