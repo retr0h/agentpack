@@ -13,7 +13,7 @@ not yet implemented, `-` = not supported or not verified
 | Claude Code | driver | driver   | driver | driver | driver | driver | `internal/driver/claudecode/`  |
 | Cursor      | driver | -        | -      | -      | driver | -      | `internal/driver/cursor/`      |
 | Windsurf    | driver | -        | driver | -      | driver | -      | `internal/driver/windsurf/`    |
-| Codex       | driver | -        | driver | -      | -      | -      | `internal/driver/codex/`       |
+| Codex       | driver | -        | driver | -      | -      | driver | `internal/driver/codex/`       |
 | Copilot     | driver | -        | -      | -      | driver | -      | `internal/driver/copilot/`     |
 | Cline       | driver | -        | driver | -      | driver | -      | `internal/driver/cline/`       |
 | Gemini CLI  | driver | -        | -      | -      | driver | -      | `internal/driver/gemini/`      |
