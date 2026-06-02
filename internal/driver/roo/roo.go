@@ -34,10 +34,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // Roo is the target driver for Roo Code.
 type Roo struct {
 	userHomeFunc func() (string, error)

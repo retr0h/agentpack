@@ -34,10 +34,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // Kiro is the target driver for Kiro CLI.
 type Kiro struct {
 	userHomeFunc func() (string, error)

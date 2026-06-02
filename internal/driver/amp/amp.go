@@ -36,10 +36,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // Amp is the target driver for Amp.
 type Amp struct {
 	userHomeFunc      func() (string, error)

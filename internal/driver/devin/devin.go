@@ -38,10 +38,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // Devin is the target driver for Devin.
 type Devin struct {
 	configDirFunc func() (string, error)

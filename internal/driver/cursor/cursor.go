@@ -36,10 +36,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // Cursor is the target driver for Cursor.
 type Cursor struct {
 	userHomeFunc func() (string, error)

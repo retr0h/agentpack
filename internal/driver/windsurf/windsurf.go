@@ -38,10 +38,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // Windsurf is the target driver for Windsurf.
 type Windsurf struct {
 	userHomeFunc func() (string, error)

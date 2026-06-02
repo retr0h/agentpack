@@ -232,7 +232,8 @@ var registry = []AgentDef{
 	},
 }
 
-func init() {
+// RegisterAll registers every data-driven agent in the global target registry.
+func RegisterAll() {
 	for _, def := range registry {
 		target.Register(newAgent(def, os.UserHomeDir, os.Getwd))
 	}

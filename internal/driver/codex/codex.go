@@ -37,10 +37,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // Codex is the target driver for OpenAI Codex.
 type Codex struct {
 	userHomeFunc func() (string, error)

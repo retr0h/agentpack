@@ -38,10 +38,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // ClaudeCode is the target driver for Claude Code.
 type ClaudeCode struct {
 	userHomeFunc func() (string, error)

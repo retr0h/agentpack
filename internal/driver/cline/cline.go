@@ -37,10 +37,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // Cline is the target driver for Cline.
 type Cline struct {
 	userHomeFunc func() (string, error)

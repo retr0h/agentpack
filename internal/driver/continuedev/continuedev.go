@@ -36,10 +36,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // Continue is the target driver for Continue.
 type Continue struct {
 	userHomeFunc func() (string, error)

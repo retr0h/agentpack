@@ -34,9 +34,8 @@
 //	    Dir:       os.Getwd(),
 //	})
 //
-// Target drivers are registered via init() using Register. The claudecode,
-// cursor, and universal packages register their drivers automatically when
-// imported with a blank import ("_") in cmd/root.go.
+// Target drivers are registered by calling driver.RegisterAll() from
+// cmd/root.go at application startup.
 package target
 
 import (

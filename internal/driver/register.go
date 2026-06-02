@@ -1,22 +1,46 @@
-// Package driver registers all built-in target drivers.
-// Import this package with a blank import to register every driver:
-//
-//	_ "github.com/retr0h/agentpack/internal/driver"
+// Package driver provides RegisterAll to register every built-in target driver.
 package driver
 
 import (
-	_ "github.com/retr0h/agentpack/internal/driver/agents"
-	_ "github.com/retr0h/agentpack/internal/driver/amp"
-	_ "github.com/retr0h/agentpack/internal/driver/claudecode"
-	_ "github.com/retr0h/agentpack/internal/driver/cline"
-	_ "github.com/retr0h/agentpack/internal/driver/codex"
-	_ "github.com/retr0h/agentpack/internal/driver/continuedev"
-	_ "github.com/retr0h/agentpack/internal/driver/copilot"
-	_ "github.com/retr0h/agentpack/internal/driver/cursor"
-	_ "github.com/retr0h/agentpack/internal/driver/devin"
-	_ "github.com/retr0h/agentpack/internal/driver/gemini"
-	_ "github.com/retr0h/agentpack/internal/driver/goose"
-	_ "github.com/retr0h/agentpack/internal/driver/kiro"
-	_ "github.com/retr0h/agentpack/internal/driver/roo"
-	_ "github.com/retr0h/agentpack/internal/driver/windsurf"
+	"sync"
+
+	"github.com/retr0h/agentpack/internal/driver/agents"
+	"github.com/retr0h/agentpack/internal/driver/amp"
+	"github.com/retr0h/agentpack/internal/driver/claudecode"
+	"github.com/retr0h/agentpack/internal/driver/cline"
+	"github.com/retr0h/agentpack/internal/driver/codex"
+	"github.com/retr0h/agentpack/internal/driver/continuedev"
+	"github.com/retr0h/agentpack/internal/driver/copilot"
+	"github.com/retr0h/agentpack/internal/driver/cursor"
+	"github.com/retr0h/agentpack/internal/driver/devin"
+	"github.com/retr0h/agentpack/internal/driver/gemini"
+	"github.com/retr0h/agentpack/internal/driver/goose"
+	"github.com/retr0h/agentpack/internal/driver/kiro"
+	"github.com/retr0h/agentpack/internal/driver/roo"
+	"github.com/retr0h/agentpack/internal/driver/windsurf"
+	"github.com/retr0h/agentpack/pkg/target"
 )
+
+var once sync.Once //nolint:gochecknoglobals
+
+// RegisterAll registers every built-in target driver with the global target
+// registry. It is safe to call multiple times; only the first call performs
+// registration.
+func RegisterAll() {
+	once.Do(func() {
+		target.Register(claudecode.New())
+		target.Register(cursor.New())
+		target.Register(copilot.New())
+		target.Register(windsurf.New())
+		target.Register(codex.New())
+		target.Register(cline.New())
+		target.Register(gemini.New())
+		target.Register(devin.New())
+		target.Register(continuedev.New())
+		target.Register(amp.New())
+		target.Register(goose.New())
+		target.Register(kiro.New())
+		target.Register(roo.New())
+		agents.RegisterAll()
+	})
+}

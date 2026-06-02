@@ -22,13 +22,11 @@ package target
 
 import "fmt"
 
-// registry holds all known targets, populated via init() in each driver
-// package.
+// registry holds all known targets, populated by driver.RegisterAll().
 var registry []Target //nolint:gochecknoglobals
 
-// Register adds a target to the global registry. It is called from each
-// driver package's init() function so that a blank import is sufficient to
-// activate the driver.
+// Register adds a target to the global registry. It is called from
+// driver.RegisterAll() during application startup.
 func Register(t Target) {
 	registry = append(registry, t)
 }

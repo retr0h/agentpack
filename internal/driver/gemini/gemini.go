@@ -36,10 +36,6 @@ import (
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
-func init() {
-	target.Register(New())
-}
-
 // Gemini is the target driver for Gemini CLI.
 type Gemini struct {
 	userHomeFunc func() (string, error)
