@@ -124,24 +124,11 @@ var registry = []AgentDef{
 		GlobalSkillsDir: ".firebender/skills",
 	},
 	{
-		Name:            "forgecode",
-		Display:         "ForgeCode",
-		DetectHome:      ".forge",
-		GlobalSkillsDir: ".forge/skills",
-	},
-	{
-		Name:            "hermes-agent",
-		Display:         "Hermes Agent",
-		DetectHome:      ".hermes",
-		GlobalSkillsDir: ".hermes/skills",
-	},
-	{
 		Name:            "iflow-cli",
 		Display:         "iFlow CLI",
 		DetectHome:      ".iflow",
 		GlobalSkillsDir: ".iflow/skills",
 	},
-	{Name: "junie", Display: "Junie", DetectHome: ".junie", GlobalSkillsDir: ".junie/skills"},
 	{
 		Name:            "kilo",
 		Display:         "Kilo Code",

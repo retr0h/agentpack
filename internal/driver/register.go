@@ -13,8 +13,10 @@ import (
 	"github.com/retr0h/agentpack/internal/driver/copilot"
 	"github.com/retr0h/agentpack/internal/driver/cursor"
 	"github.com/retr0h/agentpack/internal/driver/devin"
+	"github.com/retr0h/agentpack/internal/driver/forgecode"
 	"github.com/retr0h/agentpack/internal/driver/gemini"
 	"github.com/retr0h/agentpack/internal/driver/goose"
+	"github.com/retr0h/agentpack/internal/driver/junie"
 	"github.com/retr0h/agentpack/internal/driver/kiro"
 	"github.com/retr0h/agentpack/internal/driver/roo"
 	"github.com/retr0h/agentpack/internal/driver/windsurf"
@@ -36,10 +38,12 @@ func RegisterAll() {
 		target.Register(cline.New())
 		target.Register(gemini.New())
 		target.Register(devin.New())
+		target.Register(forgecode.New())
 		target.Register(continuedev.New())
 		target.Register(amp.New())
 		target.Register(goose.New())
 		target.Register(kiro.New())
+		target.Register(junie.New())
 		target.Register(roo.New())
 		agents.RegisterAll()
 	})
