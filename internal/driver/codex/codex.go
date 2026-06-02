@@ -29,9 +29,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+
+	toml "github.com/pelletier/go-toml/v2"
 
 	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/pkg/target"
@@ -63,7 +67,7 @@ func (c *Codex) DisplayName() string { return "Codex" }
 
 // SupportedTypes returns the content types this driver can install.
 func (c *Codex) SupportedTypes() []string {
-	return []string{"skill", "hook"}
+	return []string{"skill", "hook", "config"}
 }
 
 // Detect returns true if the Codex config directory exists or CODEX_HOME is
@@ -133,6 +137,16 @@ func (c *Codex) installFromEntries(
 			if err := c.installHooks(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
 				return nil, err
 			}
+
+		case "config":
+			cfgPath, err := c.codexConfigPath(opts)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := c.installConfig(ctx, opts.SourceDir, cfgPath); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -177,6 +191,15 @@ func (c *Codex) installFromDirs(
 	}
 
 	if err := c.installHooks(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+		return nil, err
+	}
+
+	cfgPath, cfgErr := c.codexConfigPath(opts)
+	if cfgErr != nil {
+		return nil, cfgErr
+	}
+
+	if err := c.installConfig(ctx, opts.SourceDir, cfgPath); err != nil {
 		return nil, err
 	}
 
@@ -282,6 +305,121 @@ func (c *Codex) installHooks(
 
 	if err := configmerge.MergeHooks(hooksPath, pluginName, hooks); err != nil {
 		return fmt.Errorf("merge hooks: %w", err)
+	}
+
+	return nil
+}
+
+// codexConfigPath returns the path to .codex/config.toml for the install
+// scope. Project installs resolve relative to opts.Dir (or cwd); global
+// installs resolve under ~/.codex/.
+func (c *Codex) codexConfigPath(opts target.InstallOpts) (string, error) {
+	if opts.Global {
+		home, err := c.userHomeFunc()
+		if err != nil {
+			return "", fmt.Errorf("home dir: %w", err)
+		}
+
+		return filepath.Join(home, ".codex", "config.toml"), nil
+	}
+
+	dir := opts.Dir
+	if dir == "" {
+		cwd, err := c.cwdFunc()
+		if err != nil {
+			return "", fmt.Errorf("getwd: %w", err)
+		}
+
+		dir = cwd
+	}
+
+	return filepath.Join(dir, ".codex", "config.toml"), nil
+}
+
+// installConfig merges all settings/*.json files from srcDir into the TOML
+// config at cfgPath. Each JSON file is expected to contain a flat object of
+// key-value pairs that are merged at the top level; existing keys not present
+// in the fragment are preserved.
+func (c *Codex) installConfig(ctx context.Context, srcDir, cfgPath string) error {
+	settingsDir := filepath.Join(srcDir, "settings")
+	if _, err := os.Stat(settingsDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(settingsDir)
+	if err != nil {
+		return fmt.Errorf("read settings dir: %w", err)
+	}
+
+	// Read existing TOML config (create empty map when absent).
+	cfg, err := readTOML(cfgPath)
+	if err != nil {
+		return err
+	}
+
+	for _, de := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(settingsDir, de.Name()))
+		if err != nil {
+			return fmt.Errorf("read settings/%s: %w", de.Name(), err)
+		}
+
+		var fragment map[string]any
+		if err := json.Unmarshal(data, &fragment); err != nil {
+			return fmt.Errorf("parse settings/%s: %w", de.Name(), err)
+		}
+
+		maps.Copy(cfg, fragment)
+	}
+
+	return writeTOML(cfgPath, cfg)
+}
+
+// readTOML reads and unmarshals the TOML file at path into a map.
+// When the file does not exist it returns an empty map.
+func readTOML(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return map[string]any{}, nil
+		}
+
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var cfg map[string]any
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	if cfg == nil {
+		cfg = map[string]any{}
+	}
+
+	return cfg, nil
+}
+
+// writeTOML marshals cfg as TOML and writes it to path, creating parent
+// directories as needed.
+func writeTOML(path string, cfg map[string]any) error {
+	data, err := toml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", path, err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
+	}
+
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
 	}
 
 	return nil

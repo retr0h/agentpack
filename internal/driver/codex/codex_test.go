@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	toml "github.com/pelletier/go-toml/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -95,7 +96,7 @@ func TestCodex_SupportedTypes(t *testing.T) {
 		name string
 		want []string
 	}{
-		{name: "returns skill and hook", want: []string{"skill", "hook"}},
+		{name: "returns skill hook and config", want: []string{"skill", "hook", "config"}},
 	}
 
 	for _, tt := range tests {
@@ -312,6 +313,47 @@ func TestCodex_Install(t *testing.T) {
 				require.True(t, ok)
 				_, ok = hooks["PostToolUse"]
 				assert.True(t, ok)
+			},
+		},
+		{
+			name: "installs config into .codex/config.toml via entries",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "model.json"), map[string]any{
+					"model": "o3-pro",
+				})
+				return src, t.TempDir()
+			},
+			entries: []target.ContentEntry{
+				{Name: "config", Type: "config"},
+			},
+			check: func(t *testing.T, dir string, _ string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".codex", "config.toml"))
+				require.NoError(t, err)
+				var cfg map[string]any
+				require.NoError(t, toml.Unmarshal(data, &cfg))
+				assert.Equal(t, "o3-pro", cfg["model"])
+			},
+		},
+		{
+			name: "installs config into .codex/config.toml via directory walk",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "approval.json"), map[string]any{
+					"approval_mode": "full-auto",
+				})
+				return src, t.TempDir()
+			},
+			check: func(t *testing.T, dir string, _ string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".codex", "config.toml"))
+				require.NoError(t, err)
+				var cfg map[string]any
+				require.NoError(t, toml.Unmarshal(data, &cfg))
+				assert.Equal(t, "full-auto", cfg["approval_mode"])
 			},
 		},
 		{
@@ -728,6 +770,186 @@ func TestCodex_InstallHooks(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestCodex_InstallConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, cfgPath string)
+		wantErr string
+		check   func(t *testing.T, cfgPath string)
+	}{
+		{
+			name: "merges config into .codex/config.toml",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "model.json"), map[string]any{
+					"model": "o3-pro",
+				})
+				return src, filepath.Join(t.TempDir(), ".codex", "config.toml")
+			},
+			check: func(t *testing.T, cfgPath string) {
+				t.Helper()
+				data, err := os.ReadFile(cfgPath)
+				require.NoError(t, err)
+				var cfg map[string]any
+				require.NoError(t, toml.Unmarshal(data, &cfg))
+				assert.Equal(t, "o3-pro", cfg["model"])
+			},
+		},
+		{
+			name: "creates config.toml if absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "notify.json"), map[string]any{
+					"notify": true,
+				})
+				dir := t.TempDir()
+				cfgPath := filepath.Join(dir, ".codex", "config.toml")
+				// Ensure parent dir does not exist yet.
+				_, err := os.Stat(filepath.Dir(cfgPath))
+				require.True(t, os.IsNotExist(err))
+				return src, cfgPath
+			},
+			check: func(t *testing.T, cfgPath string) {
+				t.Helper()
+				data, err := os.ReadFile(cfgPath)
+				require.NoError(t, err)
+				var cfg map[string]any
+				require.NoError(t, toml.Unmarshal(data, &cfg))
+				assert.Equal(t, true, cfg["notify"])
+			},
+		},
+		{
+			name: "preserves existing TOML keys when merging",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "model.json"), map[string]any{
+					"model": "o3-pro",
+				})
+				dir := t.TempDir()
+				cfgPath := filepath.Join(dir, ".codex", "config.toml")
+				existing := map[string]any{
+					"approval_mode": "suggest",
+					"notify":        true,
+				}
+				existingData, err := toml.Marshal(existing)
+				require.NoError(t, err)
+				writeFile(t, cfgPath, string(existingData))
+				return src, cfgPath
+			},
+			check: func(t *testing.T, cfgPath string) {
+				t.Helper()
+				data, err := os.ReadFile(cfgPath)
+				require.NoError(t, err)
+				var cfg map[string]any
+				require.NoError(t, toml.Unmarshal(data, &cfg))
+				assert.Equal(t, "o3-pro", cfg["model"])
+				assert.Equal(t, "suggest", cfg["approval_mode"])
+				assert.Equal(t, true, cfg["notify"])
+			},
+		},
+		{
+			name: "no-op when settings dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), filepath.Join(t.TempDir(), "config.toml")
+			},
+		},
+		{
+			name: "returns error when settings dir is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				settingsDir := filepath.Join(src, "settings")
+				require.NoError(t, os.MkdirAll(settingsDir, 0o755))
+				require.NoError(t, os.Chmod(settingsDir, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(settingsDir, 0o755) })
+				return src, filepath.Join(t.TempDir(), "config.toml")
+			},
+			wantErr: "read settings dir",
+		},
+		{
+			name: "returns error when settings JSON file is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "settings", "bad.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, filepath.Join(t.TempDir(), "config.toml")
+			},
+			wantErr: "read settings/bad.json",
+		},
+		{
+			name: "returns error when settings JSON is invalid",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "settings", "broken.json"), `{invalid`)
+				return src, filepath.Join(t.TempDir(), "config.toml")
+			},
+			wantErr: "parse settings/broken.json",
+		},
+		{
+			name: "returns error when existing config.toml is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "x.json"), map[string]any{
+					"key": "val",
+				})
+				dir := t.TempDir()
+				cfgPath := filepath.Join(dir, "config.toml")
+				require.NoError(t, os.WriteFile(cfgPath, []byte("key = \"val\"\n"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(cfgPath, 0o644) })
+				return src, cfgPath
+			},
+			wantErr: "read",
+		},
+		{
+			name: "returns error when existing config.toml contains invalid TOML",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "x.json"), map[string]any{
+					"key": "val",
+				})
+				dir := t.TempDir()
+				cfgPath := filepath.Join(dir, "config.toml")
+				writeFile(t, cfgPath, "= invalid toml [[[")
+				return src, cfgPath
+			},
+			wantErr: "parse",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, cfgPath := tt.setup(t)
+			c := codex.New()
+			err := codex.InstallConfig(context.Background(), c, srcDir, cfgPath)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, cfgPath)
+			}
 		})
 	}
 }

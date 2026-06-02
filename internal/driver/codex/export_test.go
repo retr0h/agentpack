@@ -53,3 +53,12 @@ func InstallHooks(
 ) error {
 	return c.installHooks(ctx, srcDir, hooksPath, pluginName)
 }
+
+// InstallConfig exposes installConfig for testing.
+func InstallConfig(
+	ctx context.Context,
+	c *Codex,
+	srcDir, cfgPath string,
+) error {
+	return c.installConfig(ctx, srcDir, cfgPath)
+}
