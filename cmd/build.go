@@ -30,8 +30,8 @@ import (
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/spf13/cobra"
 
-	"github.com/retr0h/agentpack/internal/build"
 	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/retr0h/agentpack/pkg/build"
 )
 
 type builder interface {

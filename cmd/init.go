@@ -28,7 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/internal/initpkg"
+	"github.com/retr0h/agentpack/pkg/initpkg"
 )
 
 // scaffolder is the consumer-side interface for pkg/initpkg.Scaffold.

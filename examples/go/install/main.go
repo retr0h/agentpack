@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/retr0h/agentpack/internal/install"
+	"github.com/retr0h/agentpack/pkg/install"
 )
 
 func main() {

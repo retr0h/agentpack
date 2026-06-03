@@ -29,8 +29,8 @@ import (
 
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/gitutil"
-	"github.com/retr0h/agentpack/internal/list"
-	"github.com/retr0h/agentpack/internal/outdated"
+	"github.com/retr0h/agentpack/pkg/list"
+	"github.com/retr0h/agentpack/pkg/outdated"
 	"github.com/retr0h/agentpack/pkg/target"
 )
 

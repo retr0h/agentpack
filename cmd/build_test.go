@@ -31,7 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/internal/build"
+	"github.com/retr0h/agentpack/pkg/build"
 )
 
 type fakeBuilder struct {

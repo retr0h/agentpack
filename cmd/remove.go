@@ -28,8 +28,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/internal/install"
-	pkgremove "github.com/retr0h/agentpack/internal/remove"
+	"github.com/retr0h/agentpack/pkg/install"
+	pkgremove "github.com/retr0h/agentpack/pkg/remove"
 )
 
 type remover interface {

@@ -30,8 +30,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/internal/inspect"
-	"github.com/retr0h/agentpack/internal/registry"
+	"github.com/retr0h/agentpack/pkg/inspect"
+	"github.com/retr0h/agentpack/pkg/registry"
 )
 
 type fakeRegistryLoader struct {

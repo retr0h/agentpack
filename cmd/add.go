@@ -32,8 +32,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/internal/install"
 	"github.com/retr0h/agentpack/internal/safety"
+	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/target"
 )
 

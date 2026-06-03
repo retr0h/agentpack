@@ -30,9 +30,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/internal/list"
-	"github.com/retr0h/agentpack/internal/outdated"
-	"github.com/retr0h/agentpack/internal/registry"
+	"github.com/retr0h/agentpack/pkg/list"
+	"github.com/retr0h/agentpack/pkg/outdated"
+	"github.com/retr0h/agentpack/pkg/registry"
 )
 
 type fakeLister struct {

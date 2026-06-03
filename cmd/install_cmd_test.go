@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pkgsync "github.com/retr0h/agentpack/internal/sync"
+	pkgsync "github.com/retr0h/agentpack/pkg/sync"
 )
 
 type fakeSyncer struct {

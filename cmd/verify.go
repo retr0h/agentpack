@@ -31,7 +31,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/internal/verify"
+	"github.com/retr0h/agentpack/pkg/verify"
 )
 
 type verifier interface {

@@ -30,7 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/internal/verify"
+	"github.com/retr0h/agentpack/pkg/verify"
 )
 
 type fakeVerifier struct {

@@ -30,7 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/internal/search"
+	"github.com/retr0h/agentpack/pkg/search"
 )
 
 type fakeSearcher struct {

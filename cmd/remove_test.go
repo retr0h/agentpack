@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pkgremove "github.com/retr0h/agentpack/internal/remove"
+	pkgremove "github.com/retr0h/agentpack/pkg/remove"
 )
 
 type fakeRemover struct {
