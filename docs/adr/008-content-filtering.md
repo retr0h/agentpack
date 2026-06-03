@@ -1,5 +1,5 @@
 ---
-status: "superseded by [ADR-010](010-content-selectors.md)"
+status: 'superseded by [ADR-010](010-content-selectors.md)'
 date: 2026-05-25
 ---
 

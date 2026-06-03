@@ -9,17 +9,17 @@ date: 2026-06-02
 
 The CLI syntax for selecting content from a package has two problems:
 
-1. **`@` means skill, not version.** Every other package manager (npm, cargo, go,
-   pip) uses `@` for version pinning. agentpack uses it for skill selection
+1. **`@` means skill, not version.** Every other package manager (npm, cargo,
+   go, pip) uses `@` for version pinning. agentpack uses it for skill selection
    (`owner/repo@skill-name`). This violates user expectations and creates
    ambiguity — `owner/repo@v1.2.3` could be a version or a skill named "v1.2.3".
    The same design flaw in npx skills caused a supply-chain security issue
    ([vercel-labs/skills#863](https://github.com/vercel-labs/skills/issues/863)).
 
 2. **Only skills can be selected.** The `@skill` syntax and `--skill` flag only
-   filter skills. There is no way to select a specific command, hook, MCP config,
-   or other content type from a package. With six content types (ADR-009), the
-   selector should work with all of them.
+   filter skills. There is no way to select a specific command, hook, MCP
+   config, or other content type from a package. With six content types
+   (ADR-009), the selector should work with all of them.
 
 ## Decision Drivers
 
@@ -97,9 +97,8 @@ When `content` is omitted, all content from the package is installed. When
 present, only the listed items are installed. Each entry uses the same
 `type/name` format as the CLI selector.
 
-The previous `skills` and `targets` fields are deprecated but still accepted
-for backward compatibility. `skills: [foo]` is equivalent to
-`content: [skill/foo]`.
+The previous `skills` and `targets` fields are deprecated but still accepted for
+backward compatibility. `skills: [foo]` is equivalent to `content: [skill/foo]`.
 
 ### Removed syntax
 
@@ -134,8 +133,8 @@ Content selectors filter metadata entries before passing them to drivers
 4. Pass filtered entries to the driver
 
 This means a selector like `:command/scan` on a package installed to Cursor
-(which only supports skills) would result in nothing being installed to Cursor
-— the command entry passes the selector filter but fails the driver capability
+(which only supports skills) would result in nothing being installed to Cursor —
+the command entry passes the selector filter but fails the driver capability
 filter. This is correct behavior.
 
 ### Delete syntax
@@ -152,8 +151,8 @@ This replaces the previous `@skill` syntax for partial removal.
 
 - CLI syntax aligns with npm/cargo/go conventions for version pinning
 - All six content types are selectable, not just skills
-- One unified selector concept replaces `--skill` flag, `@skill` shorthand,
-  and `#ref` fragment
+- One unified selector concept replaces `--skill` flag, `@skill` shorthand, and
+  `#ref` fragment
 - Breaking change from the previous `@skill` and `#ref` syntax
 - The `skills` field in `agentpack-packages.yaml` is deprecated in favor of
   `content`
@@ -162,5 +161,6 @@ This replaces the previous `@skill` syntax for partial removal.
 
 - Supersedes the `@skill` syntax from ADR-008 content filtering
 - Extends [ADR-009](009-metadata-driven-format.md) content type model
-- Motivated by [vercel-labs/skills#863](https://github.com/vercel-labs/skills/issues/863)
+- Motivated by
+  [vercel-labs/skills#863](https://github.com/vercel-labs/skills/issues/863)
   supply-chain incident caused by ambiguous `@` syntax
