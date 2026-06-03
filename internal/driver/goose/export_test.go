@@ -54,3 +54,18 @@ func InstallMCP(ctx context.Context, g *Goose, srcDir, configPath string) error 
 func GooseConfigPath(g *Goose) (string, error) {
 	return g.gooseConfigPath()
 }
+
+// ReadYAMLConfig exposes readYAMLConfig for testing.
+func ReadYAMLConfig(path string) (map[string]any, error) {
+	return readYAMLConfig(path)
+}
+
+// WriteYAMLConfig exposes writeYAMLConfig for testing.
+func WriteYAMLConfig(path string, doc map[string]any) error {
+	return writeYAMLConfig(path, doc)
+}
+
+// MergeGooseExtension exposes mergeGooseExtension for testing.
+func MergeGooseExtension(path, name string, config map[string]any) error {
+	return mergeGooseExtension(path, name, config)
+}

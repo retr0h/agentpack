@@ -15,6 +15,7 @@ import (
 	"github.com/retr0h/agentpack/internal/driver/claudecode"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -147,6 +148,7 @@ func TestInstall(t *testing.T) {
 		entriesFromSrc func(src string) []target.ContentEntry
 		homeFunc       func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string)
 	}{
@@ -588,6 +590,81 @@ func TestInstall(t *testing.T) {
 			},
 			wantErr: "already exists",
 		},
+		{
+			name: "installFromDirs context cancelled inside loop after top-level check",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromEntries context cancelled inside entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installHooks error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				hooksFile := filepath.Join(src, "hooks", "hooks.json")
+				writeJSON(t, hooksFile, map[string]any{
+					"PreToolUse": []any{map[string]any{"matcher": "Bash"}},
+				})
+				dst := t.TempDir()
+				sp := filepath.Join(dst, ".claude", "settings.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(sp), 0o755))
+				require.NoError(t, os.WriteFile(sp, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(sp, 0o644) })
+				return src, dst
+			},
+			wantErr: "merge hooks",
+		},
+		{
+			name: "installSettings error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				prefsFile := filepath.Join(src, "settings", "prefs.json")
+				writeJSON(t, prefsFile, map[string]any{"theme": "dark"})
+				dst := t.TempDir()
+				sp := filepath.Join(dst, ".claude", "settings.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(sp), 0o755))
+				require.NoError(t, os.WriteFile(sp, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(sp, 0o644) })
+				return src, dst
+			},
+			wantErr: "merge settings/",
+		},
+		{
+			name: "copyTreeTracked copyFile error from unreadable source file",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				if os.Getuid() == 0 {
+					t.Skip("root bypasses permission checks")
+				}
+				src := t.TempDir()
+				p := filepath.Join(src, "skills", "review", "SKILL.md")
+				writeFile(t, p, "# Review")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, t.TempDir()
+			},
+			wantErr: "install skills",
+		},
 	}
 
 	for _, tt := range tests {
@@ -602,10 +679,13 @@ func TestInstall(t *testing.T) {
 				claudecode.SetOsMkdirAll(cc, tt.mkdirFunc)
 			}
 			ctx := context.Background()
-			if tt.wantErr == "context canceled" {
+			if tt.wantErr == "context canceled" && tt.customCtx == nil {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 			entries := tt.entries
 			if tt.entriesFromSrc != nil {

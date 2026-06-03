@@ -34,6 +34,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/roo"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -173,6 +174,7 @@ func TestRoo_Install(t *testing.T) {
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string)
 	}{
@@ -428,6 +430,75 @@ func TestRoo_Install(t *testing.T) {
 			},
 			wantErr: "getwd",
 		},
+		{
+			name: "installFromEntries ctx cancelled mid-loop returns error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "a", "SKILL.md"), "# A")
+				writeFile(t, filepath.Join(src, "skills", "b", "SKILL.md"), "# B")
+				return src, t.TempDir()
+			},
+			entries: []target.ContentEntry{
+				{Name: "a", Type: "skill"},
+				{Name: "b", Type: "skill"},
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromDirs roomodesPath cwdFunc error propagates on second call",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, ""
+			},
+			cwdFunc: func() func() (string, error) {
+				calls := 0
+				return func() (string, error) {
+					calls++
+					if calls == 1 {
+						return t.TempDir(), nil
+					}
+					return "", errors.New("getwd second call failed")
+				}
+			}(),
+			wantErr: "getwd",
+		},
+		{
+			name: "installFromDirs ctx cancelled after top-level Install check",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "config entry installConfig error propagates in installFromEntries",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "e.json"), map[string]any{"k": "v"})
+				dst := t.TempDir()
+				require.NoError(
+					t,
+					os.MkdirAll(filepath.Join(dst, ".agents", "skills", "test-plugin"), 0o755),
+				)
+				p := filepath.Join(dst, ".roomodes")
+				writeFile(t, p, "")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, dst
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "cfg", Type: "config", Root: filepath.Join(src, "settings")},
+				}
+			},
+			wantErr: "merge settings/e.json",
+		},
 	}
 
 	for _, tt := range tests {
@@ -452,6 +523,9 @@ func TestRoo_Install(t *testing.T) {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries
@@ -581,6 +655,114 @@ func TestRoo_InstallConfig(t *testing.T) {
 				return src, t.TempDir()
 			},
 			wantErr: "parse settings/bad.json",
+		},
+		{
+			name: "unreadable settings dir returns read dir error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				settingsDir := filepath.Join(src, "settings")
+				require.NoError(t, os.MkdirAll(settingsDir, 0o755))
+				require.NoError(t, os.Chmod(settingsDir, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(settingsDir, 0o755) })
+				return src, t.TempDir()
+			},
+			wantErr: "read settings dir",
+		},
+		{
+			name: "unreadable settings json file returns read error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "settings", "locked.json")
+				writeFile(t, p, `{"key":"val"}`)
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, t.TempDir()
+			},
+			wantErr: "read settings/locked.json",
+		},
+		{
+			name: "merge error when .roomodes is unwritable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "m.json"), map[string]any{"k": "v"})
+				dst := t.TempDir()
+				require.NoError(
+					t,
+					os.MkdirAll(filepath.Join(dst, ".agents", "skills", "test-plugin"), 0o755),
+				)
+				p := filepath.Join(dst, ".roomodes")
+				writeFile(t, p, "")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, dst
+			},
+			wantErr: "merge settings/m.json",
+		},
+		{
+			name: "readYAMLConfig returns empty map for empty yaml file",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "new.json"), map[string]any{"k": "v"})
+				dst := t.TempDir()
+				writeFile(t, filepath.Join(dst, ".roomodes"), "")
+				return src, dst
+			},
+			check: func(t *testing.T, dir string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dir, ".roomodes"))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				assert.Equal(t, "v", doc["k"])
+			},
+		},
+		{
+			name: "readYAMLConfig returns error for unreadable existing .roomodes",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "x.json"), map[string]any{"k": "v"})
+				dst := t.TempDir()
+				p := filepath.Join(dst, ".roomodes")
+				writeFile(t, p, "k: v\n")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return src, dst
+			},
+			wantErr: "merge settings/x.json",
+		},
+		{
+			name: "readYAMLConfig returns parse error for invalid yaml in .roomodes",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "y.json"), map[string]any{"k": "v"})
+				dst := t.TempDir()
+				writeFile(t, filepath.Join(dst, ".roomodes"), "key: [unclosed")
+				return src, dst
+			},
+			wantErr: "merge settings/y.json",
+		},
+		{
+			name: "writeYAMLConfig WriteFile error when install dir is read-only",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "q.json"), map[string]any{"k": "v"})
+				dst := t.TempDir()
+				require.NoError(
+					t,
+					os.MkdirAll(filepath.Join(dst, ".agents", "skills", "test-plugin"), 0o755),
+				)
+				require.NoError(t, os.Chmod(dst, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(dst, 0o755) })
+				return src, dst
+			},
+			wantErr: "merge settings/q.json",
 		},
 	}
 

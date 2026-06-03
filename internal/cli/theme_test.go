@@ -265,6 +265,108 @@ func TestHumanSize(t *testing.T) {
 	}
 }
 
+func TestShortSHA(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		sha  string
+		want string
+	}{
+		{
+			name: "full SHA truncates to seven",
+			sha:  "abc1234567890",
+			want: "abc1234",
+		},
+		{
+			name: "shorter than seven returned as-is",
+			sha:  "abc",
+			want: "abc",
+		},
+		{
+			name: "empty stays empty",
+			sha:  "",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, cli.ShortSHA(tt.sha))
+		})
+	}
+}
+
+func TestFormatInstalls(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		count int
+		want  string
+	}{
+		{
+			name:  "under one thousand",
+			count: 42,
+			want:  "42 installs",
+		},
+		{
+			name:  "thousands",
+			count: 1500,
+			want:  "1.5K installs",
+		},
+		{
+			name:  "millions",
+			count: 2_300_000,
+			want:  "2.3M installs",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, cli.FormatInstalls(tt.count))
+		})
+	}
+}
+
+func TestFormatDate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		ts   string
+		want string
+	}{
+		{
+			name: "RFC3339 keeps date only",
+			ts:   "2026-06-02T13:45:00Z",
+			want: "2026-06-02",
+		},
+		{
+			name: "no T separator returns input",
+			ts:   "2026-06-02",
+			want: "2026-06-02",
+		},
+		{
+			name: "empty input",
+			ts:   "",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, cli.FormatDate(tt.ts))
+		})
+	}
+}
+
 func TestCheckmark(t *testing.T) {
 	t.Parallel()
 

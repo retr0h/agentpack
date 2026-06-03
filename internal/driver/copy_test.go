@@ -86,6 +86,21 @@ func TestCopyFile(t *testing.T) {
 			},
 			wantErr: "is a directory",
 		},
+		{
+			name: "error when source file is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				if os.Getuid() == 0 {
+					t.Skip("root bypasses file permissions")
+				}
+				src := filepath.Join(t.TempDir(), "unreadable.txt")
+				require.NoError(t, os.WriteFile(src, []byte("secret"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(src, 0o644) })
+
+				return src, filepath.Join(t.TempDir(), "dst.txt")
+			},
+			wantErr: "read",
+		},
 	}
 
 	for _, tt := range tests {
@@ -193,6 +208,27 @@ func TestCopyTreeIfExists(t *testing.T) {
 				return src, filepath.Join(t.TempDir(), "out")
 			},
 			wantErr: "context canceled",
+		},
+		{
+			name: "propagates walkErr when source subdir is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				if os.Getuid() == 0 {
+					t.Skip("root bypasses file permissions")
+				}
+				src := t.TempDir()
+				locked := filepath.Join(src, "locked")
+				require.NoError(t, os.MkdirAll(locked, 0o755))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(locked, "x.txt"), []byte("x"), 0o644),
+				)
+				require.NoError(t, os.Chmod(locked, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+
+				return src, filepath.Join(t.TempDir(), "out")
+			},
+			wantErr: "permission denied",
 		},
 	}
 

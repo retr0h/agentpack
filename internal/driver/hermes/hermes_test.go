@@ -34,6 +34,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/hermes"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -173,6 +174,7 @@ func TestHermes_Install(t *testing.T) {
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string, homeDir string)
 	}{
@@ -455,6 +457,34 @@ func TestHermes_Install(t *testing.T) {
 			wantErr: "merge hooks",
 		},
 		{
+			name: "installFromDirs context cancelled inside dir loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromEntries context cancelled inside entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
 			name: "copyTreeIfExists error from unreadable file in skills dir",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
@@ -517,6 +547,9 @@ func TestHermes_Install(t *testing.T) {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries
@@ -756,6 +789,287 @@ func TestHermes_InstallHooks(t *testing.T) {
 			if tt.check != nil {
 				tt.check(t, configPath)
 			}
+		})
+	}
+}
+
+func TestHermes_ReadYAMLConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string
+		wantErr string
+		check   func(t *testing.T, doc map[string]any)
+	}{
+		{
+			name: "returns empty map when file does not exist",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "nonexistent.yaml")
+			},
+			check: func(t *testing.T, doc map[string]any) {
+				t.Helper()
+				assert.Empty(t, doc)
+			},
+		},
+		{
+			name: "returns empty map when file is empty YAML",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "config.yaml")
+				writeFile(t, p, "")
+				return p
+			},
+			check: func(t *testing.T, doc map[string]any) {
+				t.Helper()
+				assert.NotNil(t, doc)
+				assert.Empty(t, doc)
+			},
+		},
+		{
+			name: "returns error when file is unreadable",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "config.yaml")
+				writeFile(t, p, "key: value")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			wantErr: "read ",
+		},
+		{
+			name: "returns error when file contains invalid YAML",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "config.yaml")
+				writeFile(t, p, "key: [\ninvalid")
+				return p
+			},
+			wantErr: "parse ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := tt.setup(t)
+			doc, err := hermes.ReadYAMLConfig(path)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, doc)
+			}
+		})
+	}
+}
+
+func TestHermes_WriteYAMLConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string
+		doc     map[string]any
+		wantErr string
+		check   func(t *testing.T, path string)
+	}{
+		{
+			name: "writes YAML file creating parent directories",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "subdir", "config.yaml")
+			},
+			doc: map[string]any{"key": "value"},
+			check: func(t *testing.T, path string) {
+				t.Helper()
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				assert.Equal(t, "value", doc["key"])
+			},
+		},
+		{
+			name: "returns error when parent directory is unwritable",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				parent := t.TempDir()
+				require.NoError(t, os.Chmod(parent, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(parent, 0o755) })
+				return filepath.Join(parent, "subdir", "config.yaml")
+			},
+			doc:     map[string]any{"key": "value"},
+			wantErr: "mkdir ",
+		},
+		{
+			name: "returns error when file is not writable",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "config.yaml")
+				writeFile(t, p, "old: content")
+				require.NoError(t, os.Chmod(p, 0o444))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			doc:     map[string]any{"key": "value"},
+			wantErr: "write ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := tt.setup(t)
+			err := hermes.WriteYAMLConfig(path, tt.doc)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, path)
+			}
+		})
+	}
+}
+
+func TestHermes_MergeHooksYAML(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		setup      func(t *testing.T) string
+		hooks      map[string]any
+		pluginName string
+		wantErr    string
+		check      func(t *testing.T, path string)
+	}{
+		{
+			name: "skips non-slice hook entries",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "config.yaml")
+			},
+			hooks: map[string]any{
+				"on_save": "not-a-slice",
+			},
+			pluginName: "test-plugin",
+			check: func(t *testing.T, path string) {
+				t.Helper()
+				_, err := os.Stat(path)
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "skips non-map hook entries within slice",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "config.yaml")
+			},
+			hooks: map[string]any{
+				"on_save": []any{"string-not-map", 42},
+			},
+			pluginName: "test-plugin",
+			check: func(t *testing.T, path string) {
+				t.Helper()
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				hooks, ok := doc["hooks"].(map[string]any)
+				require.True(t, ok)
+				entries, ok := hooks["on_save"].([]any)
+				require.True(t, ok)
+				assert.Empty(t, entries)
+			},
+		},
+		{
+			name: "returns error when config file is unreadable",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "config.yaml")
+				writeFile(t, p, "hooks:\n  on_save: []\n")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			hooks: map[string]any{
+				"on_save": []any{map[string]any{"command": "echo lint"}},
+			},
+			pluginName: "test-plugin",
+			wantErr:    "read ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := tt.setup(t)
+			err := hermes.MergeHooksYAML(path, tt.pluginName, tt.hooks)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, path)
+			}
+		})
+	}
+}
+
+func TestHermes_GetOrCreateYAMLSlice(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		m    map[string]any
+		key  string
+		want []any
+	}{
+		{
+			name: "returns existing slice",
+			m:    map[string]any{"events": []any{"a", "b"}},
+			key:  "events",
+			want: []any{"a", "b"},
+		},
+		{
+			name: "returns empty slice when key absent",
+			m:    map[string]any{},
+			key:  "events",
+			want: []any{},
+		},
+		{
+			name: "returns empty slice when value is not a slice",
+			m:    map[string]any{"events": "not-a-slice"},
+			key:  "events",
+			want: []any{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := hermes.GetOrCreateYAMLSlice(tt.m, tt.key)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

@@ -235,3 +235,8 @@ func NewWithTargets(targets []target.Target) *Installer {
 
 	return i
 }
+
+// DefaultResolveTargets exposes defaultResolveTargets for testing.
+func DefaultResolveTargets(names []string) ([]target.Target, error) {
+	return defaultResolveTargets(names)
+}

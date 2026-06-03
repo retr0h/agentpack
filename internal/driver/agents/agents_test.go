@@ -33,6 +33,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/agents"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func TestDefs(t *testing.T) {
@@ -436,6 +437,7 @@ func TestAgent_Install(t *testing.T) {
 		cwdFunc          func(t *testing.T, destBase string) func() (string, error)
 		cancelCtx        bool
 		cancelAfterDelay time.Duration
+		customCtx        context.Context
 		wantErr          string
 		check            func(t *testing.T, destBase string, pluginName string)
 	}{
@@ -904,6 +906,25 @@ func TestAgent_Install(t *testing.T) {
 			},
 			wantErr: "copy skills: read",
 		},
+		{
+			name: "entries: ctx cancelled mid-loop returns error",
+			def: agents.AgentDef{
+				Name:            "cursor",
+				Display:         "Cursor",
+				DetectHome:      ".cursor",
+				GlobalSkillsDir: ".cursor/skills",
+			},
+			entries: []target.ContentEntry{
+				{Name: "a", Type: "skill"},
+				{Name: "b", Type: "skill"},
+			},
+			setupSrc: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(2),
+			wantErr:   "context canceled",
+		},
 	}
 
 	for _, tt := range tests {
@@ -951,6 +972,9 @@ func TestAgent_Install(t *testing.T) {
 			}
 			if tt.cancelAfterDelay > 0 {
 				time.AfterFunc(tt.cancelAfterDelay, cancel)
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries

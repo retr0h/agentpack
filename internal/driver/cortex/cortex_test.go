@@ -33,6 +33,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/cortex"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -165,6 +166,7 @@ func TestCortex_Install(t *testing.T) {
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string, homeDir string)
 	}{
@@ -616,6 +618,97 @@ func TestCortex_Install(t *testing.T) {
 			}(),
 			wantErr: "enumerate installed files",
 		},
+		{
+			name: "installFromDirs context cancelled after top-level check",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromEntries context cancelled inside entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "mcpConfigPath cwdFunc error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				writeFile(t, filepath.Join(src, "hooks", "hooks.json"), `{}`)
+				return src, ""
+			},
+			cwdFunc: func() func() (string, error) {
+				calls := 0
+				return func() (string, error) {
+					calls++
+					if calls <= 2 {
+						return t.TempDir(), nil
+					}
+					return "", errors.New("getwd third call failed")
+				}
+			}(),
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "installFromDirs succeeds with empty Dir and working cwdFunc covering dir=cwd paths",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			cwdFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+		},
+		{
+			name: "installMCP error propagates in installFromEntries mcp case via name conflict",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				dst := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "dup.json"), map[string]any{
+					"name": "dup-srv",
+					"type": "stdio",
+				})
+				writeJSON(
+					t,
+					filepath.Join(dst, ".snowflake", "cortex", "mcp.json"),
+					map[string]any{
+						"mcpServers": map[string]any{
+							"dup-srv": map[string]any{"type": "stdio"},
+						},
+					},
+				)
+				return src, dst
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "dup-srv", Type: "mcp", Root: filepath.Join(src, "mcp")},
+				}
+			},
+			wantErr: "already exists",
+		},
 	}
 
 	for _, tt := range tests {
@@ -645,6 +738,9 @@ func TestCortex_Install(t *testing.T) {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries

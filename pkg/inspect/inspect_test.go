@@ -427,3 +427,42 @@ func TestRun(t *testing.T) {
 		})
 	}
 }
+
+func TestIsArchiveFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{
+			name: "agentpack extension",
+			path: "plugin.agentpack",
+			want: true,
+		},
+		{
+			name: "nested path with extension",
+			path: "dist/org/my-plugin.agentpack",
+			want: true,
+		},
+		{
+			name: "different extension",
+			path: "plugin.tar.gz",
+			want: false,
+		},
+		{
+			name: "no extension",
+			path: "plugin",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, inspect.IsArchiveFile(tt.path))
+		})
+	}
+}

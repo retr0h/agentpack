@@ -26,6 +26,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,6 +34,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/kiro"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -165,6 +167,7 @@ func TestKiro_Install(t *testing.T) {
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string, homeDir string)
 	}{
@@ -623,6 +626,81 @@ func TestKiro_Install(t *testing.T) {
 			},
 			wantErr: "merge hooks",
 		},
+		{
+			name: "local install with empty dir uses cwdFunc for both mcp and hooks paths",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			cwdFunc: func() func() (string, error) {
+				dir := t.TempDir()
+				return func() (string, error) { return dir, nil }
+			}(),
+		},
+		{
+			name: "installFromDirs context cancelled inside dir loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromEntries context cancelled inside entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "mcpConfigPath global home error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			global: true,
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				var calls atomic.Int32
+				return func() (string, error) {
+					if calls.Add(1) == 1 {
+						return home, nil
+					}
+					return "", errors.New("home unavailable on second call")
+				}
+			}(),
+			wantErr: "home dir",
+		},
+		{
+			name: "hooksPath global home error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			global: true,
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				var calls atomic.Int32
+				return func() (string, error) {
+					c := calls.Add(1)
+					if c <= 2 {
+						return home, nil
+					}
+					return "", errors.New("home unavailable on third call")
+				}
+			}(),
+			wantErr: "home dir",
+		},
 	}
 
 	for _, tt := range tests {
@@ -653,6 +731,9 @@ func TestKiro_Install(t *testing.T) {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries

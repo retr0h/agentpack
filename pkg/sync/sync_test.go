@@ -54,6 +54,7 @@ func TestRun(t *testing.T) {
 	tests := []struct {
 		name        string
 		yaml        string
+		lockYAML    string
 		customCtx   context.Context
 		cancelCtx   bool
 		setupMocks  func(ctrl *gomock.Controller) (pkgsync.Options, func())
@@ -171,6 +172,50 @@ func TestRun(t *testing.T) {
 				assert.Equal(t, pkgsync.StatusInstalled, results[0].Status)
 				assert.Equal(t, "locked-plugin", results[0].Name)
 			},
+		},
+		{
+			name:     "git package reads locked SHA from agentpack.lock on disk",
+			yaml:     "packages:\n  - name: disk-plugin\n    git: github.com/org/repo\n    ref: main\n",
+			lockYAML: "lockVersion: 2\npackages:\n  - name: disk-plugin\n    source: github.com/org/repo\n    sha: feedface12345678\n    resolved: \"2026-01-01T00:00:00Z\"\n",
+			setupMocks: func(ctrl *gomock.Controller) (pkgsync.Options, func()) {
+				mockFetcher := fetcherMocks.NewMockFetcher(ctrl)
+				mockBuilder := syncMocks.NewMockBuilder(ctrl)
+				mockInstaller := syncMocks.NewMockInstaller(ctrl)
+
+				mockFetcher.EXPECT().
+					Fetch(gomock.Any(), "github.com/org/repo#feedface12345678", gomock.Any()).
+					Return(nil)
+
+				mockBuilder.EXPECT().
+					Build(gomock.Any(), gomock.Any()).
+					Return([]build.Result{{Name: "disk-plugin", ArchivePath: "/tmp/disk-plugin-1.0.0.agentpack"}}, nil)
+
+				mockInstaller.EXPECT().
+					Install(gomock.Any(), "/tmp/disk-plugin-1.0.0.agentpack").
+					Return(&install.Result{Name: "disk-plugin", Version: "1.0.0"}, nil)
+
+				return pkgsync.Options{
+					Fetcher:   mockFetcher,
+					Builder:   mockBuilder,
+					Installer: mockInstaller,
+				}, func() {}
+			},
+			checkResult: func(t *testing.T, results []pkgsync.Result) {
+				t.Helper()
+
+				require.Len(t, results, 1)
+				assert.Equal(t, pkgsync.StatusInstalled, results[0].Status)
+				assert.Equal(t, "disk-plugin", results[0].Name)
+			},
+		},
+		{
+			name:     "malformed agentpack.lock returns error",
+			yaml:     "packages:\n  - name: any-plugin\n    git: github.com/org/repo\n",
+			lockYAML: "lockVersion: 2\npackages: [this is not valid lock structure",
+			setupMocks: func(_ *gomock.Controller) (pkgsync.Options, func()) {
+				return pkgsync.Options{}, func() {}
+			},
+			wantErr: "load lock",
 		},
 		{
 			name: "git package ignores lock when no entry exists",
@@ -480,6 +525,11 @@ func TestRun(t *testing.T) {
 			if tt.yaml != "" {
 				cfgDir := t.TempDir()
 				configPath = writePackagesFile(t, cfgDir, tt.yaml)
+
+				if tt.lockYAML != "" {
+					lockPath := filepath.Join(cfgDir, "agentpack.lock")
+					require.NoError(t, os.WriteFile(lockPath, []byte(tt.lockYAML), 0o644))
+				}
 			} else {
 				configPath = "/nonexistent/agentpack-packages.yaml"
 			}

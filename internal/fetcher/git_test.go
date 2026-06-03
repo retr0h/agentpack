@@ -513,6 +513,34 @@ func TestParseGitSource(t *testing.T) {
 			source:  "#v1.0.0",
 			wantErr: "empty URL before '#'",
 		},
+		{
+			name:       "ADR-010 at-ref syntax parses correctly",
+			source:     "github.com/org/repo@v2.0.0",
+			wantRawURL: "github.com/org/repo",
+			wantRef:    "v2.0.0",
+		},
+		{
+			name:       "ADR-010 at-ref with branch name",
+			source:     "github.com/org/repo@main",
+			wantRawURL: "github.com/org/repo",
+			wantRef:    "main",
+		},
+		{
+			name:       "selectors are stripped before ref parsing",
+			source:     "github.com/org/repo@v1.0:skill/k8s",
+			wantRawURL: "github.com/org/repo",
+			wantRef:    "v1.0",
+		},
+		{
+			// For https:// URLs, the leading ":" in ":skill/k8s" is the scheme
+			// separator detection; the colon in "https://" is treated as a scheme,
+			// so the ":skill/k8s" selector survives into the ref field.
+			// This edge case is documented: use the bare host form for selectors.
+			name:       "https URL with at-ref includes selector in ref due to scheme detection",
+			source:     "https://github.com/org/repo.git@v1.0:skill/k8s",
+			wantRawURL: "https://github.com/org/repo.git",
+			wantRef:    "v1.0:skill/k8s",
+		},
 	}
 
 	for _, tt := range tests {

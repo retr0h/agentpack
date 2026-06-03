@@ -33,6 +33,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/crush"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -165,6 +166,7 @@ func TestCrush_Install(t *testing.T) {
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string, homeDir string)
 	}{
@@ -508,6 +510,45 @@ func TestCrush_Install(t *testing.T) {
 			}(),
 			wantErr: "enumerate installed files",
 		},
+		{
+			name: "installFromDirs context cancelled after top-level check",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromEntries context cancelled inside entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromDirs succeeds with empty Dir and working cwdFunc covering hooksPath dir=cwd",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), ""
+			},
+			cwdFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -537,6 +578,9 @@ func TestCrush_Install(t *testing.T) {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries

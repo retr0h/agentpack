@@ -131,6 +131,37 @@ func TestInstallMCP(t *testing.T) {
 			},
 		},
 		{
+			name: "returns error when mcp server already exists in settings",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				mcpDir := filepath.Join(src, "mcp")
+				require.NoError(t, os.MkdirAll(mcpDir, 0o755))
+				data, err := json.Marshal(map[string]any{
+					"name": "duplicate-api",
+					"type": "remote",
+					"url":  "https://mcp.example.com/v1",
+				})
+				require.NoError(t, err)
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(mcpDir, "duplicate-api.json"), data, 0o644),
+				)
+				destDir := t.TempDir()
+				mcpPath := filepath.Join(destDir, "mcp.json")
+				existing, err := json.Marshal(map[string]any{
+					"mcpServers": map[string]any{
+						"duplicate-api": map[string]any{"type": "stdio"},
+					},
+				})
+				require.NoError(t, err)
+				require.NoError(t, os.WriteFile(mcpPath, existing, 0o644))
+
+				return src, mcpPath
+			},
+			wantErr: "merge mcp",
+		},
+		{
 			name: "merges mcp server into target file",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
@@ -369,6 +400,25 @@ func TestInstallSkillEntry(t *testing.T) {
 					skillsDir, baseDir, os.MkdirAll
 			},
 			wantFiles: 0,
+		},
+		{
+			name: "copy tree error propagates when source file is unreadable",
+			setup: func(t *testing.T) (target.ContentEntry, string, string, func(string, os.FileMode) error) {
+				t.Helper()
+				if os.Getuid() == 0 {
+					t.Skip("root bypasses file permissions")
+				}
+				baseDir := t.TempDir()
+				skillsDir := filepath.Join(baseDir, "skills")
+				entryRoot := t.TempDir()
+				p := filepath.Join(entryRoot, "secret.md")
+				require.NoError(t, os.WriteFile(p, []byte("secret"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+
+				return target.ContentEntry{Name: "locked", Type: "skill", Root: entryRoot},
+					skillsDir, baseDir, os.MkdirAll
+			},
+			wantErr: "copy skills",
 		},
 	}
 

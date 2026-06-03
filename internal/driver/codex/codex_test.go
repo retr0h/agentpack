@@ -34,6 +34,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/codex"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -196,6 +197,7 @@ func TestCodex_Install(t *testing.T) {
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string, homeDir string)
 	}{
@@ -599,6 +601,125 @@ func TestCodex_Install(t *testing.T) {
 			}(),
 			wantErr: "enumerate installed files",
 		},
+		{
+			name: "installFromDirs context cancelled after top-level check",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromEntries context cancelled inside entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "codexConfigPath global home error in installFromEntries config case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "settings", "x.json"), `{"key":"val"}`)
+				return src, ""
+			},
+			global: true,
+			homeFunc: func() (string, error) {
+				return "", errors.New("no home for config entry")
+			},
+			entries: []target.ContentEntry{
+				{Name: "config", Type: "config"},
+			},
+			wantErr: "home dir",
+		},
+		{
+			name: "codexConfigPath local cwdFunc error in installFromEntries config case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "settings", "x.json"), `{"key":"val"}`)
+				return src, ""
+			},
+			cwdFunc: func() (string, error) {
+				return "", errors.New("getwd failed for config entry")
+			},
+			entries: []target.ContentEntry{
+				{Name: "config", Type: "config"},
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "codexConfigPath cwdFunc error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				writeFile(t, filepath.Join(src, "hooks", "hooks.json"), `{}`)
+				return src, ""
+			},
+			cwdFunc: func() func() (string, error) {
+				calls := 0
+				return func() (string, error) {
+					calls++
+					if calls <= 2 {
+						return t.TempDir(), nil
+					}
+					return "", errors.New("getwd third call failed")
+				}
+			}(),
+			homeFunc: func() (string, error) {
+				return t.TempDir(), nil
+			},
+			wantErr: "getwd",
+		},
+		{
+			name: "installConfig error propagates in installFromDirs when config.toml unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "settings", "x.json"), `{"key":"val"}`)
+				installDir := t.TempDir()
+				cfgFile := filepath.Join(installDir, ".codex", "config.toml")
+				require.NoError(t, os.MkdirAll(filepath.Dir(cfgFile), 0o755))
+				require.NoError(t, os.WriteFile(cfgFile, []byte("key = \"val\"\n"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(cfgFile, 0o644) })
+				return src, installDir
+			},
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			wantErr: "read",
+		},
+		{
+			name: "installConfig error propagates in installFromEntries config case",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "settings", "x.json"), `{"key":"val"}`)
+				installDir := t.TempDir()
+				cfgFile := filepath.Join(installDir, ".codex", "config.toml")
+				require.NoError(t, os.MkdirAll(filepath.Dir(cfgFile), 0o755))
+				require.NoError(t, os.WriteFile(cfgFile, []byte("key = \"val\"\n"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(cfgFile, 0o644) })
+				return src, installDir
+			},
+			entries: []target.ContentEntry{
+				{Name: "config", Type: "config"},
+			},
+			wantErr: "read",
+		},
 	}
 
 	for _, tt := range tests {
@@ -629,6 +750,9 @@ func TestCodex_Install(t *testing.T) {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries
@@ -686,10 +810,11 @@ func TestCodex_InstallConfig(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T) (srcDir, cfgPath string)
-		wantErr string
-		check   func(t *testing.T, cfgPath string)
+		name      string
+		setup     func(t *testing.T) (srcDir, cfgPath string)
+		customCtx context.Context
+		wantErr   string
+		check     func(t *testing.T, cfgPath string)
 	}{
 		{
 			name: "merges config into .codex/config.toml",
@@ -838,6 +963,113 @@ func TestCodex_InstallConfig(t *testing.T) {
 			},
 			wantErr: "parse",
 		},
+		{
+			name: "context cancelled inside installConfig loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "x.json"), map[string]any{
+					"key": "val",
+				})
+				return src, filepath.Join(t.TempDir(), ".codex", "config.toml")
+			},
+			customCtx: testutil.NewCancelAfterN(0),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "de.IsDir skips directory entry in settings dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				settingsDir := filepath.Join(src, "settings")
+				require.NoError(t, os.MkdirAll(filepath.Join(settingsDir, "subdir"), 0o755))
+				writeJSON(t, filepath.Join(settingsDir, "x.json"), map[string]any{
+					"key": "val",
+				})
+				return src, filepath.Join(t.TempDir(), ".codex", "config.toml")
+			},
+			check: func(t *testing.T, cfgPath string) {
+				t.Helper()
+				data, err := os.ReadFile(cfgPath)
+				require.NoError(t, err)
+				var cfg map[string]any
+				require.NoError(t, toml.Unmarshal(data, &cfg))
+				assert.Equal(t, "val", cfg["key"])
+			},
+		},
+		{
+			name: "non-json file is skipped in settings dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				settingsDir := filepath.Join(src, "settings")
+				writeFile(t, filepath.Join(settingsDir, "ignore.txt"), "not json")
+				writeJSON(t, filepath.Join(settingsDir, "x.json"), map[string]any{
+					"key": "val",
+				})
+				return src, filepath.Join(t.TempDir(), ".codex", "config.toml")
+			},
+			check: func(t *testing.T, cfgPath string) {
+				t.Helper()
+				data, err := os.ReadFile(cfgPath)
+				require.NoError(t, err)
+				var cfg map[string]any
+				require.NoError(t, toml.Unmarshal(data, &cfg))
+				assert.Equal(t, "val", cfg["key"])
+			},
+		},
+		{
+			name: "empty TOML file produces non-nil map",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "x.json"), map[string]any{
+					"key": "val",
+				})
+				dir := t.TempDir()
+				cfgPath := filepath.Join(dir, "config.toml")
+				writeFile(t, cfgPath, "")
+				return src, cfgPath
+			},
+			check: func(t *testing.T, cfgPath string) {
+				t.Helper()
+				data, err := os.ReadFile(cfgPath)
+				require.NoError(t, err)
+				var cfg map[string]any
+				require.NoError(t, toml.Unmarshal(data, &cfg))
+				assert.Equal(t, "val", cfg["key"])
+			},
+		},
+		{
+			name: "writeTOML MkdirAll error propagates",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "x.json"), map[string]any{
+					"key": "val",
+				})
+				parent := t.TempDir()
+				require.NoError(t, os.Chmod(parent, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(parent, 0o755) })
+				return src, filepath.Join(parent, "subdir", "config.toml")
+			},
+			wantErr: "mkdir",
+		},
+		{
+			name: "writeTOML WriteFile error propagates",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "settings", "x.json"), map[string]any{
+					"key": "val",
+				})
+				parent := t.TempDir()
+				require.NoError(t, os.Chmod(parent, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(parent, 0o755) })
+				return src, filepath.Join(parent, "config.toml")
+			},
+			wantErr: "write",
+		},
 	}
 
 	for _, tt := range tests {
@@ -846,7 +1078,11 @@ func TestCodex_InstallConfig(t *testing.T) {
 
 			srcDir, cfgPath := tt.setup(t)
 			c := codex.New()
-			err := codex.InstallConfig(context.Background(), c, srcDir, cfgPath)
+			ctx := context.Background()
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
+			}
+			err := codex.InstallConfig(ctx, c, srcDir, cfgPath)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

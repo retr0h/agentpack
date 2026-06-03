@@ -33,6 +33,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/openhands"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -165,6 +166,7 @@ func TestOpenHands_Install(t *testing.T) {
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string, homeDir string)
 	}{
@@ -623,6 +625,88 @@ func TestOpenHands_Install(t *testing.T) {
 			},
 			wantErr: "merge hooks",
 		},
+		{
+			name: "installFromEntries ctx cancelled mid-loop returns error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "a", "SKILL.md"), "# A")
+				return src, t.TempDir()
+			},
+			entries: []target.ContentEntry{
+				{Name: "a", Type: "skill"},
+				{Name: "b", Type: "skill"},
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromDirs ctx cancelled after top-level Install check",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "mcpConfigPath global home error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, t.TempDir()
+			},
+			global: true,
+			homeFunc: func() func() (string, error) {
+				calls := 0
+				tmp := t.TempDir()
+				return func() (string, error) {
+					calls++
+					if calls == 1 {
+						return tmp, nil
+					}
+					return "", errors.New("home unavailable for mcp")
+				}
+			}(),
+			wantErr: "home dir",
+		},
+		{
+			name: "hooksPath global home error propagates in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, t.TempDir()
+			},
+			global: true,
+			homeFunc: func() func() (string, error) {
+				calls := 0
+				tmp := t.TempDir()
+				return func() (string, error) {
+					calls++
+					if calls <= 2 {
+						return tmp, nil
+					}
+					return "", errors.New("home unavailable for hooks")
+				}
+			}(),
+			wantErr: "home dir",
+		},
+		{
+			name: "hooksPath uses cwd when dir is empty in installFromDirs",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "x.md"), "x")
+				return src, ""
+			},
+			cwdFunc: func() func() (string, error) {
+				tmp := t.TempDir()
+				return func() (string, error) { return tmp, nil }
+			}(),
+			homeFunc: func() (string, error) { return t.TempDir(), nil },
+		},
 	}
 
 	for _, tt := range tests {
@@ -653,6 +737,9 @@ func TestOpenHands_Install(t *testing.T) {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries

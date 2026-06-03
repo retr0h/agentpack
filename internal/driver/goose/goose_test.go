@@ -34,6 +34,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/goose"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -174,6 +175,7 @@ func TestGoose_Install(t *testing.T) {
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string)
 	}{
@@ -448,6 +450,31 @@ func TestGoose_Install(t *testing.T) {
 			wantErr: "mkdir skills dir",
 		},
 		{
+			name: "installFromDirs context cancelled inside dir loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromEntries context cancelled inside entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
 			name: "copyTreeIfExists error from unreadable file in skills dir",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
@@ -502,6 +529,9 @@ func TestGoose_Install(t *testing.T) {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries
@@ -559,10 +589,11 @@ func TestGoose_InstallMCP(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T) (srcDir, configPath string)
-		wantErr string
-		check   func(t *testing.T, configPath string)
+		name      string
+		setup     func(t *testing.T) (srcDir, configPath string)
+		customCtx context.Context
+		wantErr   string
+		check     func(t *testing.T, configPath string)
 	}{
 		{
 			name: "merges MCP config into config.yaml",
@@ -745,6 +776,39 @@ func TestGoose_InstallMCP(t *testing.T) {
 				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
 			},
 		},
+		{
+			name: "context cancelled inside mcp entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "srv.json"), map[string]any{
+					"name":    "srv",
+					"type":    "stdio",
+					"command": "srv-bin",
+				})
+				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
+			},
+			customCtx: testutil.NewCancelAfterN(0),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "returns error when config file is unreadable via mergeGooseExtension",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "srv.json"), map[string]any{
+					"name":    "srv",
+					"type":    "stdio",
+					"command": "srv-bin",
+				})
+				configPath := filepath.Join(t.TempDir(), "goose", "config.yaml")
+				writeFile(t, configPath, "extensions:\n  existing: {}\n")
+				require.NoError(t, os.Chmod(configPath, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(configPath, 0o644) })
+				return src, configPath
+			},
+			wantErr: "merge mcp",
+		},
 	}
 
 	for _, tt := range tests {
@@ -754,7 +818,12 @@ func TestGoose_InstallMCP(t *testing.T) {
 			srcDir, configPath := tt.setup(t)
 			g := goose.New()
 
-			err := goose.InstallMCP(context.Background(), g, srcDir, configPath)
+			ctx := context.Context(context.Background())
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
+			}
+
+			err := goose.InstallMCP(ctx, g, srcDir, configPath)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -766,6 +835,197 @@ func TestGoose_InstallMCP(t *testing.T) {
 			if tt.check != nil {
 				tt.check(t, configPath)
 			}
+		})
+	}
+}
+
+func TestGoose_ReadYAMLConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string
+		wantErr string
+		check   func(t *testing.T, doc map[string]any)
+	}{
+		{
+			name: "returns empty map when file does not exist",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "nonexistent.yaml")
+			},
+			check: func(t *testing.T, doc map[string]any) {
+				t.Helper()
+				assert.Empty(t, doc)
+			},
+		},
+		{
+			name: "returns empty map when file is empty YAML",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "config.yaml")
+				writeFile(t, p, "")
+				return p
+			},
+			check: func(t *testing.T, doc map[string]any) {
+				t.Helper()
+				assert.NotNil(t, doc)
+				assert.Empty(t, doc)
+			},
+		},
+		{
+			name: "returns error when file is unreadable",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "config.yaml")
+				writeFile(t, p, "key: value")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			wantErr: "read ",
+		},
+		{
+			name: "returns error when file contains invalid YAML",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "config.yaml")
+				writeFile(t, p, "key: [\ninvalid")
+				return p
+			},
+			wantErr: "parse ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := tt.setup(t)
+			doc, err := goose.ReadYAMLConfig(path)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, doc)
+			}
+		})
+	}
+}
+
+func TestGoose_WriteYAMLConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string
+		doc     map[string]any
+		wantErr string
+		check   func(t *testing.T, path string)
+	}{
+		{
+			name: "writes YAML file creating parent directories",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "subdir", "config.yaml")
+			},
+			doc: map[string]any{"key": "value"},
+			check: func(t *testing.T, path string) {
+				t.Helper()
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, yaml.Unmarshal(data, &doc))
+				assert.Equal(t, "value", doc["key"])
+			},
+		},
+		{
+			name: "returns error when parent directory is unwritable",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				parent := t.TempDir()
+				require.NoError(t, os.Chmod(parent, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(parent, 0o755) })
+				return filepath.Join(parent, "subdir", "config.yaml")
+			},
+			doc:     map[string]any{"key": "value"},
+			wantErr: "mkdir ",
+		},
+		{
+			name: "returns error when file is not writable",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "config.yaml")
+				writeFile(t, p, "old: content")
+				require.NoError(t, os.Chmod(p, 0o444))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			doc:     map[string]any{"key": "value"},
+			wantErr: "write ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := tt.setup(t)
+			err := goose.WriteYAMLConfig(path, tt.doc)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, path)
+			}
+		})
+	}
+}
+
+func TestGoose_MergeGooseExtension(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string
+		extName string
+		config  map[string]any
+		wantErr string
+	}{
+		{
+			name: "returns error when config file is unreadable",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "config.yaml")
+				writeFile(t, p, "extensions:\n  existing: {}\n")
+				require.NoError(t, os.Chmod(p, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+				return p
+			},
+			extName: "new-ext",
+			config:  map[string]any{"type": "stdio"},
+			wantErr: "read ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := tt.setup(t)
+			err := goose.MergeGooseExtension(path, tt.extName, tt.config)
+
+			require.ErrorContains(t, err, tt.wantErr)
 		})
 	}
 }

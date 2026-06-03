@@ -80,6 +80,24 @@ func TestEnumerateFiles(t *testing.T) {
 			},
 			wantErr: "context canceled",
 		},
+		{
+			name: "returns error when file is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				if os.Getuid() == 0 {
+					t.Skip("root bypasses file permissions")
+				}
+				base := t.TempDir()
+				dest := filepath.Join(base, "skills")
+				require.NoError(t, os.MkdirAll(dest, 0o755))
+				p := filepath.Join(dest, "secret.md")
+				require.NoError(t, os.WriteFile(p, []byte("secret"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+
+				return dest, base
+			},
+			wantErr: "permission denied",
+		},
 	}
 
 	for _, tt := range tests {

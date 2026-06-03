@@ -42,6 +42,7 @@ import (
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/target"
 	"github.com/retr0h/agentpack/internal/target/mocks"
+	"github.com/retr0h/agentpack/internal/testutil"
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/safety"
@@ -221,6 +222,19 @@ func TestStoreArchive(t *testing.T) {
 			sha:     "abc1234",
 			wantErr: "open",
 		},
+		{
+			name: "returns error when context is already cancelled",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				storeDir := filepath.Join(dir, "archives")
+				require.NoError(t, os.MkdirAll(storeDir, 0o700))
+				return filepath.Join(dir, "unused.agentpack"), storeDir
+			},
+			pkgName: "ctx-plugin",
+			sha:     "abc1234",
+			wantErr: "context canceled",
+		},
 	}
 
 	for _, tt := range tests {
@@ -233,7 +247,14 @@ func TestStoreArchive(t *testing.T) {
 			restore := install.SetArchivesDir(func() (string, error) { return storeDir, nil })
 			defer restore()
 
-			dstPath, err := install.StoreArchive(context.Background(), srcPath, tt.pkgName, tt.sha)
+			ctx := context.Background()
+			if tt.wantErr == "context canceled" {
+				cancelCtx, cancel := context.WithCancel(ctx)
+				cancel()
+				ctx = cancelCtx
+			}
+
+			dstPath, err := install.StoreArchive(ctx, srcPath, tt.pkgName, tt.sha)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -280,6 +301,17 @@ func TestArchivesDir(t *testing.T) {
 			name:    "returns error when home dir lookup fails",
 			wantErr: "home dir",
 		},
+		{
+			name: "returns error when mkdir fails",
+			// Point home at a path where a file blocks the .config directory.
+			homeDir: func() string {
+				tmp := t.TempDir()
+				blocker := filepath.Join(tmp, ".config")
+				_ = os.WriteFile(blocker, []byte("block"), 0o644)
+				return tmp
+			}(),
+			wantErr: "mkdir archives dir",
+		},
 	}
 
 	for _, tt := range tests {
@@ -289,8 +321,9 @@ func TestArchivesDir(t *testing.T) {
 			var restore func()
 
 			if tt.homeDir != "" {
+				capturedHome := tt.homeDir
 				restore = install.SetArchivesDirHome(
-					func() (string, error) { return tt.homeDir, nil },
+					func() (string, error) { return capturedHome, nil },
 				)
 			} else {
 				restore = install.SetArchivesDirHome(func() (string, error) {
@@ -739,6 +772,38 @@ func TestAutoPackageWithVersion(t *testing.T) {
 			},
 			wantErr: "context canceled",
 		},
+		{
+			name: "returns error when context cancelled inside content dirs loop",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				skillDir := filepath.Join(dir, "skills", "review")
+				require.NoError(t, os.MkdirAll(skillDir, 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(skillDir, "SKILL.md"),
+					[]byte("# review\n"),
+					0o644,
+				))
+				return dir
+			},
+			wantErr: "context canceled",
+		},
+		{
+			name: "returns error when context cancelled inside walkRoots inner loop",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				skillDir := filepath.Join(dir, "skills", "review")
+				require.NoError(t, os.MkdirAll(skillDir, 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(skillDir, "SKILL.md"),
+					[]byte("# review\n"),
+					0o644,
+				))
+				return dir
+			},
+			wantErr: "context canceled",
+		},
 	}
 
 	for _, tt := range tests {
@@ -747,11 +812,18 @@ func TestAutoPackageWithVersion(t *testing.T) {
 
 			cloneDir := tt.setup(t)
 
-			ctx := context.Background()
-			if tt.name == "returns error when context is already cancelled" {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(ctx)
+			var ctx context.Context
+			switch tt.name {
+			case "returns error when context is already cancelled":
+				cancelCtx, cancel := context.WithCancel(context.Background())
 				cancel()
+				ctx = cancelCtx
+			case "returns error when context cancelled inside content dirs loop":
+				ctx = testutil.NewCancelAfterN(1)
+			case "returns error when context cancelled inside walkRoots inner loop":
+				ctx = testutil.NewCancelAfterN(2)
+			default:
+				ctx = context.Background()
 			}
 
 			archivePath, err := install.AutoPackageWithVersion(
@@ -856,6 +928,32 @@ func TestAutoPackageGeneratesEntries(t *testing.T) {
 				require.Len(t, meta.Entries, 1)
 				assert.Equal(t, "k8s", meta.Entries[0].Name)
 				assert.Equal(t, "skill", meta.Entries[0].Type)
+			},
+		},
+		{
+			name: "agent filter restricts to agents only",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+
+				for _, name := range []string{"reviewer", "planner"} {
+					agentDir := filepath.Join(dir, "agents", name)
+					require.NoError(t, os.MkdirAll(agentDir, 0o755))
+					require.NoError(t, os.WriteFile(
+						filepath.Join(agentDir, "AGENT.md"),
+						[]byte("# "+name+"\n"),
+						0o644,
+					))
+				}
+
+				return dir
+			},
+			agentFilter: []string{"reviewer"},
+			check: func(t *testing.T, meta *metadata.Metadata) {
+				t.Helper()
+				require.Len(t, meta.Entries, 1)
+				assert.Equal(t, "reviewer", meta.Entries[0].Name)
+				assert.Equal(t, "agent", meta.Entries[0].Type)
 			},
 		},
 	}

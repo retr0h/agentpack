@@ -33,6 +33,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/cline"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -165,6 +166,7 @@ func TestCline_Install(t *testing.T) {
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string, homeDir string)
 	}{
@@ -598,6 +600,48 @@ func TestCline_Install(t *testing.T) {
 			}(),
 			wantErr: "enumerate installed files",
 		},
+		{
+			name: "installFromDirs context cancelled after top-level check",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromEntries context cancelled inside entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "k8s", "SKILL.md"), "# K8s")
+				return src, t.TempDir()
+			},
+			entriesFromSrc: func(src string) []target.ContentEntry {
+				return []target.ContentEntry{
+					{Name: "k8s", Type: "skill", Root: filepath.Join(src, "skills", "k8s")},
+				}
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installHooks error propagates in installFromDirs when hooks dir unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				hooksDir := filepath.Join(src, "hooks")
+				require.NoError(t, os.MkdirAll(hooksDir, 0o755))
+				require.NoError(t, os.Chmod(hooksDir, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksDir, 0o755) })
+				return src, t.TempDir()
+			},
+			homeFunc: func() func() (string, error) {
+				home := t.TempDir()
+				return func() (string, error) { return home, nil }
+			}(),
+			wantErr: "read hooks dir",
+		},
 	}
 
 	for _, tt := range tests {
@@ -628,6 +672,9 @@ func TestCline_Install(t *testing.T) {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries

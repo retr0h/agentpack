@@ -198,6 +198,21 @@ func TestNew(t *testing.T) {
 			source:  "ftp://example.com/archive.agentpack",
 			wantErr: "unknown scheme",
 		},
+		{
+			name:     "github.com with ADR-010 at-ref returns GitFetcher",
+			source:   "github.com/org/repo@v1.0.0",
+			wantType: "*fetcher.GitFetcher",
+		},
+		{
+			name:     "github.com with ADR-010 selector returns GitFetcher",
+			source:   "github.com/org/repo:skill/k8s",
+			wantType: "*fetcher.GitFetcher",
+		},
+		{
+			name:     "https github.com with selector returns GitFetcher",
+			source:   "https://github.com/org/repo:skill/k8s",
+			wantType: "*fetcher.GitFetcher",
+		},
 	}
 
 	for _, tt := range tests {

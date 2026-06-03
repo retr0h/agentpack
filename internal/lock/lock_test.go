@@ -726,6 +726,151 @@ func TestLockfile_RemoveContent(t *testing.T) {
 			wantFilePaths:   nil,
 			wantAbsentPaths: nil,
 		},
+		{
+			name: "removes command content type and prunes matching files",
+			initial: lock.LockedPackage{
+				Name:    "cmd-pkg",
+				Source:  "github.com/org/cmd",
+				SHA:     "sha1",
+				Content: []string{"command/scan", "skill/k8s"},
+				Files: []lock.LockedFile{
+					{Path: ".claude/commands/scan/scan.md", SHA256: "aaa", Target: "claude-code"},
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "bbb", Target: "claude-code"},
+				},
+			},
+			removeContent:   []string{"command/scan"},
+			wantContent:     []string{"skill/k8s"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md"},
+			wantAbsentPaths: []string{".claude/commands/scan/scan.md"},
+		},
+		{
+			name: "removes hook content type and prunes matching files",
+			initial: lock.LockedPackage{
+				Name:    "hook-pkg",
+				Source:  "github.com/org/hook",
+				SHA:     "sha1",
+				Content: []string{"hook/lint", "skill/k8s"},
+				Files: []lock.LockedFile{
+					{Path: ".claude/hooks/lint/hook.json", SHA256: "aaa", Target: "claude-code"},
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "bbb", Target: "claude-code"},
+				},
+			},
+			removeContent:   []string{"hook/lint"},
+			wantContent:     []string{"skill/k8s"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md"},
+			wantAbsentPaths: []string{".claude/hooks/lint/hook.json"},
+		},
+		{
+			name: "removes agent content type and prunes matching files",
+			initial: lock.LockedPackage{
+				Name:    "agent-pkg",
+				Source:  "github.com/org/agent",
+				SHA:     "sha1",
+				Content: []string{"agent/reviewer", "skill/k8s"},
+				Files: []lock.LockedFile{
+					{
+						Path:   ".claude/agents/reviewer/agent.md",
+						SHA256: "aaa",
+						Target: "claude-code",
+					},
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "bbb", Target: "claude-code"},
+				},
+			},
+			removeContent:   []string{"agent/reviewer"},
+			wantContent:     []string{"skill/k8s"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md"},
+			wantAbsentPaths: []string{".claude/agents/reviewer/agent.md"},
+		},
+		{
+			name: "removes mcp content type and prunes matching files",
+			initial: lock.LockedPackage{
+				Name:    "mcp-pkg",
+				Source:  "github.com/org/mcp",
+				SHA:     "sha1",
+				Content: []string{"mcp/myserver", "skill/k8s"},
+				Files: []lock.LockedFile{
+					{
+						Path:   ".claude/mcp/myserver/server.json",
+						SHA256: "aaa",
+						Target: "claude-code",
+					},
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "bbb", Target: "claude-code"},
+				},
+			},
+			removeContent:   []string{"mcp/myserver"},
+			wantContent:     []string{"skill/k8s"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md"},
+			wantAbsentPaths: []string{".claude/mcp/myserver/server.json"},
+		},
+		{
+			name: "removes config content type and prunes matching files",
+			initial: lock.LockedPackage{
+				Name:    "cfg-pkg",
+				Source:  "github.com/org/cfg",
+				SHA:     "sha1",
+				Content: []string{"config/base", "skill/k8s"},
+				Files: []lock.LockedFile{
+					{
+						Path:   ".claude/settings/base/settings.json",
+						SHA256: "aaa",
+						Target: "claude-code",
+					},
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "bbb", Target: "claude-code"},
+				},
+			},
+			removeContent:   []string{"config/base"},
+			wantContent:     []string{"skill/k8s"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md"},
+			wantAbsentPaths: []string{".claude/settings/base/settings.json"},
+		},
+		{
+			name: "unknown content type does not prune any files",
+			initial: lock.LockedPackage{
+				Name:    "unknown-pkg",
+				Source:  "github.com/org/unknown",
+				SHA:     "sha1",
+				Content: []string{"unknown/thing", "skill/k8s"},
+				Files: []lock.LockedFile{
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "bbb", Target: "claude-code"},
+				},
+			},
+			removeContent:   []string{"unknown/thing"},
+			wantContent:     []string{"skill/k8s"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md"},
+			wantAbsentPaths: nil,
+		},
+		{
+			name: "malformed content selector without slash does not prune any files",
+			initial: lock.LockedPackage{
+				Name:    "noslash-pkg",
+				Source:  "github.com/org/noslash",
+				SHA:     "sha1",
+				Content: []string{"noslash", "skill/k8s"},
+				Files: []lock.LockedFile{
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "bbb", Target: "claude-code"},
+				},
+			},
+			removeContent:   []string{"noslash"},
+			wantContent:     []string{"skill/k8s"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md"},
+			wantAbsentPaths: nil,
+		},
+		{
+			name: "leadNeedle match removes file when path starts with dirName",
+			initial: lock.LockedPackage{
+				Name:    "lead-pkg",
+				Source:  "github.com/org/lead",
+				SHA:     "sha1",
+				Content: []string{"skill/k8s"},
+				Files: []lock.LockedFile{
+					{Path: "skills/k8s/SKILL.md", SHA256: "aaa", Target: "claude-code"},
+				},
+			},
+			removeContent:   []string{"skill/k8s"},
+			wantContent:     nil,
+			wantFilePaths:   nil,
+			wantAbsentPaths: []string{"skills/k8s/SKILL.md"},
+		},
 	}
 
 	for _, tt := range tests {

@@ -1288,10 +1288,11 @@ func TestFindChecksums(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T) string
-		wantErr string
-		check   func(t *testing.T, path string)
+		name      string
+		setup     func(t *testing.T) string
+		customCtx context.Context
+		wantErr   string
+		check     func(t *testing.T, path string)
 	}{
 		{
 			name: "finds checksums.txt inside .agentpack dir",
@@ -1339,6 +1340,26 @@ func TestFindChecksums(t *testing.T) {
 			},
 			wantErr: "searching for checksums.txt",
 		},
+		{
+			name: "returns error when context is already cancelled",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(dir, "subdir"), 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(dir, "subdir", "some.txt"),
+					[]byte("x"),
+					0o644,
+				))
+				return dir
+			},
+			customCtx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			}(),
+			wantErr: "searching for checksums.txt",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1346,7 +1367,13 @@ func TestFindChecksums(t *testing.T) {
 			t.Parallel()
 
 			dir := tt.setup(t)
-			path, err := install.FindChecksums(context.Background(), dir)
+
+			ctx := tt.customCtx
+			if ctx == nil {
+				ctx = context.Background()
+			}
+
+			path, err := install.FindChecksums(ctx, dir)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -1839,6 +1866,222 @@ func TestSelectorsToSkillFilter(t *testing.T) {
 	}
 }
 
+func TestSelectorsToAgentFilter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		selectors []install.ContentSelector
+		want      []string
+	}{
+		{
+			name: "extracts agent names from mixed selectors",
+			selectors: []install.ContentSelector{
+				{Type: "agent", Name: "reviewer"},
+				{Type: "skill", Name: "k8s"},
+				{Type: "agent", Name: "planner"},
+			},
+			want: []string{"reviewer", "planner"},
+		},
+		{
+			name: "returns nil when no agent selectors",
+			selectors: []install.ContentSelector{
+				{Type: "skill", Name: "k8s"},
+			},
+			want: nil,
+		},
+		{
+			name:      "nil selectors returns nil",
+			selectors: nil,
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := install.SelectorsToAgentFilter(tt.selectors)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestUpdateManifests(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		source  string
+		content []string
+		targets []string
+		ref     string
+		result  *install.Result
+		setup   func(t *testing.T, dir string)
+		wantErr string
+		check   func(t *testing.T, pkgYAML, lockYAML string)
+	}{
+		{
+			name:    "writes package and lock entries with ref",
+			source:  "github.com/org/my-plugin",
+			content: []string{"skill/k8s"},
+			targets: []string{"claude-code"},
+			ref:     "v1.0.0",
+			result: &install.Result{
+				Name: "org/my-plugin",
+				SHA:  "abc1234567890",
+				Dirs: map[string]string{"Claude Code": "claude-code"},
+			},
+			check: func(t *testing.T, pkgYAML, lockYAML string) {
+				assert.Contains(t, pkgYAML, "org/my-plugin")
+				assert.Contains(t, pkgYAML, "github.com/org/my-plugin")
+				assert.Contains(t, lockYAML, "org/my-plugin")
+				assert.Contains(t, lockYAML, "abc1234567890")
+				assert.Contains(t, lockYAML, "v1.0.0")
+			},
+		},
+		{
+			name:    "writes entries without ref",
+			source:  "github.com/org/no-ref",
+			content: nil,
+			targets: []string{"cursor"},
+			ref:     "",
+			result: &install.Result{
+				Name: "org/no-ref",
+				SHA:  "deadbeef",
+			},
+			check: func(t *testing.T, pkgYAML, lockYAML string) {
+				assert.Contains(t, pkgYAML, "org/no-ref")
+				assert.Contains(t, lockYAML, "deadbeef")
+			},
+		},
+		{
+			name:   "returns error when packages file is unreadable",
+			source: "github.com/org/err-pkg",
+			result: &install.Result{Name: "org/err-pkg"},
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				pkgPath := filepath.Join(dir, "agentpack-packages.yaml")
+				require.NoError(t, os.WriteFile(pkgPath, []byte("packages: []\n"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(pkgPath, 0o644) })
+			},
+			wantErr: "load packages",
+		},
+		{
+			name:   "returns error when packages file save fails",
+			source: "github.com/org/save-err",
+			result: &install.Result{Name: "org/save-err"},
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				// Make dir read-only so WriteFile fails.
+				require.NoError(t, os.Chmod(dir, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+			},
+			wantErr: "save packages",
+		},
+		{
+			name:   "returns error when lock file is unreadable",
+			source: "github.com/org/lock-err",
+			result: &install.Result{Name: "org/lock-err"},
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				lockPath := filepath.Join(dir, "agentpack.lock")
+				require.NoError(t, os.WriteFile(lockPath, []byte("lockVersion: 2\n"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(lockPath, 0o644) })
+			},
+			wantErr: "load lock",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+
+			if tt.setup != nil {
+				tt.setup(t, dir)
+			}
+
+			err := install.UpdateManifests(
+				dir, tt.source, tt.content, tt.targets, tt.ref, tt.result,
+			)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			pkgData, err := os.ReadFile(filepath.Join(dir, "agentpack-packages.yaml"))
+			require.NoError(t, err)
+			lockData, err := os.ReadFile(filepath.Join(dir, "agentpack.lock"))
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, string(pkgData), string(lockData))
+			}
+		})
+	}
+}
+
+func TestRemoveManifests(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		selectors []install.ContentSelector
+		check     func(t *testing.T, pkgYAML string)
+	}{
+		{
+			name:      "full removal deletes the package",
+			selectors: nil,
+			check: func(t *testing.T, pkgYAML string) {
+				assert.NotContains(t, pkgYAML, "org/my-plugin")
+			},
+		},
+		{
+			name:      "partial removal trims only matching content",
+			selectors: []install.ContentSelector{{Type: "skill", Name: "k8s"}},
+			check: func(t *testing.T, pkgYAML string) {
+				assert.Contains(t, pkgYAML, "org/my-plugin")
+				assert.NotContains(t, pkgYAML, "skill/k8s")
+				assert.Contains(t, pkgYAML, "command/scan")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+
+			result := &install.Result{
+				Name: "org/my-plugin",
+				SHA:  "abc1234",
+				Dirs: map[string]string{"Claude Code": "claude-code"},
+			}
+			require.NoError(t, install.UpdateManifests(
+				dir,
+				"github.com/org/my-plugin",
+				[]string{"skill/k8s", "command/scan"},
+				[]string{"claude-code"},
+				"",
+				result,
+			))
+
+			install.RemoveManifests(dir, "org/my-plugin", tt.selectors)
+
+			pkgData, err := os.ReadFile(filepath.Join(dir, "agentpack-packages.yaml"))
+			require.NoError(t, err)
+
+			tt.check(t, string(pkgData))
+		})
+	}
+}
+
 // --------------------------------------------------------------------------
 // TestHumanSize
 // --------------------------------------------------------------------------
@@ -2044,6 +2287,7 @@ func TestRunFromGit(t *testing.T) {
 	tests := []struct {
 		name        string
 		noParallel  bool
+		ref         string
 		setup       func(t *testing.T, ctrl *gomock.Controller) (source string, targets []target.Target)
 		injectFuncs func(t *testing.T)
 		wantErr     string
@@ -2211,6 +2455,45 @@ func TestRunFromGit(t *testing.T) {
 			},
 			wantErr: "no installable content",
 		},
+		{
+			name:       "installs with Ref option sets version from ref",
+			noParallel: true,
+			ref:        "v1.2.3",
+			setup: func(t *testing.T, ctrl *gomock.Controller) (string, []target.Target) {
+				t.Helper()
+				bareRepo := initBareGitRepo(t)
+
+				m := mocks.NewMockTarget(ctrl)
+				m.EXPECT().Name().Return("claude-code").AnyTimes()
+				m.EXPECT().DisplayName().Return("Claude Code").AnyTimes()
+				m.EXPECT().
+					SupportedTypes().
+					Return([]string{"skill", "command", "hook", "agent", "mcp", "config"}).
+					AnyTimes()
+				m.EXPECT().
+					Install(gomock.Any(), gomock.Any()).
+					Return([]target.InstalledFile{{Path: "skills/test/SKILL.md", SHA256: "dummy"}}, nil)
+
+				return bareRepo, []target.Target{m}
+			},
+			injectFuncs: func(t *testing.T) {
+				t.Helper()
+				restore := install.SetRegistrySave(
+					func(_ *registry.PackageManifest) error { return nil },
+				)
+				t.Cleanup(restore)
+				archivesDir := t.TempDir()
+				restoreArchives := install.SetArchivesDir(
+					func() (string, error) { return archivesDir, nil },
+				)
+				t.Cleanup(restoreArchives)
+			},
+			checkResult: func(t *testing.T, r *install.Result) {
+				t.Helper()
+				require.NotNil(t, r)
+				assert.NotEmpty(t, r.SHA)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -2228,6 +2511,7 @@ func TestRunFromGit(t *testing.T) {
 
 			r, err := install.NewWithTargets(targets).Run(context.Background(), install.Options{
 				Source: source,
+				Ref:    tt.ref,
 			})
 
 			if tt.wantErr != "" {
@@ -2800,8 +3084,8 @@ func testLifecycleFull(t *testing.T) {
 	// -------------------------------------------------------------------------
 	// Step 6: List -- verify registry.List returns exactly one manifest with
 	// both targets and both skills. We query the registry directly rather than
-	// through pkg/list (which imports pkg/target/agents and would register the
-	// universal target, breaking the "no targets" subtest).
+	// through pkg/list (which imports internal/driver/agents and would register
+	// the universal target, breaking the "no targets" subtest).
 	// -------------------------------------------------------------------------
 	allManifests, listErr := reg.List()
 	require.NoError(t, listErr)
@@ -2911,7 +3195,7 @@ func testLifecycleWholeRepo(t *testing.T) {
 // returns an empty slice the install pipeline returns the expected error.
 //
 // NOTE: Because this file imports the list package -- which transitively imports
-// pkg/target/agents (registering the universal target that always detects) --
+// internal/driver/agents (registering the universal target that always detects) --
 // target.Detected() will always return at least one entry in this test binary.
 // The test therefore exercises the error path by passing a mock target whose
 // Install always returns an error, verifying that the pipeline handles target
@@ -3798,4 +4082,184 @@ func testManifestWholeRepo(t *testing.T) {
 	assertFilePath(t, m.Files, "skills/react-expert/SKILL.md")
 	assertFilePath(t, m.Files, "commands/scan.md")
 	assertFilePath(t, m.Files, "hooks/hooks.json")
+}
+
+// --------------------------------------------------------------------------
+// TestDefaultResolveTargets
+// --------------------------------------------------------------------------
+
+func TestDefaultResolveTargets(t *testing.T) {
+	// NOTE: not parallel — manipulates the global target registry.
+
+	tests := []struct {
+		name    string
+		names   []string
+		wantErr string
+		check   func(t *testing.T, targets []target.Target)
+	}{
+		{
+			name:  "empty names returns detected targets",
+			names: nil,
+			check: func(t *testing.T, _ []target.Target) {
+				t.Helper()
+				// Returns whatever Detected() returns; could be empty or non-empty
+				// depending on environment — the key thing is no error.
+			},
+		},
+		{
+			name:    "unknown name returns error",
+			names:   []string{"totally-nonexistent-target-xyz"},
+			wantErr: "unknown target",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			targets, err := install.DefaultResolveTargets(tt.names)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, targets)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestCopyToTemp
+// --------------------------------------------------------------------------
+
+func TestCopyToTemp(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		setup      func(t *testing.T) string
+		noParallel bool
+		wantErr    string
+		check      func(t *testing.T, dst string)
+	}{
+		{
+			name: "copies source directory to new temp dir",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, "file.txt"), []byte("hello"), 0o644),
+				)
+				return src
+			},
+			check: func(t *testing.T, dst string) {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(dst, "file.txt"))
+				require.NoError(t, err)
+				assert.Equal(t, "hello", string(data))
+			},
+		},
+		{
+			name: "returns error when copyDir fails due to unreadable subdir",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				src := t.TempDir()
+				subdir := filepath.Join(src, "locked")
+				require.NoError(t, os.MkdirAll(subdir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(subdir, "f.txt"), []byte("x"), 0o644))
+				require.NoError(t, os.Chmod(subdir, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(subdir, 0o755) })
+				return src
+			},
+			wantErr: "copy to target dir",
+		},
+		{
+			name:       "returns error when osMkdirTemp fails",
+			noParallel: true,
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			wantErr: "create target temp dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !tt.noParallel {
+				t.Parallel()
+			}
+
+			src := tt.setup(t)
+
+			if tt.noParallel {
+				restore := install.SetOsMkdirTemp(install.MkdirTempAlwaysFails)
+				defer restore()
+			}
+
+			dst, err := install.CopyToTemp(context.Background(), src)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotEmpty(t, dst)
+
+			defer func() { _ = os.RemoveAll(dst) }()
+
+			if tt.check != nil {
+				tt.check(t, dst)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// Additional TestNameFromSource cases (ADR-010 selector stripping via ://)
+// --------------------------------------------------------------------------
+
+func TestNameFromSourceWithSelectors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{
+			name:   "https URL with selector suffix strips selector",
+			source: "https://github.com/org/repo:skill/k8s",
+			want:   "org/repo",
+		},
+		{
+			name:   "source with @ref selector strips both ref and selector",
+			source: "github.com/org/repo@v1.0:skill/k8s",
+			want:   "org/repo",
+		},
+		{
+			name:   "bitbucket host returns owner/repo",
+			source: "bitbucket.org/org/my-repo",
+			want:   "org/my-repo",
+		},
+		{
+			name:   "local path with extension returns base without extension",
+			source: "/some/dir/archive.agentpack",
+			want:   "archive",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := install.NameFromSource(tt.source)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

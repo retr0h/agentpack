@@ -32,6 +32,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/driver/opencode"
 	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/testutil"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -157,6 +158,7 @@ func TestOpenCode_Install(t *testing.T) {
 		cwdFunc        func() (string, error)
 		mkdirFunc      func(string, os.FileMode) error
 		cancelCtx      bool
+		customCtx      context.Context
 		wantErr        string
 		check          func(t *testing.T, installDir string)
 	}{
@@ -325,6 +327,30 @@ func TestOpenCode_Install(t *testing.T) {
 			},
 			wantErr: "enumerate installed files",
 		},
+		{
+			name: "installFromEntries ctx cancelled mid-loop returns error",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeFile(t, filepath.Join(src, "skills", "a", "SKILL.md"), "# A")
+				return src, t.TempDir()
+			},
+			entries: []target.ContentEntry{
+				{Name: "a", Type: "skill"},
+				{Name: "b", Type: "skill"},
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
+		{
+			name: "installFromDirs ctx cancelled after top-level Install check",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				return t.TempDir(), t.TempDir()
+			},
+			customCtx: testutil.NewCancelAfterN(1),
+			wantErr:   "context canceled",
+		},
 	}
 
 	for _, tt := range tests {
@@ -349,6 +375,9 @@ func TestOpenCode_Install(t *testing.T) {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			}
+			if tt.customCtx != nil {
+				ctx = tt.customCtx
 			}
 
 			entries := tt.entries

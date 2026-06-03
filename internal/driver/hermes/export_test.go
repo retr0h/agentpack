@@ -48,3 +48,23 @@ func InstallHooks(
 ) error {
 	return h.installHooks(ctx, srcDir, configPath, pluginName)
 }
+
+// ReadYAMLConfig exposes readYAMLConfig for testing.
+func ReadYAMLConfig(path string) (map[string]any, error) {
+	return readYAMLConfig(path)
+}
+
+// WriteYAMLConfig exposes writeYAMLConfig for testing.
+func WriteYAMLConfig(path string, doc map[string]any) error {
+	return writeYAMLConfig(path, doc)
+}
+
+// MergeHooksYAML exposes mergeHooksYAML for testing.
+func MergeHooksYAML(path, pluginName string, hooks map[string]any) error {
+	return mergeHooksYAML(path, pluginName, hooks)
+}
+
+// GetOrCreateYAMLSlice exposes getOrCreateYAMLSlice for testing.
+func GetOrCreateYAMLSlice(m map[string]any, key string) []any {
+	return getOrCreateYAMLSlice(m, key)
+}

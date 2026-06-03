@@ -32,6 +32,125 @@ import (
 )
 
 // --------------------------------------------------------------------------
+// TestBuildFromSource
+// --------------------------------------------------------------------------
+
+func TestBuildFromSource(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		pkgName     string
+		source      string
+		content     []string
+		targets     []string
+		ref         string
+		wantGit     string
+		wantSource  string
+		wantRef     string
+		wantContent []string
+		wantTargets []string
+	}{
+		{
+			name:    "github.com source sets git field",
+			pkgName: "my-plugin",
+			source:  "github.com/org/my-plugin",
+			ref:     "v1.0.0",
+			wantGit: "github.com/org/my-plugin",
+			wantRef: "v1.0.0",
+		},
+		{
+			name:    "gitlab.com source sets git field",
+			pkgName: "gl-plugin",
+			source:  "gitlab.com/org/gl-plugin",
+			ref:     "main",
+			wantGit: "gitlab.com/org/gl-plugin",
+			wantRef: "main",
+		},
+		{
+			name:    "bitbucket.org source sets git field",
+			pkgName: "bb-plugin",
+			source:  "bitbucket.org/org/bb-plugin",
+			ref:     "",
+			wantGit: "bitbucket.org/org/bb-plugin",
+			wantRef: "",
+		},
+		{
+			name:       "non-git source sets source field",
+			pkgName:    "offline",
+			source:     "~/Downloads/plugin.agentpack",
+			wantSource: "~/Downloads/plugin.agentpack",
+		},
+		{
+			name:        "content selectors are stored when provided",
+			pkgName:     "content-plugin",
+			source:      "github.com/org/content-plugin",
+			content:     []string{"skill/k8s", "command/scan"},
+			wantGit:     "github.com/org/content-plugin",
+			wantContent: []string{"skill/k8s", "command/scan"},
+		},
+		{
+			name:        "targets are stored when provided",
+			pkgName:     "targeted",
+			source:      "github.com/org/targeted",
+			targets:     []string{"claude-code", "cursor"},
+			wantGit:     "github.com/org/targeted",
+			wantTargets: []string{"claude-code", "cursor"},
+		},
+		{
+			name:    "empty content slice is not stored",
+			pkgName: "no-content",
+			source:  "github.com/org/no-content",
+			content: nil,
+			wantGit: "github.com/org/no-content",
+		},
+		{
+			name:    "empty targets slice is not stored",
+			pkgName: "no-targets",
+			source:  "github.com/org/no-targets",
+			targets: nil,
+			wantGit: "github.com/org/no-targets",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := packages.BuildFromSource(tt.pkgName, tt.source, tt.content, tt.targets, tt.ref)
+
+			assert.Equal(t, tt.pkgName, got.Name)
+
+			if tt.wantGit != "" {
+				assert.Equal(t, tt.wantGit, got.Git)
+				assert.Empty(t, got.Source)
+			}
+
+			if tt.wantSource != "" {
+				assert.Equal(t, tt.wantSource, got.Source)
+				assert.Empty(t, got.Git)
+			}
+
+			if tt.wantRef != "" {
+				assert.Equal(t, tt.wantRef, got.Ref)
+			}
+
+			if tt.wantContent != nil {
+				assert.Equal(t, tt.wantContent, got.Content)
+			} else {
+				assert.Empty(t, got.Content)
+			}
+
+			if tt.wantTargets != nil {
+				assert.Equal(t, tt.wantTargets, got.Targets)
+			} else {
+				assert.Empty(t, got.Targets)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
 // TestLoad
 // --------------------------------------------------------------------------
 
