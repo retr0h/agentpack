@@ -24,13 +24,28 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"time"
 )
 
 // osCreateHTTP is swappable for testing.
 var osCreateHTTP = func(name string) (io.WriteCloser, error) {
 	return os.Create(name)
+}
+
+// httpClient bounds connection setup and the wait for response headers so a
+// hung or unresponsive server fails fast, while leaving the body transfer
+// itself unbounded so large archives on slow links still download. Overall
+// cancellation still flows through the request context.
+var httpClient = &http.Client{
+	Transport: &http.Transport{
+		DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   30 * time.Second,
+		ResponseHeaderTimeout: 60 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+	},
 }
 
 // HTTPFetcher downloads a remote archive over HTTP or HTTPS.
@@ -44,7 +59,7 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, source string, dest string) err
 		return fmt.Errorf("build request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("http get: %w", err)
 	}

@@ -1941,6 +1941,22 @@ func TestUpdateManifests(t *testing.T) {
 			},
 		},
 		{
+			name:    "lock pins the full commit SHA not the short one",
+			source:  "github.com/org/full-sha",
+			content: nil,
+			targets: []string{"claude-code"},
+			ref:     "main",
+			result: &install.Result{
+				Name:      "org/full-sha",
+				SHA:       "abc1234",
+				CommitSHA: "abc1234567890abcdef1234567890abcdef123456",
+				Dirs:      map[string]string{"Claude Code": "claude-code"},
+			},
+			check: func(t *testing.T, _, lockYAML string) {
+				assert.Contains(t, lockYAML, "abc1234567890abcdef1234567890abcdef123456")
+			},
+		},
+		{
 			name:    "writes entries without ref",
 			source:  "github.com/org/no-ref",
 			content: nil,

@@ -117,6 +117,26 @@ func TestInstallMCP(t *testing.T) {
 			wantErr: "missing or invalid \"name\" field",
 		},
 		{
+			name: "returns error when name has unsafe characters",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				mcpDir := filepath.Join(src, "mcp")
+				require.NoError(t, os.MkdirAll(mcpDir, 0o755))
+				require.NoError(
+					t,
+					os.WriteFile(
+						filepath.Join(mcpDir, "srv.json"),
+						[]byte(`{"name":"../../evil","type":"stdio"}`),
+						0o644,
+					),
+				)
+
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "invalid server name",
+		},
+		{
 			name: "skips directories and non-json entries in mcp dir",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()

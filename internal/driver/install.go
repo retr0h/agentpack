@@ -27,10 +27,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/target"
 )
+
+// mcpNameRe constrains MCP server names to a safe identifier so a
+// package-controlled "name" cannot inject path separators or overwrite
+// unrelated entries when written as a JSON key into settings.
+var mcpNameRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 // InstallSkillEntry copies a single skill/command/agent entry into the
 // target directory and returns the list of files written.
@@ -87,6 +93,13 @@ func InstallMCP(_ context.Context, srcDir, mcpPath string) error {
 		name, ok := raw["name"].(string)
 		if !ok || name == "" {
 			return fmt.Errorf("mcp/%s: missing or invalid \"name\" field", de.Name())
+		}
+
+		if !mcpNameRe.MatchString(name) {
+			return fmt.Errorf(
+				"mcp/%s: invalid server name %q (allowed: letters, digits, '.', '_', '-')",
+				de.Name(), name,
+			)
 		}
 
 		delete(raw, "name")

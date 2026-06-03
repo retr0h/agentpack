@@ -159,9 +159,13 @@ type Step struct {
 type Result struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
-	SHA     string `json:"sha"`
-	Source  string `json:"source"`
-	Steps   []Step `json:"steps,omitempty"`
+	// SHA is the short (display) git commit SHA. CommitSHA holds the full SHA.
+	SHA string `json:"sha"`
+	// CommitSHA is the full 40-char git commit SHA, used as the reproducible
+	// pin in agentpack.lock. Empty for non-git sources.
+	CommitSHA string `json:"commitSha,omitempty"`
+	Source    string `json:"source"`
+	Steps     []Step `json:"steps,omitempty"`
 	// Dirs maps target display-name → installed directory.
 	Dirs map[string]string `json:"dirs,omitempty"`
 	// FileCounts maps target display-name → number of files installed.
@@ -555,10 +559,17 @@ func UpdateManifests(
 		}
 	}
 
+	// The lock pins the full commit SHA for reproducibility; the short SHA on
+	// Result is for display only. Fall back to it for non-git sources.
+	lockSHA := result.CommitSHA
+	if lockSHA == "" {
+		lockSHA = result.SHA
+	}
+
 	lp := lock.LockedPackage{
 		Name:     result.Name,
 		Source:   source,
-		SHA:      result.SHA,
+		SHA:      lockSHA,
 		Resolved: time.Now().UTC().Format(time.RFC3339),
 		Content:  content,
 		Targets:  lockedTargets,
@@ -967,6 +978,7 @@ func (i *Installer) installFromDir(
 		Name:                  meta.Name,
 		Version:               meta.Version,
 		SHA:                   gitutil.ShortSHA(meta.GitCommitSHA),
+		CommitSHA:             meta.GitCommitSHA,
 		Dirs:                  dirs,
 		FileCounts:            fileCounts,
 		ContentClassification: meta.Content,
