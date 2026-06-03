@@ -56,8 +56,8 @@ import (
 	"github.com/retr0h/agentpack/internal/merge"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/packages"
-	"github.com/retr0h/agentpack/pkg/safety"
 	"github.com/retr0h/agentpack/pkg/registry"
+	"github.com/retr0h/agentpack/pkg/safety"
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
@@ -77,11 +77,28 @@ var (
 	registryLoad = registry.New().Load
 )
 
+// defaultResolveTargets maps requested target names to driver instances. When
+// no names are given it returns all auto-detected targets.
+func defaultResolveTargets(names []string) ([]target.Target, error) {
+	if len(names) == 0 {
+		return target.Detected(), nil
+	}
+
+	return target.Resolve(names)
+}
+
 // Installer orchestrates the agentpack install pipeline.
-type Installer struct{}
+type Installer struct {
+	// resolveTargets maps requested target names to driver instances. Held per
+	// installer (not as a package global) so tests can inject mock targets
+	// without shared mutable state, keeping parallel tests safe.
+	resolveTargets func(names []string) ([]target.Target, error)
+}
 
 // New returns a new Installer ready to run install pipelines.
-func New() *Installer { return &Installer{} }
+func New() *Installer {
+	return &Installer{resolveTargets: defaultResolveTargets}
+}
 
 // Options configures an install run.
 type Options struct {
@@ -116,10 +133,10 @@ type Options struct {
 	// When nil, steps are silently accumulated on the Result.
 	OnStep func(Step)
 
-	// Targets is the list of agent targets to install into. When nil or empty
-	// the global target registry is consulted and only detected targets are
-	// used.
-	Targets []target.Target
+	// TargetNames restricts the install to the named agent targets (e.g.
+	// "claude-code", "cursor"). When nil or empty, all auto-detected targets
+	// are used. Names are resolved against the registered target drivers.
+	TargetNames []string
 
 	// Global installs into each agent's global skills directory (under home)
 	// instead of the project-local directory.
@@ -168,13 +185,17 @@ func (i *Installer) Run(ctx context.Context, opts Options) (*Result, error) {
 
 	// Git source: clone → install directly from the repo contents.
 	if _, isGit := f.(*fetcher.GitFetcher); isGit {
-		return runFromGit(ctx, opts, f)
+		return i.runFromGit(ctx, opts, f)
 	}
 
-	return runFromArchive(ctx, opts, f)
+	return i.runFromArchive(ctx, opts, f)
 }
 
-func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, error) {
+func (i *Installer) runFromGit(
+	ctx context.Context,
+	opts Options,
+	f fetcher.Fetcher,
+) (*Result, error) {
 	cloneDir, err := osMkdirTemp("", "agentpack-git-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
@@ -261,7 +282,7 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 		return nil, fmt.Errorf("fetcher for stored archive: %w", err)
 	}
 
-	result, err := runFromArchive(ctx, archiveOpts, archiveFetcher)
+	result, err := i.runFromArchive(ctx, archiveOpts, archiveFetcher)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +292,11 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 	return result, nil
 }
 
-func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, error) {
+func (i *Installer) runFromArchive(
+	ctx context.Context,
+	opts Options,
+	f fetcher.Fetcher,
+) (*Result, error) {
 	tmpFile, err := osCreateTemp("", "agentpack-install-*.agentpack")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
@@ -359,7 +384,7 @@ func runFromArchive(ctx context.Context, opts Options, f fetcher.Fetcher) (*Resu
 		})
 	}
 
-	return installFromDir(ctx, opts, tmpDir, meta)
+	return i.installFromDir(ctx, opts, tmpDir, meta)
 }
 
 // knownGitHosts is the set of hosting domains whose first two path segments
@@ -771,15 +796,15 @@ func resolveEntryRoot(name, entryType string) string {
 	return dir
 }
 
-func installFromDir(
+func (i *Installer) installFromDir(
 	ctx context.Context,
 	opts Options,
 	sourceDir string,
 	meta *metadata.Metadata,
 ) (*Result, error) {
-	targets := opts.Targets
-	if len(targets) == 0 {
-		targets = target.Detected()
+	targets, err := i.resolveTargets(opts.TargetNames)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(targets) == 0 {

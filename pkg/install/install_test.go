@@ -1011,11 +1011,10 @@ skills:
 				onStep = func(s install.Step) { steps = append(steps, s) }
 			}
 
-			r, err := install.New().Run(ctx, install.Options{
-				Source:  archivePath,
-				Targets: targets,
-				OnStep:  onStep,
-				Global:  tt.global,
+			r, err := install.NewWithTargets(targets).Run(ctx, install.Options{
+				Source: archivePath,
+				OnStep: onStep,
+				Global: tt.global,
 			})
 
 			if tt.wantErr != "" {
@@ -2227,9 +2226,8 @@ func TestRunFromGit(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			source, targets := tt.setup(t, ctrl)
 
-			r, err := install.New().Run(context.Background(), install.Options{
-				Source:  source,
-				Targets: targets,
+			r, err := install.NewWithTargets(targets).Run(context.Background(), install.Options{
+				Source: source,
 			})
 
 			if tt.wantErr != "" {
@@ -2738,11 +2736,10 @@ func testLifecycleFull(t *testing.T) {
 	// -------------------------------------------------------------------------
 	ccTarget := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDirCC)
 
-	_, err := install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Skills:  []string{"kubernetes-specialist"},
-		Targets: []target.Target{ccTarget},
-		Dir:     installDirCC,
+	_, err := install.NewWithTargets([]target.Target{ccTarget}).Run(ctx, install.Options{
+		Source: archivePath,
+		Skills: []string{"kubernetes-specialist"},
+		Dir:    installDirCC,
 	})
 	require.NoError(t, err)
 
@@ -2777,11 +2774,10 @@ func testLifecycleFull(t *testing.T) {
 	// -------------------------------------------------------------------------
 	cursorTarget := mockTargetThatInstalls(t, ctrl, "cursor", "Cursor", installDirCursor)
 
-	_, err = install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Skills:  []string{"react-expert"},
-		Targets: []target.Target{cursorTarget},
-		Dir:     installDirCursor,
+	_, err = install.NewWithTargets([]target.Target{cursorTarget}).Run(ctx, install.Options{
+		Source: archivePath,
+		Skills: []string{"react-expert"},
+		Dir:    installDirCursor,
 	})
 	require.NoError(t, err)
 
@@ -2890,11 +2886,10 @@ func testLifecycleWholeRepo(t *testing.T) {
 
 	tgt := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDir)
 
-	_, err := install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Skills:  nil, // no filter -- install everything
-		Targets: []target.Target{tgt},
-		Dir:     installDir,
+	_, err := install.NewWithTargets([]target.Target{tgt}).Run(ctx, install.Options{
+		Source: archivePath,
+		Skills: nil, // no filter -- install everything
+		Dir:    installDir,
 	})
 	require.NoError(t, err)
 
@@ -2942,9 +2937,8 @@ func testLifecycleNoTargets(t *testing.T) {
 		Install(gomock.Any(), gomock.Any()).
 		Return(nil, fmt.Errorf("simulated: no agent available"))
 
-	_, err := install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Targets: []target.Target{failTarget},
+	_, err := install.NewWithTargets([]target.Target{failTarget}).Run(ctx, install.Options{
+		Source: archivePath,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "install to fail-target")
@@ -3044,11 +3038,10 @@ func testLifecycleSkillFilter(t *testing.T) {
 		}).
 		AnyTimes()
 
-	_, err := install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Skills:  []string{"kubernetes-specialist"},
-		Targets: []target.Target{m},
-		Dir:     installDir,
+	_, err := install.NewWithTargets([]target.Target{m}).Run(ctx, install.Options{
+		Source: archivePath,
+		Skills: []string{"kubernetes-specialist"},
+		Dir:    installDir,
 	})
 	require.NoError(t, err)
 
@@ -3089,11 +3082,10 @@ func testLifecycleWholeRepoAllContent(t *testing.T) {
 
 	tgt := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDir)
 
-	_, err := install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Skills:  nil, // whole repo -- no filter
-		Targets: []target.Target{tgt},
-		Dir:     installDir,
+	_, err := install.NewWithTargets([]target.Target{tgt}).Run(ctx, install.Options{
+		Source: archivePath,
+		Skills: nil, // whole repo -- no filter
+		Dir:    installDir,
 	})
 	require.NoError(t, err)
 
@@ -3138,11 +3130,10 @@ func testLifecycleSkillThenWholeRepo(t *testing.T) {
 	// -------------------------------------------------------------------------
 	targetA := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDirA)
 
-	_, err := install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Skills:  []string{"kubernetes-specialist"},
-		Targets: []target.Target{targetA},
-		Dir:     installDirA,
+	_, err := install.NewWithTargets([]target.Target{targetA}).Run(ctx, install.Options{
+		Source: archivePath,
+		Skills: []string{"kubernetes-specialist"},
+		Dir:    installDirA,
 	})
 	require.NoError(t, err)
 
@@ -3151,11 +3142,10 @@ func testLifecycleSkillThenWholeRepo(t *testing.T) {
 	// -------------------------------------------------------------------------
 	targetB := mockTargetThatInstalls(t, ctrl, "cursor", "Cursor", installDirB)
 
-	_, err = install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Skills:  nil, // no filter
-		Targets: []target.Target{targetB},
-		Dir:     installDirB,
+	_, err = install.NewWithTargets([]target.Target{targetB}).Run(ctx, install.Options{
+		Source: archivePath,
+		Skills: nil, // no filter
+		Dir:    installDirB,
 	})
 	require.NoError(t, err)
 
@@ -3385,11 +3375,10 @@ func testManifestFullLifecycle(t *testing.T) {
 	// -------------------------------------------------------------------------
 	ccTarget := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDirCC)
 
-	_, err := install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Skills:  []string{"kubernetes-specialist"},
-		Targets: []target.Target{ccTarget},
-		Dir:     installDirCC,
+	_, err := install.NewWithTargets([]target.Target{ccTarget}).Run(ctx, install.Options{
+		Source: archivePath,
+		Skills: []string{"kubernetes-specialist"},
+		Dir:    installDirCC,
 	})
 	require.NoError(t, err)
 
@@ -3425,11 +3414,10 @@ func testManifestFullLifecycle(t *testing.T) {
 	// -------------------------------------------------------------------------
 	cursorTarget := mockTargetThatInstalls(t, ctrl, "cursor", "Cursor", installDirCursor)
 
-	_, err = install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Skills:  []string{"react-expert"},
-		Targets: []target.Target{cursorTarget},
-		Dir:     installDirCursor,
+	_, err = install.NewWithTargets([]target.Target{cursorTarget}).Run(ctx, install.Options{
+		Source: archivePath,
+		Skills: []string{"react-expert"},
+		Dir:    installDirCursor,
 	})
 	require.NoError(t, err)
 
@@ -3549,11 +3537,10 @@ func testManifestTwoPackages(t *testing.T) {
 	// -------------------------------------------------------------------------
 	targetA := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDirA)
 
-	_, err := install.New().Run(ctx, install.Options{
-		Source:  archiveA,
-		Skills:  []string{"kubernetes-specialist"},
-		Targets: []target.Target{targetA},
-		Dir:     installDirA,
+	_, err := install.NewWithTargets([]target.Target{targetA}).Run(ctx, install.Options{
+		Source: archiveA,
+		Skills: []string{"kubernetes-specialist"},
+		Dir:    installDirA,
 	})
 	require.NoError(t, err)
 
@@ -3567,10 +3554,9 @@ func testManifestTwoPackages(t *testing.T) {
 	// -------------------------------------------------------------------------
 	targetB := mockTargetThatInstalls(t, ctrl, "cursor", "Cursor", installDirB)
 
-	_, err = install.New().Run(ctx, install.Options{
-		Source:  archiveB,
-		Targets: []target.Target{targetB},
-		Dir:     installDirB,
+	_, err = install.NewWithTargets([]target.Target{targetB}).Run(ctx, install.Options{
+		Source: archiveB,
+		Dir:    installDirB,
 	})
 	require.NoError(t, err)
 
@@ -3719,11 +3705,11 @@ func testManifestSupportedTypesFiltering(t *testing.T) {
 		}).
 		AnyTimes()
 
-	_, err := install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Targets: []target.Target{allTypesTarget, skillOnlyTarget},
-		Dir:     installDirAll,
-	})
+	_, err := install.NewWithTargets([]target.Target{allTypesTarget, skillOnlyTarget}).
+		Run(ctx, install.Options{
+			Source: archivePath,
+			Dir:    installDirAll,
+		})
 	require.NoError(t, err)
 
 	// The skill-only target must have received only skill-typed entries.
@@ -3780,10 +3766,9 @@ func testManifestWholeRepo(t *testing.T) {
 
 	tgt := mockTargetThatInstalls(t, ctrl, "claude-code", "Claude Code", installDir)
 
-	_, err := install.New().Run(ctx, install.Options{
-		Source:  archivePath,
-		Targets: []target.Target{tgt},
-		Dir:     installDir,
+	_, err := install.NewWithTargets([]target.Target{tgt}).Run(ctx, install.Options{
+		Source: archivePath,
+		Dir:    installDir,
 	})
 	require.NoError(t, err)
 

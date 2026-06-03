@@ -33,11 +33,14 @@ import (
 )
 
 type fakeInstaller struct {
-	result *install.Result
-	err    error
+	result  *install.Result
+	err     error
+	gotOpts install.Options
 }
 
-func (f *fakeInstaller) Run(_ context.Context, _ install.Options) (*install.Result, error) {
+func (f *fakeInstaller) Run(_ context.Context, opts install.Options) (*install.Result, error) {
+	f.gotOpts = opts
+
 	return f.result, f.err
 }
 
@@ -107,9 +110,18 @@ func TestAddCmd(t *testing.T) {
 			},
 		},
 		{
-			name:    "unknown target returns error",
-			args:    []string{"add", "github.com/org/my-plugin", "--target", "nonexistent"},
-			wantErr: `unknown target "nonexistent"`,
+			name: "forwards --target names to the installer",
+			args: []string{"add", "github.com/org/my-plugin", "--target", "cursor"},
+			setup: func() {
+				pkgInstaller = &fakeInstaller{
+					result: &install.Result{Name: "org/my-plugin"},
+				}
+			},
+			check: func(t *testing.T, _ string) {
+				fi, ok := pkgInstaller.(*fakeInstaller)
+				require.True(t, ok)
+				assert.Equal(t, []string{"cursor"}, fi.gotOpts.TargetNames)
+			},
 		},
 	}
 

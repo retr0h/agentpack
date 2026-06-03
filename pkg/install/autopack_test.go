@@ -40,9 +40,9 @@ import (
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/metadata"
-	"github.com/retr0h/agentpack/pkg/safety"
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/registry"
+	"github.com/retr0h/agentpack/pkg/safety"
 	"github.com/retr0h/agentpack/pkg/target"
 	"github.com/retr0h/agentpack/pkg/target/mocks"
 )
@@ -1017,11 +1017,11 @@ func TestContentCheckCallback(t *testing.T) {
 				{Path: "skills/intro.md", SHA256: "dummy"},
 			}, nil).AnyTimes()
 
-			r, err := install.New().Run(context.Background(), install.Options{
-				Source:       archivePath,
-				Targets:      []target.Target{mockTarget},
-				ContentCheck: tt.contentCheck,
-			})
+			r, err := install.NewWithTargets([]target.Target{mockTarget}).
+				Run(context.Background(), install.Options{
+					Source:       archivePath,
+					ContentCheck: tt.contentCheck,
+				})
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

@@ -32,9 +32,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/pkg/safety"
 	"github.com/retr0h/agentpack/pkg/install"
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/pkg/safety"
 )
 
 type installer interface {
@@ -74,16 +73,11 @@ Use : to select content:  agentpack add owner/repo:skill/k8s:command/scan`,
 			}
 		}
 
-		targets, targetErr := target.Resolve(installTargets)
-		if targetErr != nil {
-			return targetErr
-		}
-
 		result, err := pkgInstaller.Run(ctx, install.Options{
 			Source:       spec.Source,
 			Ref:          spec.Ref,
 			Selectors:    spec.Selectors,
-			Targets:      targets,
+			TargetNames:  installTargets,
 			Global:       installGlobal,
 			OnStep:       onStep,
 			ContentCheck: buildContentCheck(cmd, installTrust),

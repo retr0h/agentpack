@@ -225,3 +225,13 @@ func MergeFiles(existing, incoming []registry.InstalledFile) []registry.Installe
 // ParseSourceExported exposes ParseSource for testing from outside the package.
 // (ParseSource is already exported, but this alias follows the export_test pattern.)
 var ParseSourceExported = ParseSource
+
+// NewWithTargets returns an Installer whose target resolver always yields the
+// given targets, letting tests inject mocks without global registration. Each
+// installer owns its resolver, so tests stay parallel-safe.
+func NewWithTargets(targets []target.Target) *Installer {
+	i := New()
+	i.resolveTargets = func([]string) ([]target.Target, error) { return targets, nil }
+
+	return i
+}
