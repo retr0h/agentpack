@@ -59,7 +59,7 @@ type Target interface {
 | ------------ | ----------- | --------------------------------------------------------- | ------------------- |
 | `ClaudeCode` | Claude Code | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` | `~/.claude/` exists |
 
-**Tier 2 — data-driven agents** (`pkg/target/agents`; local installs go to
+**Tier 2 — data-driven agents** (`internal/driver/agents`; local installs go to
 `.agents/skills/{name}/` by default, or the agent's `LocalSkillsDir` when set):
 
 | Agent          | Local install dir          | Detect                         |

@@ -70,7 +70,7 @@ See [Usage][] for full details.
 - ⚙️ **Config merging** — MCP servers, hooks, and settings merge into `.claude/settings.json`
 - ✈️ **No toolchain required** — `.agentpack` files install without git, npm, or Go
 - 📋 **JSON everywhere** — `-o json` on every command for scripting
-- 📚 **Extensible** — write custom target drivers against the `pkg/target` interface
+- 📚 **55+ agents** — built-in drivers for Claude Code, Cursor, Copilot, Codex, and dozens more
 
 ## 📐 The .agentpack format
 

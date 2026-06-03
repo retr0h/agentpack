@@ -81,7 +81,7 @@ alongside the interface they mock.
 
 Generate with `//go:generate` directives in `mocks/generate.go`:
 
-    //go:generate go tool go.uber.org/mock/mockgen -destination=target.gen.go -package=mocks github.com/retr0h/agentpack/pkg/target Target
+    //go:generate go tool go.uber.org/mock/mockgen -destination=target.gen.go -package=mocks github.com/retr0h/agentpack/internal/target Target
 
 Regenerate all mocks:
 
@@ -113,25 +113,27 @@ Then `RunE` calls `pkgInstaller.Run(...)`.
 
 ## Driver development
 
-Target drivers live in `internal/driver/`. Shared filesystem operations live in
-`internal/driver/fs/` — `CopyFile`, `CopyTreeIfExists`, `EnumerateFiles`,
-`InstallMCP`, `InstallHooksJSON`, `InstallSkillEntry`.
+Each target driver lives in its own subpackage under `internal/driver/`. Shared
+filesystem operations live in the top-level `internal/driver/` package —
+`CopyFile`, `CopyTreeIfExists`, `EnumerateFiles`, `InstallMCP`,
+`InstallHooksJSON`, `InstallSkillEntry`.
 
 **Never duplicate code across drivers.** Before writing a function in a driver,
-check if `internal/driver/fs/` already has it. If you need a function that two
-or more drivers would share, put it in `fs/` from the start — not in one driver
-with a plan to "extract later."
+check if `internal/driver/` already has it. If you need a function that two or
+more drivers would share, put it in `internal/driver/` from the start — not in
+one driver with a plan to "extract later."
 
 Common patterns that MUST use shared code:
 
-- Copying files/trees → `fs.CopyFile`, `fs.CopyTreeIfExists`
-- Enumerating installed files → `fs.EnumerateFiles`
-- Installing MCP from JSON → `fs.InstallMCP`
-- Installing hooks from JSON → `fs.InstallHooksJSON`
-- Installing a skill entry → `fs.InstallSkillEntry`
+- Copying files/trees → `driver.CopyFile`, `driver.CopyTreeIfExists`
+- Enumerating installed files → `driver.EnumerateFiles`
+- Installing MCP from JSON → `driver.InstallMCP`
+- Installing hooks from JSON → `driver.InstallHooksJSON`
+- Installing a skill entry → `driver.InstallSkillEntry`
 
 Drivers with non-standard formats (YAML config, TOML config, executable hook
-scripts) implement their own handlers but still use `fs.*` for file operations.
+scripts) implement their own handlers but still use `driver.*` for file
+operations.
 
 When creating a new driver, follow an existing driver of similar complexity:
 
