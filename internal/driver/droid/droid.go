@@ -138,7 +138,13 @@ func (d *Droid) installFromDirs(
 		return nil, err
 	}
 
-	baseDir, skillsDir, err := d.resolveDirs(opts)
+	baseDir, skillsDir, err := fs.ResolveDirs(
+		opts,
+		".factory/skills",
+		".agents/skills",
+		d.userHomeFunc,
+		d.cwdFunc,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -178,47 +184,18 @@ func (d *Droid) installSkillEntry(
 	opts target.InstallOpts,
 	entry target.ContentEntry,
 ) ([]target.InstalledFile, error) {
-	baseDir, skillsDir, err := d.resolveDirs(opts)
+	baseDir, skillsDir, err := fs.ResolveDirs(
+		opts,
+		".factory/skills",
+		".agents/skills",
+		d.userHomeFunc,
+		d.cwdFunc,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	destDir := filepath.Join(skillsDir, entry.Name)
-
-	if err := d.mkdirAllFunc(destDir, 0o755); err != nil {
-		return nil, fmt.Errorf("mkdir skills dir: %w", err)
-	}
-
-	if err := fs.CopyTreeIfExists(ctx, entry.Root, destDir); err != nil {
-		return nil, fmt.Errorf("copy skills: %w", err)
-	}
-
-	return fs.EnumerateFiles(ctx, destDir, baseDir)
-}
-
-// resolveDirs returns (baseDir, skillsDir) based on whether the install is
-// global or local.
-func (d *Droid) resolveDirs(opts target.InstallOpts) (string, string, error) {
-	if opts.Global {
-		home, err := d.userHomeFunc()
-		if err != nil {
-			return "", "", fmt.Errorf("home dir: %w", err)
-		}
-
-		return home, filepath.Join(home, ".factory", "skills"), nil
-	}
-
-	dir := opts.Dir
-	if dir == "" {
-		cwd, err := d.cwdFunc()
-		if err != nil {
-			return "", "", fmt.Errorf("getwd: %w", err)
-		}
-
-		dir = cwd
-	}
-
-	return dir, filepath.Join(dir, ".agents", "skills"), nil
+	return fs.InstallSkillEntry(ctx, entry, skillsDir, baseDir, d.mkdirAllFunc)
 }
 
 // hooksPath returns the settings.json path for the install scope. Droid hooks

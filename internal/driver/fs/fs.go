@@ -136,6 +136,63 @@ func EnumerateFiles(
 	return files, err
 }
 
+// ResolveDirs returns (baseDir, skillsDir) for a target install.
+// globalSkillDir is relative to home (e.g. ".cursor/skills").
+// localSkillDir is relative to project dir (e.g. ".agents/skills").
+// homeFn returns the root directory for global installs (typically
+// os.UserHomeDir); cwdFn returns the fallback for local installs when
+// opts.Dir is empty.
+func ResolveDirs(
+	opts target.InstallOpts,
+	globalSkillDir string,
+	localSkillDir string,
+	homeFn func() (string, error),
+	cwdFn func() (string, error),
+) (string, string, error) {
+	if opts.Global {
+		home, err := homeFn()
+		if err != nil {
+			return "", "", fmt.Errorf("home dir: %w", err)
+		}
+
+		return home, filepath.Join(home, globalSkillDir), nil
+	}
+
+	dir := opts.Dir
+	if dir == "" {
+		cwd, err := cwdFn()
+		if err != nil {
+			return "", "", fmt.Errorf("getwd: %w", err)
+		}
+
+		dir = cwd
+	}
+
+	return dir, filepath.Join(dir, localSkillDir), nil
+}
+
+// InstallSkillEntry copies a single skill/command/agent entry into the
+// target directory and returns the list of files written.
+func InstallSkillEntry(
+	ctx context.Context,
+	entry target.ContentEntry,
+	skillsDir string,
+	baseDir string,
+	mkdirAll func(string, os.FileMode) error,
+) ([]target.InstalledFile, error) {
+	destDir := filepath.Join(skillsDir, entry.Name)
+
+	if err := mkdirAll(destDir, 0o755); err != nil {
+		return nil, fmt.Errorf("mkdir skills dir: %w", err)
+	}
+
+	if err := CopyTreeIfExists(ctx, entry.Root, destDir); err != nil {
+		return nil, fmt.Errorf("copy skills: %w", err)
+	}
+
+	return EnumerateFiles(ctx, destDir, baseDir)
+}
+
 // InstallMCP merges all mcp/*.json files from srcDir into mcpPath.
 // Each JSON file must contain a "name" field identifying the MCP server;
 // the remaining fields are passed to configmerge.MergeMCP.

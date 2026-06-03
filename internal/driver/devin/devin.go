@@ -204,17 +204,7 @@ func (d *Devin) installSkillEntry(
 		return nil, err
 	}
 
-	destDir := filepath.Join(skillsDir, entry.Name)
-
-	if err := d.mkdirAllFunc(destDir, 0o755); err != nil {
-		return nil, fmt.Errorf("mkdir skills dir: %w", err)
-	}
-
-	if err := fs.CopyTreeIfExists(ctx, entry.Root, destDir); err != nil {
-		return nil, fmt.Errorf("copy skills: %w", err)
-	}
-
-	return fs.EnumerateFiles(ctx, destDir, baseDir)
+	return fs.InstallSkillEntry(ctx, entry, skillsDir, baseDir, d.mkdirAllFunc)
 }
 
 // resolveDirs returns (baseDir, skillsDir) based on whether the install is

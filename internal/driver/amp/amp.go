@@ -140,7 +140,13 @@ func (a *Amp) installFromDirs(
 		return nil, err
 	}
 
-	baseDir, skillsDir, err := a.resolveDirs(opts)
+	baseDir, skillsDir, err := fs.ResolveDirs(
+		opts,
+		".config/agents/skills",
+		".agents/skills",
+		a.userHomeFunc,
+		a.cwdFunc,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -180,47 +186,18 @@ func (a *Amp) installSkillEntry(
 	opts target.InstallOpts,
 	entry target.ContentEntry,
 ) ([]target.InstalledFile, error) {
-	baseDir, skillsDir, err := a.resolveDirs(opts)
+	baseDir, skillsDir, err := fs.ResolveDirs(
+		opts,
+		".config/agents/skills",
+		".agents/skills",
+		a.userHomeFunc,
+		a.cwdFunc,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	destDir := filepath.Join(skillsDir, entry.Name)
-
-	if err := a.mkdirAllFunc(destDir, 0o755); err != nil {
-		return nil, fmt.Errorf("mkdir skills dir: %w", err)
-	}
-
-	if err := fs.CopyTreeIfExists(ctx, entry.Root, destDir); err != nil {
-		return nil, fmt.Errorf("copy skills: %w", err)
-	}
-
-	return fs.EnumerateFiles(ctx, destDir, baseDir)
-}
-
-// resolveDirs returns (baseDir, skillsDir) based on whether the install is
-// global or local.
-func (a *Amp) resolveDirs(opts target.InstallOpts) (string, string, error) {
-	if opts.Global {
-		home, err := a.userHomeFunc()
-		if err != nil {
-			return "", "", fmt.Errorf("home dir: %w", err)
-		}
-
-		return home, filepath.Join(home, ".config", "agents", "skills"), nil
-	}
-
-	dir := opts.Dir
-	if dir == "" {
-		cwd, err := a.cwdFunc()
-		if err != nil {
-			return "", "", fmt.Errorf("getwd: %w", err)
-		}
-
-		dir = cwd
-	}
-
-	return dir, filepath.Join(dir, ".agents", "skills"), nil
+	return fs.InstallSkillEntry(ctx, entry, skillsDir, baseDir, a.mkdirAllFunc)
 }
 
 // mcpSettingsPath returns the path to .amp/settings.json for the install root.

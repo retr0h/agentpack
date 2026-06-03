@@ -23,6 +23,7 @@ package fs_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/internal/driver/fs"
+	"github.com/retr0h/agentpack/pkg/target"
 )
 
 func TestCopyFile(t *testing.T) {
@@ -590,6 +592,187 @@ func TestInstallHooksJSON(t *testing.T) {
 
 			if tt.check != nil {
 				tt.check(t, hooksPath)
+			}
+		})
+	}
+}
+
+func TestResolveDirs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		opts       target.InstallOpts
+		globalDir  string
+		localDir   string
+		homeFn     func() (string, error)
+		cwdFn      func() (string, error)
+		wantBase   string
+		wantSkills string
+		wantErr    string
+	}{
+		{
+			name:       "global install uses homeFn and globalDir",
+			opts:       target.InstallOpts{Global: true},
+			globalDir:  ".cursor/skills",
+			localDir:   ".agents/skills",
+			homeFn:     func() (string, error) { return "/home/user", nil },
+			cwdFn:      func() (string, error) { return "/proj", nil },
+			wantBase:   "/home/user",
+			wantSkills: filepath.Join("/home/user", ".cursor/skills"),
+		},
+		{
+			name:       "local install with opts.Dir uses Dir and localDir",
+			opts:       target.InstallOpts{Dir: "/my/project"},
+			globalDir:  ".cursor/skills",
+			localDir:   ".agents/skills",
+			homeFn:     func() (string, error) { return "/home/user", nil },
+			cwdFn:      func() (string, error) { return "/other", nil },
+			wantBase:   "/my/project",
+			wantSkills: filepath.Join("/my/project", ".agents/skills"),
+		},
+		{
+			name:       "local install without Dir falls back to cwdFn",
+			opts:       target.InstallOpts{},
+			globalDir:  ".cursor/skills",
+			localDir:   ".agents/skills",
+			homeFn:     func() (string, error) { return "/home/user", nil },
+			cwdFn:      func() (string, error) { return "/cwd/dir", nil },
+			wantBase:   "/cwd/dir",
+			wantSkills: filepath.Join("/cwd/dir", ".agents/skills"),
+		},
+		{
+			name:      "global install with homeFn error",
+			opts:      target.InstallOpts{Global: true},
+			globalDir: ".cursor/skills",
+			localDir:  ".agents/skills",
+			homeFn:    func() (string, error) { return "", errors.New("no home") },
+			cwdFn:     func() (string, error) { return "/cwd", nil },
+			wantErr:   "home dir",
+		},
+		{
+			name:      "local install with cwdFn error",
+			opts:      target.InstallOpts{},
+			globalDir: ".cursor/skills",
+			localDir:  ".agents/skills",
+			homeFn:    func() (string, error) { return "/home", nil },
+			cwdFn:     func() (string, error) { return "", errors.New("no cwd") },
+			wantErr:   "getwd",
+		},
+		{
+			name:       "windsurf-style different local dir",
+			opts:       target.InstallOpts{Dir: "/proj"},
+			globalDir:  ".codeium/windsurf/skills",
+			localDir:   ".windsurf/skills",
+			homeFn:     func() (string, error) { return "/home/user", nil },
+			cwdFn:      func() (string, error) { return "/other", nil },
+			wantBase:   "/proj",
+			wantSkills: filepath.Join("/proj", ".windsurf/skills"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			base, skills, err := fs.ResolveDirs(
+				tt.opts,
+				tt.globalDir,
+				tt.localDir,
+				tt.homeFn,
+				tt.cwdFn,
+			)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantBase, base)
+			assert.Equal(t, tt.wantSkills, skills)
+		})
+	}
+}
+
+func TestInstallSkillEntry(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		setup     func(t *testing.T) (target.ContentEntry, string, string, func(string, os.FileMode) error)
+		wantFiles int
+		wantErr   string
+	}{
+		{
+			name: "copies entry tree and enumerates files",
+			setup: func(t *testing.T) (target.ContentEntry, string, string, func(string, os.FileMode) error) {
+				t.Helper()
+				baseDir := t.TempDir()
+				skillsDir := filepath.Join(baseDir, "skills")
+				entryRoot := t.TempDir()
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(entryRoot, "rule.md"), []byte("# Rule"), 0o644),
+				)
+
+				return target.ContentEntry{Name: "demo", Type: "skill", Root: entryRoot},
+					skillsDir, baseDir, os.MkdirAll
+			},
+			wantFiles: 1,
+		},
+		{
+			name: "mkdirAll failure propagates error",
+			setup: func(t *testing.T) (target.ContentEntry, string, string, func(string, os.FileMode) error) {
+				t.Helper()
+
+				return target.ContentEntry{Name: "demo", Type: "skill", Root: t.TempDir()},
+					"/skills", "/base",
+					func(_ string, _ os.FileMode) error { return errors.New("disk full") }
+			},
+			wantErr: "mkdir skills dir",
+		},
+		{
+			name: "empty entry root produces no files",
+			setup: func(t *testing.T) (target.ContentEntry, string, string, func(string, os.FileMode) error) {
+				t.Helper()
+				baseDir := t.TempDir()
+				skillsDir := filepath.Join(baseDir, "skills")
+				entryRoot := t.TempDir()
+
+				return target.ContentEntry{Name: "empty", Type: "skill", Root: entryRoot},
+					skillsDir, baseDir, os.MkdirAll
+			},
+			wantFiles: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			entry, skillsDir, baseDir, mkdirAll := tt.setup(t)
+			files, err := fs.InstallSkillEntry(
+				context.Background(),
+				entry,
+				skillsDir,
+				baseDir,
+				mkdirAll,
+			)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Len(t, files, tt.wantFiles)
+
+			for _, f := range files {
+				assert.NotEmpty(t, f.Path)
+				assert.Len(t, f.SHA256, 64)
 			}
 		})
 	}
