@@ -25,13 +25,10 @@ package warp
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/driver/fs"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -121,7 +118,7 @@ func (w *Warp) installFromEntries(
 				return nil, err
 			}
 
-			if err := w.installMCP(ctx, opts.SourceDir, mcpPath); err != nil {
+			if err := fs.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
 				return nil, err
 			}
 		}
@@ -167,7 +164,7 @@ func (w *Warp) installFromDirs(
 		return nil, mcpErr
 	}
 
-	if err := w.installMCP(ctx, opts.SourceDir, mcpPath); err != nil {
+	if err := fs.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
 		return nil, err
 	}
 
@@ -237,48 +234,6 @@ func (w *Warp) mcpSettingsPath(opts target.InstallOpts) (string, error) {
 	}
 
 	return filepath.Join(dir, ".warp", ".mcp.json"), nil
-}
-
-// installMCP merges all mcp/*.json files from srcDir into mcpPath.
-func (w *Warp) installMCP(_ context.Context, srcDir, mcpPath string) error {
-	mcpDir := filepath.Join(srcDir, "mcp")
-	if _, err := os.Stat(mcpDir); errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-
-	entries, err := os.ReadDir(mcpDir)
-	if err != nil {
-		return fmt.Errorf("read mcp dir: %w", err)
-	}
-
-	for _, de := range entries {
-		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
-			continue
-		}
-
-		data, err := os.ReadFile(filepath.Join(mcpDir, de.Name()))
-		if err != nil {
-			return fmt.Errorf("read mcp/%s: %w", de.Name(), err)
-		}
-
-		var raw map[string]any
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return fmt.Errorf("parse mcp/%s: %w", de.Name(), err)
-		}
-
-		name, ok := raw["name"].(string)
-		if !ok || name == "" {
-			return fmt.Errorf("mcp/%s: missing or invalid \"name\" field", de.Name())
-		}
-
-		delete(raw, "name")
-
-		if err := configmerge.MergeMCP(mcpPath, name, raw); err != nil {
-			return fmt.Errorf("merge mcp %q: %w", name, err)
-		}
-	}
-
-	return nil
 }
 
 // List returns nil; Warp does not store managed-plugin metadata.

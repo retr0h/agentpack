@@ -21,7 +21,6 @@
 package copilot
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,9 +37,4 @@ func SetCwd(c *Copilot, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(c *Copilot, fn func(string, os.FileMode) error) {
 	c.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, c *Copilot, srcDir, mcpPath string) error {
-	return c.installMCP(ctx, srcDir, mcpPath)
 }

@@ -45,15 +45,6 @@ func SetGetenv(c *Codex, fn func(string) string) {
 	c.getenvFunc = fn
 }
 
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	c *Codex,
-	srcDir, hooksPath, pluginName string,
-) error {
-	return c.installHooks(ctx, srcDir, hooksPath, pluginName)
-}
-
 // InstallConfig exposes installConfig for testing.
 func InstallConfig(
 	ctx context.Context,

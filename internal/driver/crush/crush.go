@@ -25,13 +25,10 @@ package crush
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/driver/fs"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -123,7 +120,7 @@ func (c *Crush) installFromEntries(
 				return nil, err
 			}
 
-			if err := c.installHooks(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+			if err := fs.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
 				return nil, err
 			}
 		}
@@ -169,7 +166,7 @@ func (c *Crush) installFromDirs(
 		return nil, hooksErr
 	}
 
-	if err := c.installHooks(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+	if err := fs.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
 		return nil, err
 	}
 
@@ -249,33 +246,6 @@ func (c *Crush) hooksPath(opts target.InstallOpts) (string, error) {
 	}
 
 	return filepath.Join(dir, "crush.json"), nil
-}
-
-// installHooks merges hooks/hooks.json from srcDir into hooksPath.
-func (c *Crush) installHooks(
-	_ context.Context,
-	srcDir, hooksPath, pluginName string,
-) error {
-	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
-	if _, err := os.Stat(hooksFile); errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-
-	data, err := os.ReadFile(hooksFile)
-	if err != nil {
-		return fmt.Errorf("read hooks/hooks.json: %w", err)
-	}
-
-	var hooks map[string]any
-	if err := json.Unmarshal(data, &hooks); err != nil {
-		return fmt.Errorf("parse hooks/hooks.json: %w", err)
-	}
-
-	if err := configmerge.MergeHooks(hooksPath, pluginName, hooks); err != nil {
-		return fmt.Errorf("merge hooks: %w", err)
-	}
-
-	return nil
 }
 
 // List returns nil; Crush does not store managed-plugin metadata.

@@ -21,7 +21,6 @@
 package droid
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,13 +37,4 @@ func SetCwd(d *Droid, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(d *Droid, fn func(string, os.FileMode) error) {
 	d.mkdirAllFunc = fn
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	d *Droid,
-	srcDir, hooksPath, pluginName string,
-) error {
-	return d.installHooks(ctx, srcDir, hooksPath, pluginName)
 }

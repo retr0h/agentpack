@@ -21,7 +21,6 @@
 package antigravity
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,18 +37,4 @@ func SetCwd(a *Antigravity, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(a *Antigravity, fn func(string, os.FileMode) error) {
 	a.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, a *Antigravity, srcDir, mcpPath string) error {
-	return a.installMCP(ctx, srcDir, mcpPath)
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	a *Antigravity,
-	srcDir, hooksPath, pluginName string,
-) error {
-	return a.installHooks(ctx, srcDir, hooksPath, pluginName)
 }

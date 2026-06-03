@@ -21,7 +21,6 @@
 package devin
 
 import (
-	"context"
 	"os"
 
 	"github.com/retr0h/agentpack/pkg/target"
@@ -40,20 +39,6 @@ func SetCwd(d *Devin, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(d *Devin, fn func(string, os.FileMode) error) {
 	d.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, d *Devin, srcDir, mcpPath string) error {
-	return d.installMCP(ctx, srcDir, mcpPath)
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	d *Devin,
-	srcDir, hooksPath, pluginName string,
-) error {
-	return d.installHooks(ctx, srcDir, hooksPath, pluginName)
 }
 
 // MCPConfigPath exposes mcpConfigPath for testing.

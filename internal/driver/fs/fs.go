@@ -27,11 +27,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
@@ -132,4 +134,75 @@ func EnumerateFiles(
 	})
 
 	return files, err
+}
+
+// InstallMCP merges all mcp/*.json files from srcDir into mcpPath.
+// Each JSON file must contain a "name" field identifying the MCP server;
+// the remaining fields are passed to configmerge.MergeMCP.
+// If srcDir/mcp/ does not exist the call is a no-op.
+func InstallMCP(_ context.Context, srcDir, mcpPath string) error {
+	mcpDir := filepath.Join(srcDir, "mcp")
+	if _, err := os.Stat(mcpDir); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(mcpDir)
+	if err != nil {
+		return fmt.Errorf("read mcp dir: %w", err)
+	}
+
+	for _, de := range entries {
+		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(mcpDir, de.Name()))
+		if err != nil {
+			return fmt.Errorf("read mcp/%s: %w", de.Name(), err)
+		}
+
+		var raw map[string]any
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return fmt.Errorf("parse mcp/%s: %w", de.Name(), err)
+		}
+
+		name, ok := raw["name"].(string)
+		if !ok || name == "" {
+			return fmt.Errorf("mcp/%s: missing or invalid \"name\" field", de.Name())
+		}
+
+		delete(raw, "name")
+
+		if err := configmerge.MergeMCP(mcpPath, name, raw); err != nil {
+			return fmt.Errorf("merge mcp %q: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+// InstallHooksJSON merges hooks/hooks.json from srcDir into hooksPath using
+// configmerge.MergeHooks. If srcDir/hooks/hooks.json does not exist the call
+// is a no-op.
+func InstallHooksJSON(_ context.Context, srcDir, hooksPath, pluginName string) error {
+	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
+	if _, err := os.Stat(hooksFile); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+
+	data, err := os.ReadFile(hooksFile)
+	if err != nil {
+		return fmt.Errorf("read hooks/hooks.json: %w", err)
+	}
+
+	var hooks map[string]any
+	if err := json.Unmarshal(data, &hooks); err != nil {
+		return fmt.Errorf("parse hooks/hooks.json: %w", err)
+	}
+
+	if err := configmerge.MergeHooks(hooksPath, pluginName, hooks); err != nil {
+		return fmt.Errorf("merge hooks: %w", err)
+	}
+
+	return nil
 }

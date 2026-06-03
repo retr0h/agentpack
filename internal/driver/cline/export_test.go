@@ -40,11 +40,6 @@ func SetOsMkdirAll(c *Cline, fn func(string, os.FileMode) error) {
 	c.mkdirAllFunc = fn
 }
 
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, c *Cline, srcDir, mcpPath string) error {
-	return c.installMCP(ctx, srcDir, mcpPath)
-}
-
 // InstallHooks exposes installHooks for testing.
 func InstallHooks(ctx context.Context, c *Cline, srcDir, hooksDir string) error {
 	return c.installHooks(ctx, srcDir, hooksDir)

@@ -21,7 +21,6 @@
 package rovodev
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,9 +37,4 @@ func SetCwd(r *RovoDev, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(r *RovoDev, fn func(string, os.FileMode) error) {
 	r.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, r *RovoDev, srcDir, mcpPath string) error {
-	return r.installMCP(ctx, srcDir, mcpPath)
 }

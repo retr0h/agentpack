@@ -21,7 +21,6 @@
 package warp
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,9 +37,4 @@ func SetCwd(w *Warp, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(w *Warp, fn func(string, os.FileMode) error) {
 	w.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, w *Warp, srcDir, mcpPath string) error {
-	return w.installMCP(ctx, srcDir, mcpPath)
 }

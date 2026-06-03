@@ -21,7 +21,6 @@
 package cortex
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,18 +37,4 @@ func SetCwd(c *Cortex, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(c *Cortex, fn func(string, os.FileMode) error) {
 	c.mkdirAllFunc = fn
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	c *Cortex,
-	srcDir, hooksPath, pluginName string,
-) error {
-	return c.installHooks(ctx, srcDir, hooksPath, pluginName)
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, c *Cortex, srcDir, mcpPath string) error {
-	return c.installMCP(ctx, srcDir, mcpPath)
 }

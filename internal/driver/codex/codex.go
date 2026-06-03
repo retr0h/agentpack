@@ -35,7 +35,6 @@ import (
 
 	toml "github.com/pelletier/go-toml/v2"
 
-	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/driver/fs"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -133,7 +132,7 @@ func (c *Codex) installFromEntries(
 				return nil, err
 			}
 
-			if err := c.installHooks(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+			if err := fs.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
 				return nil, err
 			}
 
@@ -189,7 +188,7 @@ func (c *Codex) installFromDirs(
 		return nil, hooksErr
 	}
 
-	if err := c.installHooks(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+	if err := fs.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
 		return nil, err
 	}
 
@@ -280,33 +279,6 @@ func (c *Codex) hooksPath(opts target.InstallOpts) (string, error) {
 	}
 
 	return filepath.Join(dir, ".codex", "hooks", "hooks.json"), nil
-}
-
-// installHooks merges hooks/hooks.json from srcDir into hooksPath.
-func (c *Codex) installHooks(
-	_ context.Context,
-	srcDir, hooksPath, pluginName string,
-) error {
-	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
-	if _, err := os.Stat(hooksFile); errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-
-	data, err := os.ReadFile(hooksFile)
-	if err != nil {
-		return fmt.Errorf("read hooks/hooks.json: %w", err)
-	}
-
-	var hooks map[string]any
-	if err := json.Unmarshal(data, &hooks); err != nil {
-		return fmt.Errorf("parse hooks/hooks.json: %w", err)
-	}
-
-	if err := configmerge.MergeHooks(hooksPath, pluginName, hooks); err != nil {
-		return fmt.Errorf("merge hooks: %w", err)
-	}
-
-	return nil
 }
 
 // codexConfigPath returns the path to .codex/config.toml for the install

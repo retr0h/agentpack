@@ -21,7 +21,6 @@
 package junie
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,9 +37,4 @@ func SetCwd(j *Junie, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(j *Junie, fn func(string, os.FileMode) error) {
 	j.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, j *Junie, srcDir, mcpPath string) error {
-	return j.installMCP(ctx, srcDir, mcpPath)
 }

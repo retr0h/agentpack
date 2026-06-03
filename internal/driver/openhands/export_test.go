@@ -21,7 +21,6 @@
 package openhands
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,18 +37,4 @@ func SetCwd(o *OpenHands, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(o *OpenHands, fn func(string, os.FileMode) error) {
 	o.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, o *OpenHands, srcDir, mcpPath string) error {
-	return o.installMCP(ctx, srcDir, mcpPath)
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	o *OpenHands,
-	srcDir, hooksPath, pluginName string,
-) error {
-	return o.installHooks(ctx, srcDir, hooksPath, pluginName)
 }

@@ -21,7 +21,6 @@
 package firebender
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,9 +37,4 @@ func SetCwd(f *Firebender, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(f *Firebender, fn func(string, os.FileMode) error) {
 	f.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, f *Firebender, srcDir, mcpPath string) error {
-	return f.installMCP(ctx, srcDir, mcpPath)
 }

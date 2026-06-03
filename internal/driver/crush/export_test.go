@@ -21,7 +21,6 @@
 package crush
 
 import (
-	"context"
 	"os"
 )
 
@@ -43,13 +42,4 @@ func SetCwd(c *Crush, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(c *Crush, fn func(string, os.FileMode) error) {
 	c.mkdirAllFunc = fn
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	c *Crush,
-	srcDir, hooksPath, pluginName string,
-) error {
-	return c.installHooks(ctx, srcDir, hooksPath, pluginName)
 }

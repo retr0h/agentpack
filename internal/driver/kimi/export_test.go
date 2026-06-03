@@ -21,7 +21,6 @@
 package kimi
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,9 +37,4 @@ func SetCwd(k *Kimi, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(k *Kimi, fn func(string, os.FileMode) error) {
 	k.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, k *Kimi, srcDir, mcpPath string) error {
-	return k.installMCP(ctx, srcDir, mcpPath)
 }

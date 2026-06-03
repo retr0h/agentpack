@@ -22,6 +22,7 @@ package fs_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -304,6 +305,291 @@ func TestEnumerateFiles(t *testing.T) {
 				assert.NotEmpty(t, f.Path)
 				assert.NotEmpty(t, f.SHA256)
 				assert.Len(t, f.SHA256, 64)
+			}
+		})
+	}
+}
+
+func TestInstallMCP(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, mcpPath string)
+		wantErr string
+		check   func(t *testing.T, mcpPath string)
+	}{
+		{
+			name: "no-op when mcp dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+
+				return t.TempDir(), filepath.Join(t.TempDir(), "mcp.json")
+			},
+		},
+		{
+			name: "returns error when mcp dir is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				d := filepath.Join(src, "mcp")
+				require.NoError(t, os.MkdirAll(d, 0o755))
+				require.NoError(t, os.Chmod(d, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(d, 0o755) })
+
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "read mcp dir",
+		},
+		{
+			name: "returns error when mcp json file is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "mcp", "srv.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{"name":"srv"}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "read mcp/",
+		},
+		{
+			name: "returns error when mcp json contains invalid JSON",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				mcpDir := filepath.Join(src, "mcp")
+				require.NoError(t, os.MkdirAll(mcpDir, 0o755))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(mcpDir, "srv.json"), []byte(`{invalid`), 0o644),
+				)
+
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "parse mcp/",
+		},
+		{
+			name: "returns error when name field is missing",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				mcpDir := filepath.Join(src, "mcp")
+				require.NoError(t, os.MkdirAll(mcpDir, 0o755))
+				require.NoError(
+					t,
+					os.WriteFile(
+						filepath.Join(mcpDir, "srv.json"),
+						[]byte(`{"type":"stdio"}`),
+						0o644,
+					),
+				)
+
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			wantErr: "missing or invalid \"name\" field",
+		},
+		{
+			name: "skips directories and non-json entries in mcp dir",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(src, "mcp", "subdir"), 0o755))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, "mcp", "readme.txt"), []byte("skip me"), 0o644),
+				)
+
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+		},
+		{
+			name: "merges mcp server into target file",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				mcpDir := filepath.Join(src, "mcp")
+				require.NoError(t, os.MkdirAll(mcpDir, 0o755))
+				data, err := json.Marshal(map[string]any{
+					"name": "my-api",
+					"type": "remote",
+					"url":  "https://mcp.example.com/v1",
+				})
+				require.NoError(t, err)
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(mcpDir, "my-api.json"), data, 0o644),
+				)
+
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			check: func(t *testing.T, mcpPath string) {
+				t.Helper()
+				data, err := os.ReadFile(mcpPath)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				servers, ok := doc["mcpServers"].(map[string]any)
+				require.True(t, ok)
+				srv, ok := servers["my-api"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "remote", srv["type"])
+				assert.Equal(t, "https://mcp.example.com/v1", srv["url"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, mcpPath := tt.setup(t)
+			err := fs.InstallMCP(context.Background(), srcDir, mcpPath)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, mcpPath)
+			}
+		})
+	}
+}
+
+func TestInstallHooksJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (srcDir, hooksPath string)
+		wantErr string
+		check   func(t *testing.T, hooksPath string)
+	}{
+		{
+			name: "no-op when hooks dir is absent",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+
+				return t.TempDir(), filepath.Join(t.TempDir(), "hooks.json")
+			},
+		},
+		{
+			name: "returns error when hooks.json is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "hooks", "hooks.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+
+				return src, filepath.Join(t.TempDir(), "hooks.json")
+			},
+			wantErr: "read hooks/hooks.json",
+		},
+		{
+			name: "returns error when hooks.json contains invalid JSON",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				hooksDir := filepath.Join(src, "hooks")
+				require.NoError(t, os.MkdirAll(hooksDir, 0o755))
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(hooksDir, "hooks.json"), []byte(`{invalid`), 0o644),
+				)
+
+				return src, filepath.Join(t.TempDir(), "hooks.json")
+			},
+			wantErr: "parse hooks/hooks.json",
+		},
+		{
+			name: "merges hooks into target file",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				hooksDir := filepath.Join(src, "hooks")
+				require.NoError(t, os.MkdirAll(hooksDir, 0o755))
+				data, err := json.Marshal(map[string]any{
+					"PreToolUse": []any{
+						map[string]any{
+							"command":    "echo lint",
+							"showOutput": true,
+						},
+					},
+				})
+				require.NoError(t, err)
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(hooksDir, "hooks.json"), data, 0o644),
+				)
+
+				return src, filepath.Join(t.TempDir(), "hooks.json")
+			},
+			check: func(t *testing.T, hooksPath string) {
+				t.Helper()
+				data, err := os.ReadFile(hooksPath)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(data, &doc))
+				hooks, ok := doc["hooks"].(map[string]any)
+				require.True(t, ok)
+				_, ok = hooks["PreToolUse"]
+				assert.True(t, ok)
+			},
+		},
+		{
+			name: "returns error when existing hooksPath is unreadable",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				hooksDir := filepath.Join(src, "hooks")
+				require.NoError(t, os.MkdirAll(hooksDir, 0o755))
+				data, err := json.Marshal(map[string]any{
+					"PreToolUse": []any{
+						map[string]any{"command": "echo lint", "showOutput": true},
+					},
+				})
+				require.NoError(t, err)
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(hooksDir, "hooks.json"), data, 0o644),
+				)
+				destDir := t.TempDir()
+				hooksPath := filepath.Join(destDir, "hooks.json")
+				require.NoError(t, os.WriteFile(hooksPath, []byte(`{}`), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(hooksPath, 0o644) })
+
+				return src, hooksPath
+			},
+			wantErr: "merge hooks",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srcDir, hooksPath := tt.setup(t)
+			err := fs.InstallHooksJSON(context.Background(), srcDir, hooksPath, "test-plugin")
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.check != nil {
+				tt.check(t, hooksPath)
 			}
 		})
 	}

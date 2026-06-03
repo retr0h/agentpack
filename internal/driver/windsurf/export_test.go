@@ -21,7 +21,6 @@
 package windsurf
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,18 +37,4 @@ func SetCwd(w *Windsurf, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(w *Windsurf, fn func(string, os.FileMode) error) {
 	w.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, w *Windsurf, srcDir, mcpPath string) error {
-	return w.installMCP(ctx, srcDir, mcpPath)
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	w *Windsurf,
-	srcDir, hooksPath, pluginName string,
-) error {
-	return w.installHooks(ctx, srcDir, hooksPath, pluginName)
 }

@@ -21,7 +21,6 @@
 package amp
 
 import (
-	"context"
 	"os"
 )
 
@@ -43,9 +42,4 @@ func SetCwd(a *Amp, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(a *Amp, fn func(string, os.FileMode) error) {
 	a.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, a *Amp, srcDir, mcpPath string) error {
-	return a.installMCP(ctx, srcDir, mcpPath)
 }

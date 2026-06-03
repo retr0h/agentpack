@@ -21,7 +21,6 @@
 package gemini
 
 import (
-	"context"
 	"os"
 )
 
@@ -38,9 +37,4 @@ func SetCwd(g *Gemini, fn func() (string, error)) {
 // SetOsMkdirAll replaces mkdirAllFunc for testing.
 func SetOsMkdirAll(g *Gemini, fn func(string, os.FileMode) error) {
 	g.mkdirAllFunc = fn
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, g *Gemini, srcDir, mcpPath string) error {
-	return g.installMCP(ctx, srcDir, mcpPath)
 }

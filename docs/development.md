@@ -123,6 +123,7 @@ or more drivers would share, put it in `fs/` from the start — not in one drive
 with a plan to "extract later."
 
 Common patterns that MUST use shared code:
+
 - Copying files/trees → `fs.CopyFile`, `fs.CopyTreeIfExists`
 - Enumerating installed files → `fs.EnumerateFiles`
 - Installing MCP from JSON → `fs.InstallMCP`
@@ -133,6 +134,7 @@ Drivers with non-standard formats (YAML config, TOML config, executable hook
 scripts) implement their own handlers but still use `fs.*` for file operations.
 
 When creating a new driver, follow an existing driver of similar complexity:
+
 - Skill-only → `forgecode/`
 - Skill + MCP (JSON) → `cursor/`
 - Skill + MCP + Hook (JSON) → `windsurf/`
