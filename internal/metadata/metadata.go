@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/retr0h/agentpack/internal/safety"
+	"github.com/retr0h/agentpack/pkg/safety"
 )
 
 // ContentEntry describes a single typed item included in a plugin archive.

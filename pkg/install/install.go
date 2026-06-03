@@ -56,7 +56,7 @@ import (
 	"github.com/retr0h/agentpack/internal/merge"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/packages"
-	"github.com/retr0h/agentpack/internal/safety"
+	"github.com/retr0h/agentpack/pkg/safety"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/target"
 )

@@ -43,7 +43,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/checksum"
-	"github.com/retr0h/agentpack/internal/safety"
+	"github.com/retr0h/agentpack/pkg/safety"
 )
 
 // osMkdirTemp is swappable for testing.

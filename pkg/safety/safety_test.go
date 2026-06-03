@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/internal/safety"
+	"github.com/retr0h/agentpack/pkg/safety"
 )
 
 // --------------------------------------------------------------------------

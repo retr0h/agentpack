@@ -38,7 +38,7 @@ import (
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/metadata"
-	"github.com/retr0h/agentpack/internal/safety"
+	"github.com/retr0h/agentpack/pkg/safety"
 )
 
 // contentDirs are the recognized content directories per ADR-001. Only these
