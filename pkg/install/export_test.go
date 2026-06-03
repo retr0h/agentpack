@@ -207,6 +207,11 @@ func BuildContentEntries(meta *metadata.Metadata, sourceDir string) []target.Con
 	return buildContentEntries(meta, sourceDir)
 }
 
+// VerifyArchiveSidecar exposes verifyArchiveSidecar for testing.
+func VerifyArchiveSidecar(ctx context.Context, source, archivePath string) (bool, error) {
+	return verifyArchiveSidecar(ctx, source, archivePath)
+}
+
 // HasMetadataYAML exposes hasMetadataYAML for testing.
 func HasMetadataYAML(dir string) bool {
 	return hasMetadataYAML(dir)

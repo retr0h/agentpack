@@ -59,7 +59,7 @@ publishes the SHA256 alongside the archive (like goreleaser checksums.txt).`,
 
 		// Auto-detect .sha256 file alongside the archive if --sha256 not given.
 		if verifySHA256 == "" {
-			shaFile := strings.TrimSuffix(archivePath, ".agentpack") + ".sha256"
+			shaFile := archivePath + ".sha256"
 			if data, err := os.ReadFile(shaFile); err == nil {
 				verifySHA256 = strings.TrimSpace(string(data))
 			}

@@ -44,6 +44,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/avfs/avfs/vfs/osfs"
 	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/archive"
@@ -320,6 +321,14 @@ func (i *Installer) runFromArchive(
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
+	verified, err := verifyArchiveSidecar(ctx, opts.Source, tmpArchive)
+	if err != nil {
+		return nil, err
+	}
+	if verified {
+		emitStep(opts, Step{Name: "verify", Detail: "archive checksum verified"})
+	}
+
 	if err := archive.Extract(ctx, tmpArchive, tmpDir); err != nil {
 		return nil, fmt.Errorf("extract: %w", err)
 	}
@@ -385,6 +394,37 @@ func (i *Installer) runFromArchive(
 	}
 
 	return i.installFromDir(ctx, opts, tmpDir, meta)
+}
+
+// verifyArchiveSidecar checks archivePath against a ".sha256" sidecar published
+// next to source. ADR-009 makes that sidecar the integrity anchor for pre-built
+// archives, verified before extraction. A missing sidecar is not an error so
+// archives distributed without one still install (npm/Go-style optional
+// integrity); a present sidecar that does not match aborts the install before
+// any file is written. It returns true when a sidecar was found and matched.
+func verifyArchiveSidecar(ctx context.Context, source, archivePath string) (bool, error) {
+	data, err := os.ReadFile(source + ".sha256")
+	if err != nil {
+		return false, nil
+	}
+
+	expected := strings.TrimSpace(string(data))
+	if expected == "" {
+		return false, nil
+	}
+
+	actual, err := checksum.ComputeFile(ctx, osfs.NewWithNoIdm(), archivePath)
+	if err != nil {
+		return false, fmt.Errorf("hash archive: %w", err)
+	}
+
+	if !strings.EqualFold(actual, expected) {
+		return false, fmt.Errorf(
+			"archive SHA256 sidecar mismatch: expected %s, got %s", expected, actual,
+		)
+	}
+
+	return true, nil
 }
 
 // knownGitHosts is the set of hosting domains whose first two path segments

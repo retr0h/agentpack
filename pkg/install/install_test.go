@@ -2082,6 +2082,74 @@ func TestRemoveManifests(t *testing.T) {
 	}
 }
 
+func TestVerifyArchiveSidecar(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		writeSidecar bool
+		sidecar      func(realHash string) string
+		wantVerified bool
+		wantErr      string
+	}{
+		{
+			name:         "matching sidecar verifies",
+			writeSidecar: true,
+			sidecar:      func(h string) string { return h + "\n" },
+			wantVerified: true,
+		},
+		{
+			name:         "mismatching sidecar aborts",
+			writeSidecar: true,
+			sidecar:      func(string) string { return "deadbeefdeadbeef\n" },
+			wantErr:      "sidecar mismatch",
+		},
+		{
+			name:         "no sidecar is a no-op",
+			writeSidecar: false,
+			wantVerified: false,
+		},
+		{
+			name:         "empty sidecar is a no-op",
+			writeSidecar: true,
+			sidecar:      func(string) string { return "\n" },
+			wantVerified: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			archivePath := filepath.Join(dir, "plugin.agentpack")
+			content := []byte("fake archive bytes")
+			require.NoError(t, os.WriteFile(archivePath, content, 0o644))
+
+			sum := sha256.Sum256(content)
+			realHash := hex.EncodeToString(sum[:])
+
+			if tt.writeSidecar {
+				require.NoError(t, os.WriteFile(
+					archivePath+".sha256", []byte(tt.sidecar(realHash)), 0o644,
+				))
+			}
+
+			verified, err := install.VerifyArchiveSidecar(
+				context.Background(), archivePath, archivePath,
+			)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantVerified, verified)
+		})
+	}
+}
+
 // --------------------------------------------------------------------------
 // TestHumanSize
 // --------------------------------------------------------------------------
