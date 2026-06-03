@@ -18,45 +18,69 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package claudecode
+package merge_test
 
 import (
-	"context"
-	"os"
+	"testing"
 
-	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/retr0h/agentpack/internal/merge"
 )
 
-// SetUserHome replaces userHomeFunc for testing.
-func SetUserHome(cc *ClaudeCode, fn func() (string, error)) {
-	cc.userHomeFunc = fn
-}
+func TestStrings(t *testing.T) {
+	t.Parallel()
 
-// SetOsMkdirAll replaces mkdirAllFunc for testing.
-func SetOsMkdirAll(cc *ClaudeCode, fn func(string, os.FileMode) error) {
-	cc.mkdirAllFunc = fn
-}
+	tests := []struct {
+		name string
+		a    []string
+		b    []string
+		want []string
+	}{
+		{
+			name: "both nil returns nil",
+			a:    nil,
+			b:    nil,
+			want: nil,
+		},
+		{
+			name: "both empty returns nil",
+			a:    []string{},
+			b:    []string{},
+			want: nil,
+		},
+		{
+			name: "a only returns sorted a",
+			a:    []string{"c", "a"},
+			b:    nil,
+			want: []string{"a", "c"},
+		},
+		{
+			name: "b only returns sorted b",
+			a:    nil,
+			b:    []string{"z", "m"},
+			want: []string{"m", "z"},
+		},
+		{
+			name: "deduplicates overlapping entries",
+			a:    []string{"x", "y"},
+			b:    []string{"y", "z"},
+			want: []string{"x", "y", "z"},
+		},
+		{
+			name: "no overlap appends and sorts",
+			a:    []string{"b"},
+			b:    []string{"a"},
+			want: []string{"a", "b"},
+		},
+	}
 
-// FormatDate exposes cli.FormatDate for testing.
-func FormatDate(ts string) string {
-	return cli.FormatDate(ts)
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
-	return cc.installMCP(ctx, srcDir, settingsPath)
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	cc *ClaudeCode,
-	srcDir, settingsPath, pluginName string,
-) error {
-	return cc.installHooks(ctx, srcDir, settingsPath, pluginName)
-}
-
-// InstallSettings exposes installSettings for testing.
-func InstallSettings(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
-	return cc.installSettings(ctx, srcDir, settingsPath)
+			got := merge.Strings(tt.a, tt.b)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

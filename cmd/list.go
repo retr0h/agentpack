@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/list"
 	"github.com/retr0h/agentpack/internal/outdated"
 	"github.com/retr0h/agentpack/pkg/target"
@@ -257,8 +258,8 @@ func listOutdated(cmd *cobra.Command) error {
 				out,
 				"  %s  %s → %s\n",
 				cli.Accent(out, e.Name),
-				cli.Mute(out, cli.ShortSHA(e.InstalledSHA)),
-				cli.ShortSHA(e.RemoteSHA),
+				cli.Mute(out, gitutil.ShortSHA(e.InstalledSHA)),
+				gitutil.ShortSHA(e.RemoteSHA),
 			)
 		} else {
 			cli.Printf(

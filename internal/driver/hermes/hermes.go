@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 
@@ -269,9 +270,7 @@ func mergeHooksYAML(path, pluginName string, hooks map[string]any) error {
 			}
 
 			tagged := make(map[string]any, len(entry)+1)
-			for k, v := range entry {
-				tagged[k] = v
-			}
+			maps.Copy(tagged, entry)
 
 			tagged["_plugin"] = pluginName
 			existing = append(existing, tagged)

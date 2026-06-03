@@ -32,8 +32,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/driver/fs"
 	"github.com/retr0h/agentpack/internal/gitutil"
@@ -366,7 +366,7 @@ func (c *ClaudeCode) List() ([]target.InstalledPlugin, error) {
 			Name:      meta.Name,
 			Version:   meta.Version,
 			SHA:       gitutil.ShortSHA(meta.GitCommitSHA),
-			Installed: formatDate(meta.BuildTimestamp),
+			Installed: cli.FormatDate(meta.BuildTimestamp),
 			Dir:       dir,
 			Target:    c.DisplayName(),
 		})
@@ -423,12 +423,4 @@ func copyTreeTracked(
 	})
 
 	return files, err
-}
-
-func formatDate(ts string) string {
-	if idx := strings.IndexByte(ts, 'T'); idx > 0 {
-		return ts[:idx]
-	}
-
-	return ts
 }

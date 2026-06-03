@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 
@@ -263,9 +264,7 @@ func mergeRoomodes(path string, patch map[string]any) error {
 		return err
 	}
 
-	for k, v := range patch {
-		cfg[k] = v
-	}
+	maps.Copy(cfg, patch)
 
 	return writeYAMLConfig(path, cfg)
 }

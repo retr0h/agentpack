@@ -29,6 +29,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/inspect"
 	"github.com/retr0h/agentpack/internal/registry"
 	"github.com/retr0h/agentpack/internal/safety"
@@ -79,7 +80,7 @@ func showInstalled(cmd *cobra.Command, name string) error {
 
 	version := m.Version
 	if len(version) >= 40 {
-		version = cli.ShortSHA(version)
+		version = gitutil.ShortSHA(version)
 	}
 
 	source := m.Source
@@ -97,11 +98,11 @@ func showInstalled(cmd *cobra.Command, name string) error {
 	cli.FieldAccent(out, "Name", m.Name)
 	cli.Field(out, "Version", version)
 	cli.FieldMuted(out, "Source", source)
-	cli.FieldMuted(out, "SHA", cli.ShortSHA(m.SHA))
+	cli.FieldMuted(out, "SHA", gitutil.ShortSHA(m.SHA))
 	cli.FieldInfo(out, "Installed", installed)
 	cli.Field(out, "Scope", string(scope))
 
-	archiveBase := fmt.Sprintf("%s@%s", m.Name, cli.ShortSHA(m.SHA))
+	archiveBase := fmt.Sprintf("%s@%s", m.Name, gitutil.ShortSHA(m.SHA))
 	archivePath := fmt.Sprintf("~/.config/agentpack/archives/%s.agentpack", archiveBase)
 	cli.FieldMuted(out, "Archive", archivePath)
 
@@ -143,7 +144,7 @@ func showInstalled(cmd *cobra.Command, name string) error {
 			cli.Printf(
 				out, "  %s  %s\n",
 				path,
-				cli.Mute(out, cli.ShortSHA(f.SHA256)),
+				cli.Mute(out, gitutil.ShortSHA(f.SHA256)),
 			)
 		}
 	}
@@ -172,7 +173,7 @@ func showArchive(cmd *cobra.Command, path string) error {
 	cli.FieldAccent(out, "Package", result.Name)
 	cli.Field(out, "Version", result.Version)
 	cli.FieldInfo(out, "Built", built)
-	cli.FieldMuted(out, "SHA", cli.ShortSHA(result.SHA))
+	cli.FieldMuted(out, "SHA", gitutil.ShortSHA(result.SHA))
 
 	if result.Content != nil {
 		safeCount := len(result.Content.Safe)
@@ -207,7 +208,7 @@ func showArchive(cmd *cobra.Command, path string) error {
 			padded = cli.Err(out, padded)
 		}
 		size := cli.HumanSize(f.Size)
-		short := cli.ShortSHA(f.SHA256)
+		short := gitutil.ShortSHA(f.SHA256)
 
 		cli.Printf(
 			out, "  %s %s  %s  %s\n",

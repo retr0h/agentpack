@@ -178,12 +178,15 @@ func Plural(n int, singular, pluralForm string) string {
 	return pluralForm
 }
 
-// ShortSHA returns the first 7 characters of sha, or the full string if shorter.
-func ShortSHA(sha string) string {
-	if len(sha) >= 7 {
-		return sha[:7]
+// FormatDate extracts the date portion from a timestamp string. When the input
+// contains a 'T' separator (e.g. RFC 3339) only the part before it is returned.
+// If no 'T' is found the input is returned as-is.
+func FormatDate(ts string) string {
+	if idx := strings.IndexByte(ts, 'T'); idx > 0 {
+		return ts[:idx]
 	}
-	return sha
+
+	return ts
 }
 
 // SourceBaseName extracts a short display name from a source path or URL.

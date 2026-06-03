@@ -27,10 +27,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/retr0h/agentpack/internal/merge"
 )
 
 // Package declares a single plugin entry in the spec file.
@@ -147,9 +148,9 @@ func Save(path string, cfg *Config) error {
 func (c *Config) Add(p Package) {
 	for i, existing := range c.Packages {
 		if existing.Name == p.Name {
-			p.Content = mergeStrings(existing.Content, p.Content)
-			p.Skills = mergeStrings(existing.Skills, p.Skills)
-			p.Targets = mergeStrings(existing.Targets, p.Targets)
+			p.Content = merge.Strings(existing.Content, p.Content)
+			p.Skills = merge.Strings(existing.Skills, p.Skills)
+			p.Targets = merge.Strings(existing.Targets, p.Targets)
 			c.Packages[i] = p
 
 			return
@@ -157,29 +158,6 @@ func (c *Config) Add(p Package) {
 	}
 
 	c.Packages = append(c.Packages, p)
-}
-
-func mergeStrings(a, b []string) []string {
-	if len(a) == 0 && len(b) == 0 {
-		return nil
-	}
-
-	seen := make(map[string]bool, len(a)+len(b))
-	for _, s := range a {
-		seen[s] = true
-	}
-	for _, s := range b {
-		seen[s] = true
-	}
-
-	result := make([]string, 0, len(seen))
-	for s := range seen {
-		result = append(result, s)
-	}
-
-	sort.Strings(result)
-
-	return result
 }
 
 // Remove deletes the Package with the given name. It is a no-op when the name

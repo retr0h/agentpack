@@ -18,15 +18,10 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package fs provides shared filesystem operations used by target drivers.
-// It consolidates CopyFile, CopyTreeIfExists, and EnumerateFiles so that
-// every driver delegates to a single implementation.
 package fs
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,140 +31,6 @@ import (
 	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/pkg/target"
 )
-
-// CopyFile copies a single file from src to dst, preserving permissions.
-// Symlinks are rejected to prevent following links to sensitive files.
-func CopyFile(src, dst string) error {
-	info, err := os.Lstat(src)
-	if err != nil {
-		return fmt.Errorf("stat %s: %w", src, err)
-	}
-
-	if info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("symlinks not allowed: %s", src)
-	}
-
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", src, err)
-	}
-
-	if err := os.WriteFile(dst, data, info.Mode()); err != nil {
-		return fmt.Errorf("write %s: %w", dst, err)
-	}
-
-	return nil
-}
-
-// CopyTreeIfExists recursively copies everything from src into dst.
-// If src does not exist the call is a no-op. The context is checked
-// on every file to support cancellation.
-func CopyTreeIfExists(ctx context.Context, src, dst string) error {
-	if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-
-	return filepath.WalkDir(src, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		if d.Type()&os.ModeSymlink != 0 {
-			return nil
-		}
-
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return fmt.Errorf("rel path: %w", err)
-		}
-
-		tgt := filepath.Join(dst, rel)
-
-		if d.IsDir() {
-			return os.MkdirAll(tgt, 0o755)
-		}
-
-		return CopyFile(path, tgt)
-	})
-}
-
-// EnumerateFiles walks destDir and returns InstalledFile entries with paths
-// relative to baseDir and SHA256 digests.
-func EnumerateFiles(
-	ctx context.Context,
-	destDir, baseDir string,
-) ([]target.InstalledFile, error) {
-	var files []target.InstalledFile
-
-	err := filepath.WalkDir(destDir, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil || d.IsDir() {
-			return walkErr
-		}
-
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-
-		rel, relErr := filepath.Rel(baseDir, path)
-		if relErr != nil {
-			return relErr
-		}
-
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
-
-		h := sha256.Sum256(data)
-		files = append(files, target.InstalledFile{
-			Path:   rel,
-			SHA256: hex.EncodeToString(h[:]),
-		})
-
-		return nil
-	})
-
-	return files, err
-}
-
-// ResolveDirs returns (baseDir, skillsDir) for a target install.
-// globalSkillDir is relative to home (e.g. ".cursor/skills").
-// localSkillDir is relative to project dir (e.g. ".agents/skills").
-// homeFn returns the root directory for global installs (typically
-// os.UserHomeDir); cwdFn returns the fallback for local installs when
-// opts.Dir is empty.
-func ResolveDirs(
-	opts target.InstallOpts,
-	globalSkillDir string,
-	localSkillDir string,
-	homeFn func() (string, error),
-	cwdFn func() (string, error),
-) (string, string, error) {
-	if opts.Global {
-		home, err := homeFn()
-		if err != nil {
-			return "", "", fmt.Errorf("home dir: %w", err)
-		}
-
-		return home, filepath.Join(home, globalSkillDir), nil
-	}
-
-	dir := opts.Dir
-	if dir == "" {
-		cwd, err := cwdFn()
-		if err != nil {
-			return "", "", fmt.Errorf("getwd: %w", err)
-		}
-
-		dir = cwd
-	}
-
-	return dir, filepath.Join(dir, localSkillDir), nil
-}
 
 // InstallSkillEntry copies a single skill/command/agent entry into the
 // target directory and returns the list of files written.

@@ -337,46 +337,6 @@ func TestPlural(t *testing.T) {
 	}
 }
 
-func TestShortSHA(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		sha  string
-		want string
-	}{
-		{
-			name: "truncates long SHA to 7 characters",
-			sha:  "abcdef1234567890",
-			want: "abcdef1",
-		},
-		{
-			name: "returns unchanged when exactly 7 characters",
-			sha:  "abcdef1",
-			want: "abcdef1",
-		},
-		{
-			name: "returns unchanged when shorter than 7",
-			sha:  "abc",
-			want: "abc",
-		},
-		{
-			name: "returns empty string for empty input",
-			sha:  "",
-			want: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := cli.ShortSHA(tt.sha)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
 func TestSourceBaseName(t *testing.T) {
 	t.Parallel()
 

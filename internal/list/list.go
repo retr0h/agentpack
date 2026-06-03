@@ -39,6 +39,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/driver/agents"
 	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/registry"
@@ -173,7 +174,7 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 			Targets:        targets,
 			Contents:       extractContentItems(m),
 			SelectedSkills: m.SelectedSkills,
-			Installed:      formatDate(m.Installed),
+			Installed:      cli.FormatDate(m.Installed),
 			Scope:          scope,
 			Status:         status,
 		})
@@ -322,14 +323,6 @@ func extractContentItems(m *registry.PackageManifest) []ContentItem {
 	})
 
 	return items
-}
-
-func formatDate(ts string) string {
-	if idx := strings.IndexByte(ts, 'T'); idx > 0 {
-		return ts[:idx]
-	}
-
-	return ts
 }
 
 func shortVersion(v string) string {

@@ -18,45 +18,53 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package claudecode
+package fs
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
+	"path/filepath"
 
-	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/retr0h/agentpack/pkg/target"
 )
 
-// SetUserHome replaces userHomeFunc for testing.
-func SetUserHome(cc *ClaudeCode, fn func() (string, error)) {
-	cc.userHomeFunc = fn
-}
-
-// SetOsMkdirAll replaces mkdirAllFunc for testing.
-func SetOsMkdirAll(cc *ClaudeCode, fn func(string, os.FileMode) error) {
-	cc.mkdirAllFunc = fn
-}
-
-// FormatDate exposes cli.FormatDate for testing.
-func FormatDate(ts string) string {
-	return cli.FormatDate(ts)
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
-	return cc.installMCP(ctx, srcDir, settingsPath)
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
+// EnumerateFiles walks destDir and returns InstalledFile entries with paths
+// relative to baseDir and SHA256 digests.
+func EnumerateFiles(
 	ctx context.Context,
-	cc *ClaudeCode,
-	srcDir, settingsPath, pluginName string,
-) error {
-	return cc.installHooks(ctx, srcDir, settingsPath, pluginName)
-}
+	destDir, baseDir string,
+) ([]target.InstalledFile, error) {
+	var files []target.InstalledFile
 
-// InstallSettings exposes installSettings for testing.
-func InstallSettings(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
-	return cc.installSettings(ctx, srcDir, settingsPath)
+	err := filepath.WalkDir(destDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return walkErr
+		}
+
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+
+		rel, relErr := filepath.Rel(baseDir, path)
+		if relErr != nil {
+			return relErr
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+
+		h := sha256.Sum256(data)
+		files = append(files, target.InstalledFile{
+			Path:   rel,
+			SHA256: hex.EncodeToString(h[:]),
+		})
+
+		return nil
+	})
+
+	return files, err
 }

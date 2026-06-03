@@ -27,6 +27,7 @@ import (
 	"os"
 
 	"github.com/retr0h/agentpack/internal/archive"
+	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/registry"
@@ -158,9 +159,9 @@ func NameFromSource(source string) string {
 	return nameFromSource(source)
 }
 
-// HumanSize exposes humanSize for testing.
+// HumanSize exposes cli.HumanSize for testing.
 func HumanSize(bytes int64) string {
-	return humanSize(bytes)
+	return cli.HumanSize(bytes)
 }
 
 // CopyFileAtomic exposes copyFileAtomic for testing.

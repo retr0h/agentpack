@@ -27,10 +27,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/retr0h/agentpack/internal/merge"
 )
 
 // LockedFile records a single installed file with its integrity hash.
@@ -104,9 +105,9 @@ func (lf *Lockfile) Set(p LockedPackage) {
 	for i, existing := range lf.Packages {
 		if existing.Name == p.Name {
 			p.Files = mergeLockedFiles(existing.Files, p.Files)
-			p.Content = mergeStrings(existing.Content, p.Content)
-			p.Skills = mergeStrings(existing.Skills, p.Skills)
-			p.Targets = mergeStrings(existing.Targets, p.Targets)
+			p.Content = merge.Strings(existing.Content, p.Content)
+			p.Skills = merge.Strings(existing.Skills, p.Skills)
+			p.Targets = merge.Strings(existing.Targets, p.Targets)
 			lf.Packages[i] = p
 
 			return
@@ -294,27 +295,4 @@ func mergeLockedFiles(existing, incoming []LockedFile) []LockedFile {
 	}
 
 	return merged
-}
-
-func mergeStrings(a, b []string) []string {
-	if len(a) == 0 && len(b) == 0 {
-		return nil
-	}
-
-	seen := make(map[string]bool, len(a)+len(b))
-	for _, s := range a {
-		seen[s] = true
-	}
-	for _, s := range b {
-		seen[s] = true
-	}
-
-	result := make([]string, 0, len(seen))
-	for s := range seen {
-		result = append(result, s)
-	}
-
-	sort.Strings(result)
-
-	return result
 }

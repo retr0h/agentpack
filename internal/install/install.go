@@ -41,7 +41,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -49,10 +48,12 @@ import (
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/checksum"
+	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/fetcher"
 	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/lock"
+	"github.com/retr0h/agentpack/internal/merge"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/packages"
 	"github.com/retr0h/agentpack/internal/registry"
@@ -238,7 +239,7 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 	info, _ := os.Stat(archivePath)
 	sizeStr := ""
 	if info != nil {
-		sizeStr = fmt.Sprintf("(%s)", humanSize(info.Size()))
+		sizeStr = fmt.Sprintf("(%s)", cli.HumanSize(info.Size()))
 	}
 	emitStep(opts, Step{Name: "building package", Detail: sizeStr})
 
@@ -681,15 +682,6 @@ func emitStep(opts Options, s Step) {
 	}
 }
 
-func humanSize(bytes int64) string {
-	const kb = 1024
-	if bytes < kb {
-		return fmt.Sprintf("%d B", bytes)
-	}
-
-	return fmt.Sprintf("%d KB", bytes/kb)
-}
-
 // typeToDir maps a metadata entry type back to the conventional directory
 // name used in agentpack archives.
 var typeToDir = map[string]string{
@@ -898,8 +890,8 @@ func installFromDir(
 
 	if existing, loadErr := registryLoad(meta.Name); loadErr == nil && existing != nil {
 		manifest.Files = mergeFiles(existing.Files, manifest.Files)
-		manifest.SelectedContent = mergeStrings(existing.SelectedContent, manifest.SelectedContent)
-		manifest.SelectedSkills = mergeStrings(existing.SelectedSkills, manifest.SelectedSkills)
+		manifest.SelectedContent = merge.Strings(existing.SelectedContent, manifest.SelectedContent)
+		manifest.SelectedSkills = merge.Strings(existing.SelectedSkills, manifest.SelectedSkills)
 	}
 
 	if saveErr := registrySave(manifest); saveErr != nil {
@@ -1129,23 +1121,4 @@ func mergeFiles(existing, incoming []registry.InstalledFile) []registry.Installe
 	}
 
 	return merged
-}
-
-func mergeStrings(a, b []string) []string {
-	seen := make(map[string]bool, len(a)+len(b))
-	for _, s := range a {
-		seen[s] = true
-	}
-	for _, s := range b {
-		seen[s] = true
-	}
-
-	result := make([]string, 0, len(seen))
-	for s := range seen {
-		result = append(result, s)
-	}
-
-	slices.Sort(result)
-
-	return result
 }

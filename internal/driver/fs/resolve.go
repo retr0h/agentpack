@@ -18,45 +18,46 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package claudecode
+package fs
 
 import (
-	"context"
-	"os"
+	"fmt"
+	"path/filepath"
 
-	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/retr0h/agentpack/pkg/target"
 )
 
-// SetUserHome replaces userHomeFunc for testing.
-func SetUserHome(cc *ClaudeCode, fn func() (string, error)) {
-	cc.userHomeFunc = fn
-}
+// ResolveDirs returns (baseDir, skillsDir) for a target install.
+// globalSkillDir is relative to home (e.g. ".cursor/skills").
+// localSkillDir is relative to project dir (e.g. ".agents/skills").
+// homeFn returns the root directory for global installs (typically
+// os.UserHomeDir); cwdFn returns the fallback for local installs when
+// opts.Dir is empty.
+func ResolveDirs(
+	opts target.InstallOpts,
+	globalSkillDir string,
+	localSkillDir string,
+	homeFn func() (string, error),
+	cwdFn func() (string, error),
+) (string, string, error) {
+	if opts.Global {
+		home, err := homeFn()
+		if err != nil {
+			return "", "", fmt.Errorf("home dir: %w", err)
+		}
 
-// SetOsMkdirAll replaces mkdirAllFunc for testing.
-func SetOsMkdirAll(cc *ClaudeCode, fn func(string, os.FileMode) error) {
-	cc.mkdirAllFunc = fn
-}
+		return home, filepath.Join(home, globalSkillDir), nil
+	}
 
-// FormatDate exposes cli.FormatDate for testing.
-func FormatDate(ts string) string {
-	return cli.FormatDate(ts)
-}
+	dir := opts.Dir
+	if dir == "" {
+		cwd, err := cwdFn()
+		if err != nil {
+			return "", "", fmt.Errorf("getwd: %w", err)
+		}
 
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
-	return cc.installMCP(ctx, srcDir, settingsPath)
-}
+		dir = cwd
+	}
 
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	cc *ClaudeCode,
-	srcDir, settingsPath, pluginName string,
-) error {
-	return cc.installHooks(ctx, srcDir, settingsPath, pluginName)
-}
-
-// InstallSettings exposes installSettings for testing.
-func InstallSettings(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
-	return cc.installSettings(ctx, srcDir, settingsPath)
+	return dir, filepath.Join(dir, localSkillDir), nil
 }
