@@ -32,7 +32,6 @@ import (
 	"time"
 
 	"github.com/avfs/avfs"
-	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -649,107 +648,6 @@ plugins:
 	}
 }
 
-func TestComputeArchiveChecksums(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	tests := []struct {
-		name    string
-		useOSFS bool // use real osfs instead of memfs
-		files   func(t *testing.T) []build.FileEntry
-		wantN   int
-		wantErr string
-	}{
-		{
-			name: "virtual file checksummed",
-			files: func(_ *testing.T) []build.FileEntry {
-				return []build.FileEntry{
-					{ArchivePath: "a/b.json", Content: []byte(`{"k":"v"}`)},
-				}
-			},
-			wantN: 1,
-		},
-		{
-			name:    "disk file checksummed",
-			useOSFS: true,
-			files: func(t *testing.T) []build.FileEntry {
-				t.Helper()
-				p := filepath.Join(t.TempDir(), "data.txt")
-				if err := os.WriteFile(p, []byte("hello"), 0o644); err != nil {
-					require.NoError(t, err)
-				}
-				return []build.FileEntry{
-					{Src: p, ArchivePath: "data.txt"},
-				}
-			},
-			wantN: 1,
-		},
-		{
-			name:    "missing disk file returns error",
-			useOSFS: true,
-			files: func(_ *testing.T) []build.FileEntry {
-				return []build.FileEntry{
-					{Src: "/nonexistent/file.txt", ArchivePath: "file.txt"},
-				}
-			},
-			wantErr: "checksum",
-		},
-		{
-			name:    "cancelled context returns error",
-			useOSFS: true,
-			files: func(t *testing.T) []build.FileEntry {
-				t.Helper()
-				p := filepath.Join(t.TempDir(), "data.txt")
-				if err := os.WriteFile(p, []byte("hello"), 0o644); err != nil {
-					require.NoError(t, err)
-				}
-				return []build.FileEntry{
-					{Src: p, ArchivePath: "data.txt"},
-				}
-			},
-			wantErr: "context canceled",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			testCtx := ctx
-			if tt.wantErr == "context canceled" {
-				cancelCtx, cancel := context.WithCancel(context.Background())
-				cancel()
-				testCtx = cancelCtx
-			}
-
-			var entries []build.ChecksumEntry
-			var err error
-			if tt.useOSFS {
-				entries, err = build.ComputeArchiveChecksums(
-					testCtx,
-					osfs.NewWithNoIdm(),
-					tt.files(t),
-				)
-			} else {
-				entries, err = build.ComputeArchiveChecksums(testCtx, memfs.New(), tt.files(t))
-			}
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-
-			require.NoError(t, err)
-			require.Len(t, entries, tt.wantN)
-
-			for _, e := range entries {
-				assert.Len(t, e.Hash, 64)
-			}
-		})
-	}
-}
-
 // --------------------------------------------------------------------------
 // TestBuildPlugin
 // --------------------------------------------------------------------------
@@ -925,7 +823,7 @@ func TestBuildPlugin(t *testing.T) {
 			wantErr: "stat mcp config",
 		},
 		{
-			name: "fails when computeArchiveChecksums returns ctx error",
+			name: "fails when context is canceled during build",
 			setup: func(t *testing.T) (avfs.VFS, string, manifest.Plugin, *metadata.Metadata) {
 				t.Helper()
 				dir := t.TempDir()

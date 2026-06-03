@@ -327,43 +327,6 @@ func buildMCPEntries(
 	return files, nil
 }
 
-// computeArchiveChecksums computes the SHA256 hash for each FileEntry and
-// returns a slice of checksum.Entry values. Entries backed by a Src path are
-// hashed from disk; entries with inline Content are hashed in memory.
-func computeArchiveChecksums(
-	ctx context.Context,
-	vfs avfs.VFS,
-	files []archive.FileEntry,
-) ([]checksum.Entry, error) {
-	var entries []checksum.Entry
-
-	for _, f := range files {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-
-		var hash string
-
-		if f.Src != "" {
-			var err error
-
-			hash, err = checksum.ComputeFile(ctx, vfs, f.Src)
-			if err != nil {
-				return nil, fmt.Errorf("checksum %s: %w", f.Src, err)
-			}
-		} else {
-			hash = checksum.ComputeBytes(f.Content)
-		}
-
-		entries = append(entries, checksum.Entry{
-			Hash: hash,
-			Path: f.ArchivePath,
-		})
-	}
-
-	return entries, nil
-}
-
 // writeSidecar writes content to path using vfs, wrapping any error.
 func writeSidecar(vfs avfs.VFS, path string, content []byte) error {
 	f, err := vfs.Create(path)

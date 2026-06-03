@@ -252,22 +252,11 @@ func fileMatchesContent(path, content string) bool {
 }
 
 func fileMatchesSkill(path, skill string) bool {
-	return filepath.ToSlash(path) != "" &&
-		(contains(path, "/skills/"+skill+"/") || contains(path, "/skills/"+skill))
-}
+	slashed := filepath.ToSlash(path)
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && findSubstring(s, substr))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-
-	return false
+	return slashed != "" &&
+		(strings.Contains(slashed, "/skills/"+skill+"/") ||
+			strings.Contains(slashed, "/skills/"+skill))
 }
 
 func mergeLockedFiles(existing, incoming []LockedFile) []LockedFile {

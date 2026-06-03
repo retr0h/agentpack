@@ -197,11 +197,6 @@ func AutoPackageWithVersion(
 	return autoPackageWithVersion(ctx, cloneDir, name, sha, version, skillFilter, agentFilter)
 }
 
-// ComputeChecksums exposes computeChecksums for testing.
-func ComputeChecksums(files []archive.FileEntry) ([]byte, error) {
-	return computeChecksums(files)
-}
-
 // BuildContentEntries exposes buildContentEntries for testing.
 func BuildContentEntries(meta *metadata.Metadata, sourceDir string) []target.ContentEntry {
 	return buildContentEntries(meta, sourceDir)

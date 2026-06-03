@@ -39,15 +39,6 @@ type FileEntry = archive.FileEntry
 // ChecksumEntry aliases checksum.Entry for use in build_test.go.
 type ChecksumEntry = checksum.Entry
 
-// ComputeArchiveChecksums exposes computeArchiveChecksums for testing.
-func ComputeArchiveChecksums(
-	ctx context.Context,
-	vfs avfs.VFS,
-	files []archive.FileEntry,
-) ([]checksum.Entry, error) {
-	return computeArchiveChecksums(ctx, vfs, files)
-}
-
 // BuildPlugin exposes buildPlugin for testing.
 func BuildPlugin(
 	ctx context.Context,

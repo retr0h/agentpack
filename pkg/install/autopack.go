@@ -393,31 +393,3 @@ func buildContentMap(files []archive.FileEntry) (map[string][]byte, error) {
 
 	return m, nil
 }
-
-// computeChecksums produces the .agentpack/checksums.txt content (sha256sum
-// format) for the given file entries. Virtual files (Content != nil) are hashed
-// in memory; on-disk files (Src != "") are hashed by reading from disk.
-func computeChecksums(files []archive.FileEntry) ([]byte, error) {
-	var buf []byte
-
-	for _, f := range files {
-		var hash string
-
-		if f.Src != "" {
-			data, err := os.ReadFile(f.Src)
-			if err != nil {
-				return nil, fmt.Errorf("read %s for checksum: %w", f.Src, err)
-			}
-
-			h := sha256.Sum256(data)
-			hash = hex.EncodeToString(h[:])
-		} else {
-			h := sha256.Sum256(f.Content)
-			hash = hex.EncodeToString(h[:])
-		}
-
-		buf = fmt.Appendf(buf, "%s  %s\n", hash, f.ArchivePath)
-	}
-
-	return buf, nil
-}
