@@ -262,3 +262,8 @@ func computeBytesHash(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
 }
+
+// IsArchiveFile reports whether path names a .agentpack archive (by extension).
+func IsArchiveFile(path string) bool {
+	return filepath.Ext(path) == ".agentpack"
+}

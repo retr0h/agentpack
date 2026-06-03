@@ -74,3 +74,34 @@ func RegisterAll() {
 		agents.RegisterAll()
 	})
 }
+
+// Info describes a registered target driver for display purposes.
+type Info struct {
+	// Name is the stable driver identifier (e.g. "cursor").
+	Name string
+	// DisplayName is the human-readable driver name (e.g. "Cursor").
+	DisplayName string
+	// Detected reports whether the driver's agent was found on this machine.
+	Detected bool
+}
+
+// List returns every registered driver with its detection status, in
+// registration order. RegisterAll must have been called first.
+func List() []Info {
+	detected := make(map[string]bool)
+	for _, t := range target.Detected() {
+		detected[t.Name()] = true
+	}
+
+	all := target.All()
+	infos := make([]Info, len(all))
+	for i, t := range all {
+		infos[i] = Info{
+			Name:        t.Name(),
+			DisplayName: t.DisplayName(),
+			Detected:    detected[t.Name()],
+		}
+	}
+
+	return infos
+}

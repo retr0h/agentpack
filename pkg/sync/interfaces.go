@@ -27,6 +27,13 @@ import (
 	"github.com/retr0h/agentpack/pkg/install"
 )
 
+// Fetcher retrieves a git source into a local directory. Implement this to
+// inject a test double in place of the default git backend; a nil Fetcher in
+// Options falls back to the production implementation.
+type Fetcher interface {
+	Fetch(ctx context.Context, source, dest string) error
+}
+
 // Builder builds agentpack archives from a directory.
 type Builder interface {
 	Build(ctx context.Context, dir string) ([]build.Result, error)

@@ -28,8 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/internal/gitutil"
-	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/pkg/drivers"
 	"github.com/retr0h/agentpack/pkg/list"
 	"github.com/retr0h/agentpack/pkg/outdated"
 )
@@ -258,8 +257,8 @@ func listOutdated(cmd *cobra.Command) error {
 				out,
 				"  %s  %s → %s\n",
 				cli.Accent(out, e.Name),
-				cli.Mute(out, gitutil.ShortSHA(e.InstalledSHA)),
-				gitutil.ShortSHA(e.RemoteSHA),
+				cli.Mute(out, cli.ShortSHA(e.InstalledSHA)),
+				cli.ShortSHA(e.RemoteSHA),
 			)
 		} else {
 			cli.Printf(
@@ -277,13 +276,7 @@ func listOutdated(cmd *cobra.Command) error {
 func listTargets(cmd *cobra.Command) error {
 	out := cmd.OutOrStdout()
 
-	all := target.All()
-	detected := target.Detected()
-
-	detectedSet := make(map[string]bool, len(detected))
-	for _, t := range detected {
-		detectedSet[t.Name()] = true
-	}
+	infos := drivers.List()
 
 	if outputFormat == "json" {
 		type targetJSON struct {
@@ -292,27 +285,27 @@ func listTargets(cmd *cobra.Command) error {
 			Detected    bool   `json:"detected"`
 		}
 
-		items := make([]targetJSON, len(all))
-		for i, t := range all {
+		items := make([]targetJSON, len(infos))
+		for i, info := range infos {
 			items[i] = targetJSON{
-				Name:        t.Name(),
-				DisplayName: t.DisplayName(),
-				Detected:    detectedSet[t.Name()],
+				Name:        info.Name,
+				DisplayName: info.DisplayName,
+				Detected:    info.Detected,
 			}
 		}
 
 		return jsonOutput(out, items)
 	}
 
-	for _, t := range all {
-		padded := cli.Pad(t.DisplayName(), 18)
+	for _, info := range infos {
+		padded := cli.Pad(info.DisplayName, 18)
 		mark := cli.Mute(out, "○")
 		name := cli.Mute(out, padded)
-		if detectedSet[t.Name()] {
+		if info.Detected {
 			mark = cli.OK(out, "●")
 			name = padded
 		}
-		cli.Printf(out, "  %s %s %s\n", mark, name, cli.Mute(out, t.Name()))
+		cli.Printf(out, "  %s %s %s\n", mark, name, cli.Mute(out, info.Name))
 	}
 
 	return nil

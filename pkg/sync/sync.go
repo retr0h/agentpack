@@ -40,10 +40,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/fetcher"
+	"github.com/retr0h/agentpack/internal/lock"
 )
 
 // PackagesFile represents the top-level structure of agentpack-packages.yaml.
@@ -91,9 +93,9 @@ type Result struct {
 // Options configures a sync run.
 type Options struct {
 	ConfigPath string
-	Fetcher    fetcher.Fetcher // for git sources; nil uses default GitFetcher
-	Builder    Builder         // for building from cloned repos; nil skips build
-	Installer  Installer       // for installing archives; nil skips install
+	Fetcher    Fetcher   // for git sources; nil uses default GitFetcher
+	Builder    Builder   // for building from cloned repos; nil skips build
+	Installer  Installer // for installing archives; nil skips install
 
 	// LockedSHAs maps package name to the exact git commit SHA recorded in
 	// agentpack.lock. When a package name is present, its SHA overrides the
@@ -117,6 +119,15 @@ func New() *Syncer { return &Syncer{} }
 func (s *Syncer) Run(ctx context.Context, opts Options) ([]Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+
+	if opts.LockedSHAs == nil {
+		locked, lockErr := loadLockedSHAs(opts.ConfigPath)
+		if lockErr != nil {
+			return nil, lockErr
+		}
+
+		opts.LockedSHAs = locked
 	}
 
 	data, err := os.ReadFile(opts.ConfigPath)
@@ -225,4 +236,25 @@ func syncGitPackage(ctx context.Context, pkg Package, opts Options) []Result {
 	}
 
 	return results
+}
+
+// loadLockedSHAs reads agentpack.lock sitting next to configPath and returns a
+// package-name to commit-SHA map. A missing lockfile yields an empty map, not
+// an error, so a first-time sync works without a prior lock.
+func loadLockedSHAs(configPath string) (map[string]string, error) {
+	lockPath := filepath.Join(filepath.Dir(configPath), "agentpack.lock")
+
+	lf, err := lock.Load(lockPath)
+	if err != nil {
+		return nil, fmt.Errorf("load lock: %w", err)
+	}
+
+	shas := make(map[string]string, len(lf.Packages))
+	for _, p := range lf.Packages {
+		if p.SHA != "" {
+			shas[p.Name] = p.SHA
+		}
+	}
+
+	return shas, nil
 }

@@ -23,12 +23,10 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/internal/lock"
 	pkgsync "github.com/retr0h/agentpack/pkg/sync"
 )
 
@@ -66,25 +64,10 @@ plugin. When agentpack.lock exists, locked SHAs are used for reproducibility.`,
 			}
 		}
 
-		lockPath := filepath.Join(filepath.Dir(syncConfigFlag), "agentpack.lock")
-
-		lf, err := lock.Load(lockPath)
-		if err != nil {
-			return err
-		}
-
-		lockedSHAs := make(map[string]string, len(lf.Packages))
-		for _, p := range lf.Packages {
-			if p.SHA != "" {
-				lockedSHAs[p.Name] = p.SHA
-			}
-		}
-
 		results, err := pkgSyncer.Run(ctx, pkgsync.Options{
 			ConfigPath: syncConfigFlag,
 			Builder:    pkgsync.DefaultBuilder{},
 			Installer:  pkgsync.DefaultInstaller{},
-			LockedSHAs: lockedSHAs,
 			OnStep:     onStep,
 		})
 		if err != nil {

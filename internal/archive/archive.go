@@ -50,11 +50,6 @@ import (
 	"github.com/avfs/avfs"
 )
 
-// IsArchiveFile returns true when path has the .agentpack extension.
-func IsArchiveFile(path string) bool {
-	return strings.HasSuffix(path, ".agentpack")
-}
-
 // FileEntry describes a single file to include in an archive.
 // Either Src (path on disk) or Content (in-memory bytes) must be set.
 type FileEntry struct {

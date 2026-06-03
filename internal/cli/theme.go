@@ -27,6 +27,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/retr0h/agentpack/internal/gitutil"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
@@ -325,4 +327,9 @@ func Table(w io.Writer, cols []TableColumn) {
 		}
 		Printf(w, "%s\n", line.String())
 	}
+}
+
+// ShortSHA returns the first 7 characters of a git commit SHA for display.
+func ShortSHA(sha string) string {
+	return gitutil.ShortSHA(sha)
 }
