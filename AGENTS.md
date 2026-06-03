@@ -48,6 +48,12 @@ Skunkworks workflow — commits land directly on `main`.
     and calls through it. This includes `cmd/` — each cmd file defines an
     unexported interface for the `pkg/` function it calls, with a package-level
     var defaulting to the real implementation.
+12. **Never duplicate code across packages.** If a function would be identical
+    in two or more packages, put it in a shared package from the start. For
+    drivers, shared file operations go in `internal/driver/fs/`. Check what
+    already exists there before writing any file copy, MCP merge, hook merge,
+    or skill install logic. See [docs/development.md](docs/development.md)
+    for the driver development guide.
 
 ## Architecture
 
