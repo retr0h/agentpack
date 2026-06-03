@@ -31,7 +31,7 @@ import (
 	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/registry"
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 // StoreArchive exposes storeArchive for testing.

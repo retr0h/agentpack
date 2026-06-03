@@ -48,8 +48,8 @@ import (
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/remove"
-	"github.com/retr0h/agentpack/pkg/target"
-	"github.com/retr0h/agentpack/pkg/target/mocks"
+	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/target/mocks"
 )
 
 // initBareGitRepo creates a bare git repository at the given path that can be

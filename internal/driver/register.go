@@ -32,7 +32,7 @@ import (
 	"github.com/retr0h/agentpack/internal/driver/rovodev"
 	"github.com/retr0h/agentpack/internal/driver/warp"
 	"github.com/retr0h/agentpack/internal/driver/windsurf"
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 var once sync.Once //nolint:gochecknoglobals

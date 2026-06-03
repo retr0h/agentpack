@@ -23,7 +23,7 @@ package devin
 import (
 	"os"
 
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 // SetConfigDir replaces configDirFunc for testing.

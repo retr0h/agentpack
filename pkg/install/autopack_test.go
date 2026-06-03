@@ -43,8 +43,8 @@ import (
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/safety"
-	"github.com/retr0h/agentpack/pkg/target"
-	"github.com/retr0h/agentpack/pkg/target/mocks"
+	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/target/mocks"
 )
 
 // --------------------------------------------------------------------------

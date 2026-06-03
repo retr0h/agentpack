@@ -38,7 +38,7 @@ import (
 	"github.com/retr0h/agentpack/internal/driver/fs"
 	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/metadata"
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 // ClaudeCode is the target driver for Claude Code.

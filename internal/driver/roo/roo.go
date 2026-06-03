@@ -35,7 +35,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/driver/fs"
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 // Roo is the target driver for Roo Code.

@@ -31,7 +31,7 @@ import (
 	"path/filepath"
 
 	"github.com/retr0h/agentpack/internal/driver/fs"
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 // CodeBuddy is the target driver for CodeBuddy.

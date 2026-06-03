@@ -29,7 +29,7 @@ import (
 	"path/filepath"
 
 	"github.com/retr0h/agentpack/internal/configmerge"
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 // InstallSkillEntry copies a single skill/command/agent entry into the

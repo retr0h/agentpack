@@ -27,8 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/retr0h/agentpack/pkg/target"
-	"github.com/retr0h/agentpack/pkg/target/mocks"
+	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/target/mocks"
 )
 
 // --------------------------------------------------------------------------

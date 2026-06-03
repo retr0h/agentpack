@@ -36,7 +36,7 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 
 	"github.com/retr0h/agentpack/internal/driver/fs"
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 // Codex is the target driver for OpenAI Codex.

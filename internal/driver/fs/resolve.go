@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 // ResolveDirs returns (baseDir, skillsDir) for a target install.

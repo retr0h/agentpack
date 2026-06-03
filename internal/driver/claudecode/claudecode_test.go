@@ -14,7 +14,7 @@ import (
 	"github.com/retr0h/agentpack/internal/driver/claudecode"
 	"github.com/retr0h/agentpack/internal/driver/fs"
 	"github.com/retr0h/agentpack/internal/metadata"
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 func writeFile(t *testing.T, path, content string) {

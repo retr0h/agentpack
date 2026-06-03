@@ -33,7 +33,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/driver/hermes"
-	"github.com/retr0h/agentpack/pkg/target"
+	"github.com/retr0h/agentpack/internal/target"
 )
 
 func writeFile(t *testing.T, path, content string) {
