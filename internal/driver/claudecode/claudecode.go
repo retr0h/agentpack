@@ -34,6 +34,7 @@ import (
 	"strings"
 
 	"github.com/retr0h/agentpack/internal/configmerge"
+	"github.com/retr0h/agentpack/internal/driver/fs"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -390,7 +391,7 @@ func copyTree(mkdirAll func(string, os.FileMode) error, src, dst string) error {
 			return mkdirAll(tgt, 0o755)
 		}
 
-		return copyFile(path, tgt)
+		return fs.CopyFile(path, tgt)
 	})
 }
 
@@ -418,7 +419,7 @@ func copyTreeTracked(
 			return mkdirAll(tgt, 0o755)
 		}
 
-		if copyErr := copyFile(path, tgt); copyErr != nil {
+		if copyErr := fs.CopyFile(path, tgt); copyErr != nil {
 			return copyErr
 		}
 
@@ -442,24 +443,6 @@ func copyTreeTracked(
 	})
 
 	return files, err
-}
-
-func copyFile(src, dst string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", src, err)
-	}
-
-	info, err := os.Stat(src)
-	if err != nil {
-		return fmt.Errorf("stat %s: %w", src, err)
-	}
-
-	return os.WriteFile(dst, data, info.Mode())
 }
 
 func shortSHA(sha string) string {

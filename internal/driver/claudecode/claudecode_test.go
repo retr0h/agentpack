@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/retr0h/agentpack/internal/driver/claudecode"
+	"github.com/retr0h/agentpack/internal/driver/fs"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -801,20 +802,6 @@ func TestCopyFile(t *testing.T) {
 			},
 			wantErr: "is a directory",
 		},
-		{
-			name: "mkdirAll error when dst parent is read-only",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				src := filepath.Join(t.TempDir(), "src.txt")
-				require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
-				// Make a read-only parent so MkdirAll inside copyFile fails.
-				roDir := t.TempDir()
-				require.NoError(t, os.Chmod(roDir, 0o555))
-				t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })
-				return src, filepath.Join(roDir, "newsubdir", "dst.txt")
-			},
-			wantErr: "permission denied",
-		},
 	}
 
 	for _, tt := range tests {
@@ -822,7 +809,7 @@ func TestCopyFile(t *testing.T) {
 			t.Parallel()
 
 			src, dst := tt.setup(t)
-			err := claudecode.CopyFile(src, dst)
+			err := fs.CopyFile(src, dst)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

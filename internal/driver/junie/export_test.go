@@ -23,8 +23,6 @@ package junie
 import (
 	"context"
 	"os"
-
-	"github.com/retr0h/agentpack/pkg/target"
 )
 
 // SetUserHome replaces userHomeFunc for testing.
@@ -45,19 +43,4 @@ func SetOsMkdirAll(j *Junie, fn func(string, os.FileMode) error) {
 // InstallMCP exposes installMCP for testing.
 func InstallMCP(ctx context.Context, j *Junie, srcDir, mcpPath string) error {
 	return j.installMCP(ctx, srcDir, mcpPath)
-}
-
-// CopyTreeIfExists exposes copyTreeIfExists for testing.
-func CopyTreeIfExists(ctx context.Context, src, dst string) error {
-	return copyTreeIfExists(ctx, src, dst)
-}
-
-// CopyFile exposes copyFile for testing.
-func CopyFile(src, dst string) error {
-	return copyFile(src, dst)
-}
-
-// EnumerateFiles exposes enumerateFiles for testing.
-func EnumerateFiles(ctx context.Context, destDir, baseDir string) ([]target.InstalledFile, error) {
-	return enumerateFiles(ctx, destDir, baseDir)
 }

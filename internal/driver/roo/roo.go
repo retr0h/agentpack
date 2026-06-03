@@ -25,8 +25,6 @@ package roo
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -34,6 +32,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/retr0h/agentpack/internal/driver/fs"
 	"github.com/retr0h/agentpack/pkg/target"
 )
 
@@ -154,11 +153,11 @@ func (r *Roo) installFromDirs(
 	}
 
 	skillsSrc := filepath.Join(opts.SourceDir, "skills")
-	if err := copyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
+	if err := fs.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
 		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
-	files, err := enumerateFiles(ctx, destDir, baseDir)
+	files, err := fs.EnumerateFiles(ctx, destDir, baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate installed files: %w", err)
 	}
@@ -193,11 +192,11 @@ func (r *Roo) installSkillEntry(
 		return nil, fmt.Errorf("mkdir skills dir: %w", err)
 	}
 
-	if err := copyTreeIfExists(ctx, entry.Root, destDir); err != nil {
+	if err := fs.CopyTreeIfExists(ctx, entry.Root, destDir); err != nil {
 		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
-	return enumerateFiles(ctx, destDir, baseDir)
+	return fs.EnumerateFiles(ctx, destDir, baseDir)
 }
 
 // resolveDirs returns (baseDir, skillsDir) based on whether the install is
@@ -339,87 +338,4 @@ func writeYAMLConfig(path string, doc map[string]any) error {
 // List returns nil; Roo does not store managed-plugin metadata.
 func (r *Roo) List() ([]target.InstalledPlugin, error) {
 	return nil, nil
-}
-
-// enumerateFiles walks destDir and returns InstalledFile entries with paths
-// relative to baseDir and SHA256 digests.
-func enumerateFiles(ctx context.Context, destDir, baseDir string) ([]target.InstalledFile, error) {
-	var files []target.InstalledFile
-
-	err := filepath.WalkDir(destDir, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil || d.IsDir() {
-			return walkErr
-		}
-
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-
-		rel, relErr := filepath.Rel(baseDir, path)
-		if relErr != nil {
-			return relErr
-		}
-
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
-
-		h := sha256.Sum256(data)
-		files = append(files, target.InstalledFile{
-			Path:   rel,
-			SHA256: hex.EncodeToString(h[:]),
-		})
-
-		return nil
-	})
-
-	return files, err
-}
-
-func copyTreeIfExists(ctx context.Context, src string, dst string) error {
-	if _, err := os.Stat(src); os.IsNotExist(err) {
-		return nil
-	}
-
-	return filepath.WalkDir(src, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return fmt.Errorf("rel path: %w", err)
-		}
-
-		tgt := filepath.Join(dst, rel)
-
-		if d.IsDir() {
-			return os.MkdirAll(tgt, 0o755)
-		}
-
-		return copyFile(path, tgt)
-	})
-}
-
-func copyFile(src string, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", src, err)
-	}
-
-	info, err := os.Stat(src)
-	if err != nil {
-		return fmt.Errorf("stat %s: %w", src, err)
-	}
-
-	if err := os.WriteFile(dst, data, info.Mode()); err != nil {
-		return fmt.Errorf("write %s: %w", dst, err)
-	}
-
-	return nil
 }

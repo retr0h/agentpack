@@ -35,11 +35,6 @@ func SetOsMkdirAll(cc *ClaudeCode, fn func(string, os.FileMode) error) {
 	cc.mkdirAllFunc = fn
 }
 
-// CopyFile exposes copyFile for testing.
-func CopyFile(src, dst string) error {
-	return copyFile(src, dst)
-}
-
 // CopyTree exposes copyTree for testing.
 func CopyTree(mkdirAll func(string, os.FileMode) error, src, dst string) error {
 	return copyTree(mkdirAll, src, dst)
