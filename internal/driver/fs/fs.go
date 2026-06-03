@@ -36,15 +36,20 @@ import (
 )
 
 // CopyFile copies a single file from src to dst, preserving permissions.
+// Symlinks are rejected to prevent following links to sensitive files.
 func CopyFile(src, dst string) error {
+	info, err := os.Lstat(src)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", src, err)
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("symlinks not allowed: %s", src)
+	}
+
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", src, err)
-	}
-
-	info, err := os.Stat(src)
-	if err != nil {
-		return fmt.Errorf("stat %s: %w", src, err)
 	}
 
 	if err := os.WriteFile(dst, data, info.Mode()); err != nil {
@@ -69,6 +74,10 @@ func CopyTreeIfExists(ctx context.Context, src, dst string) error {
 
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
 		}
 
 		rel, err := filepath.Rel(src, path)

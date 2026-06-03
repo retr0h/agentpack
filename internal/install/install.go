@@ -417,15 +417,10 @@ func nameFromSource(source string) string {
 }
 
 // UpdateManifests writes the installed package into agentpack-packages.yaml
-// and agentpack.lock in the current working directory.
-func UpdateManifests(source string, skills, targets []string, result *Result) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get cwd: %w", err)
-	}
-
+// and agentpack.lock in the given directory.
+func UpdateManifests(dir, source string, skills, targets []string, result *Result) error {
 	// Update agentpack-packages.yaml.
-	pkgPath := filepath.Join(cwd, "agentpack-packages.yaml")
+	pkgPath := filepath.Join(dir, "agentpack-packages.yaml")
 
 	cfg, err := packages.Load(pkgPath)
 	if err != nil {
@@ -440,7 +435,7 @@ func UpdateManifests(source string, skills, targets []string, result *Result) er
 	}
 
 	// Update agentpack.lock.
-	lockPath := filepath.Join(cwd, "agentpack.lock")
+	lockPath := filepath.Join(dir, "agentpack.lock")
 
 	lf, err := lock.Load(lockPath)
 	if err != nil {
@@ -489,14 +484,9 @@ func UpdateManifests(source string, skills, targets []string, result *Result) er
 // agentpack.lock, and the hooks section of .claude/settings.json. All
 // operations are best-effort: a missing file or missing entry is not an error,
 // because users may have installed a package without a managed yaml/lock.
-func RemoveManifests(name, skill string) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	pkgPath := filepath.Join(cwd, "agentpack-packages.yaml")
-	lockPath := filepath.Join(cwd, "agentpack.lock")
+func RemoveManifests(dir, name, skill string) {
+	pkgPath := filepath.Join(dir, "agentpack-packages.yaml")
+	lockPath := filepath.Join(dir, "agentpack.lock")
 
 	if skill != "" {
 		if cfg, loadErr := packages.Load(pkgPath); loadErr == nil {
@@ -532,7 +522,7 @@ func RemoveManifests(name, skill string) {
 		_ = lock.Save(lockPath, lf)
 	}
 
-	settingsPath := filepath.Join(cwd, ".claude", "settings.json")
+	settingsPath := filepath.Join(dir, ".claude", "settings.json")
 	_ = configmerge.RemoveHooks(settingsPath, name)
 }
 

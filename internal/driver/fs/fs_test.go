@@ -58,7 +58,21 @@ func TestCopyFile(t *testing.T) {
 				return filepath.Join(t.TempDir(), "missing.txt"),
 					filepath.Join(t.TempDir(), "dst.txt")
 			},
-			wantErr: "read",
+			wantErr: "stat",
+		},
+		{
+			name: "error when source is a symlink",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				target := filepath.Join(dir, "real.txt")
+				require.NoError(t, os.WriteFile(target, []byte("secret"), 0o644))
+				link := filepath.Join(dir, "link.txt")
+				require.NoError(t, os.Symlink(target, link))
+
+				return link, filepath.Join(t.TempDir(), "dst.txt")
+			},
+			wantErr: "symlinks not allowed",
 		},
 		{
 			name: "error when destination is a directory",
@@ -128,6 +142,32 @@ func TestCopyTreeIfExists(t *testing.T) {
 				data, err = os.ReadFile(filepath.Join(dst, "sub", "b.txt"))
 				require.NoError(t, err)
 				assert.Equal(t, []byte("b"), data)
+			},
+		},
+		{
+			name: "skips symlinks in source tree",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				require.NoError(
+					t,
+					os.WriteFile(filepath.Join(src, "real.txt"), []byte("ok"), 0o644),
+				)
+				require.NoError(
+					t,
+					os.Symlink(filepath.Join(src, "real.txt"), filepath.Join(src, "link.txt")),
+				)
+
+				return src, filepath.Join(t.TempDir(), "out")
+			},
+			check: func(t *testing.T, dst string) {
+				t.Helper()
+				// Real file was copied.
+				_, err := os.Stat(filepath.Join(dst, "real.txt"))
+				require.NoError(t, err)
+				// Symlink was skipped.
+				_, err = os.Stat(filepath.Join(dst, "link.txt"))
+				assert.True(t, os.IsNotExist(err))
 			},
 		},
 		{

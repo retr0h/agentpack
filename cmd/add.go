@@ -93,7 +93,12 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 			return err
 		}
 
-		if updateErr := install.UpdateManifests(source, skills, installTargets, result); updateErr != nil {
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			return fmt.Errorf("get cwd: %w", cwdErr)
+		}
+
+		if updateErr := install.UpdateManifests(cwd, source, skills, installTargets, result); updateErr != nil {
 			return updateErr
 		}
 

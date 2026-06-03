@@ -22,6 +22,8 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -81,7 +83,12 @@ append @skill to the package name: agentpack del my-package@my-skill`,
 			return err
 		}
 
-		install.RemoveManifests(name, skill)
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			return fmt.Errorf("get cwd: %w", cwdErr)
+		}
+
+		install.RemoveManifests(cwd, name, skill)
 
 		if outputFormat == "json" {
 			return jsonOutput(out, result)
