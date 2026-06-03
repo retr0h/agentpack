@@ -121,8 +121,12 @@ type PackageManifest struct {
 	// Scope is ScopeLocal or ScopeGlobal.
 	Scope Scope `yaml:"scope,omitempty" json:"scope,omitempty"`
 
-	// SelectedSkills records which skills were explicitly chosen via @skill
-	// or --skill. When empty, the entire repo was installed.
+	// SelectedContent records which content entries were explicitly chosen via
+	// :type/name selectors (ADR-010). When empty, the entire repo was installed.
+	SelectedContent []string `yaml:"selectedContent,omitempty" json:"selectedContent,omitempty"`
+
+	// SelectedSkills records which skills were explicitly chosen. Deprecated:
+	// use SelectedContent instead. Maintained for backward compatibility.
 	SelectedSkills []string `yaml:"selectedSkills,omitempty" json:"selectedSkills,omitempty"`
 
 	// Files is the complete list of files written to disk.

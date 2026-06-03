@@ -220,3 +220,7 @@ func HasContentDirs(dir string) bool {
 func MergeFiles(existing, incoming []registry.InstalledFile) []registry.InstalledFile {
 	return mergeFiles(existing, incoming)
 }
+
+// ParseSourceExported exposes ParseSource for testing from outside the package.
+// (ParseSource is already exported, but this alias follows the export_test pattern.)
+var ParseSourceExported = ParseSource

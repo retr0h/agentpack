@@ -118,7 +118,6 @@ func TestAddCmd(t *testing.T) {
 			t.Chdir(t.TempDir())
 
 			origInstaller := pkgInstaller
-			origSkills := installSkills
 			origTargets := installTargets
 			origTrust := installTrust
 			origGlobal := installGlobal
@@ -126,14 +125,12 @@ func TestAddCmd(t *testing.T) {
 
 			defer func() {
 				pkgInstaller = origInstaller
-				installSkills = origSkills
 				installTargets = origTargets
 				installTrust = origTrust
 				installGlobal = origGlobal
 				outputFormat = origFormat
 			}()
 
-			installSkills = nil
 			installTargets = nil
 			installTrust = false
 			installGlobal = false

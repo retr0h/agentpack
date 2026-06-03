@@ -41,24 +41,36 @@ var pkgRemover remover = pkgremove.New()
 var delGlobal bool
 
 var delCmd = &cobra.Command{
-	Use:   "del <name[@skill]>",
+	Use:   "del <name[:type/name]...>",
 	Short: "Delete an installed agentpack plugin",
 	Long: `Delete an installed agentpack plugin. Only the exact files recorded in
 the plugin registry are deleted. User-modified files are skipped. The .git
 directory is never touched.
 
-To remove a single skill from a package without deleting the entire package,
-append @skill to the package name: agentpack del my-package@my-skill`,
+To remove specific content from a package without deleting the entire package,
+append :type/name selectors: agentpack del my-package:skill/my-skill`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		name, skill := install.ParseAtSkill(args[0])
+		spec := install.ParseSource(args[0])
 
-		displayName := name
-		if skill != "" {
-			displayName = name + "@" + skill
+		displayName := spec.Source
+		if len(spec.Selectors) > 0 {
+			for _, s := range spec.Selectors {
+				displayName += ":" + s.Type + "/" + s.Name
+			}
+		}
+
+		// For partial removal via selectors, use the first skill selector
+		// for backward compatibility with the remove pipeline.
+		skill := ""
+		if len(spec.Selectors) > 0 {
+			skills := install.SelectorsToSkillFilter(spec.Selectors)
+			if len(skills) > 0 {
+				skill = skills[0]
+			}
 		}
 
 		var onStep func(pkgremove.Step)
@@ -74,7 +86,7 @@ append @skill to the package name: agentpack del my-package@my-skill`,
 		}
 
 		result, err := pkgRemover.Run(ctx, pkgremove.Options{
-			Name:   name,
+			Name:   spec.Source,
 			Skill:  skill,
 			Global: delGlobal,
 			OnStep: onStep,
@@ -88,7 +100,7 @@ append @skill to the package name: agentpack del my-package@my-skill`,
 			return fmt.Errorf("get cwd: %w", cwdErr)
 		}
 
-		install.RemoveManifests(cwd, name, skill)
+		install.RemoveManifests(cwd, spec.Source, spec.Selectors)
 
 		if outputFormat == "json" {
 			return jsonOutput(out, result)

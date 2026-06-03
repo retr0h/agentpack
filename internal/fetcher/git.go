@@ -42,7 +42,8 @@ type GitFetcher struct{}
 //
 //   - "github.com/org/repo"            — resolved to https://github.com/org/repo.git
 //   - "https://github.com/org/repo.git" — used as-is
-//   - Either form may include "#ref" to specify a tag, branch, or SHA.
+//   - Either form may include "@ref" (ADR-010) or "#ref" (legacy) to specify a
+//     tag, branch, or SHA.
 func (f *GitFetcher) FetchWithResult(
 	ctx context.Context,
 	source string,
@@ -211,17 +212,33 @@ func defaultCacheDir() (string, error) {
 	return dir, nil
 }
 
-// parseGitSource splits "host/org/repo#ref" into (rawURL, ref).
+// parseGitSource splits "host/org/repo@ref" or "host/org/repo#ref" into
+// (rawURL, ref). The @ syntax (ADR-010) is preferred; #ref is still accepted
+// for backward compatibility. Any :selectors are stripped from the URL.
 func parseGitSource(source string) (rawURL string, ref string, err error) {
 	if source == "" {
 		return "", "", fmt.Errorf("git source must not be empty")
 	}
 
-	if idx := strings.LastIndex(source, "#"); idx >= 0 {
-		rawURL = source[:idx]
-		ref = source[idx+1:]
+	s := source
+
+	// Strip :selectors (ADR-010) before parsing ref. Skip "://" scheme separators.
+	if idx := strings.Index(s, ":"); idx >= 0 {
+		isScheme := idx+2 < len(s) && s[idx+1] == '/' && s[idx+2] == '/'
+		if !isScheme {
+			s = s[:idx]
+		}
+	}
+
+	// Try @ref (ADR-010), then fall back to #ref (legacy).
+	if idx := strings.Index(s, "@"); idx > 0 {
+		rawURL = s[:idx]
+		ref = s[idx+1:]
+	} else if idx := strings.LastIndex(s, "#"); idx >= 0 {
+		rawURL = s[:idx]
+		ref = s[idx+1:]
 	} else {
-		rawURL = source
+		rawURL = s
 	}
 
 	if rawURL == "" {

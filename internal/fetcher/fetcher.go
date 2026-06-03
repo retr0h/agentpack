@@ -69,10 +69,26 @@ var gitHosts = []string{
 func New(source string) (Fetcher, error) {
 	source = ExpandShorthand(source)
 
-	// Strip a leading fragment-only source for scheme detection.
+	// Strip #ref (legacy), :selectors (ADR-010), and @ref (ADR-010) for
+	// scheme detection. Handle "://" schemes carefully.
 	bare := source
-	if idx := strings.LastIndex(source, "#"); idx >= 0 {
-		bare = source[:idx]
+	if idx := strings.LastIndex(bare, "#"); idx >= 0 {
+		bare = bare[:idx]
+	}
+
+	// Strip :selectors only when the colon is NOT part of a "://" scheme.
+	if idx := strings.Index(bare, ":"); idx >= 0 {
+		isScheme := idx+2 < len(bare) && bare[idx+1] == '/' && bare[idx+2] == '/'
+		if !isScheme {
+			bare = bare[:idx]
+		}
+	}
+
+	// Strip @ref — but not from URLs that contain "://" (to preserve host).
+	if !strings.Contains(bare, "://") {
+		if idx := strings.Index(bare, "@"); idx >= 0 {
+			bare = bare[:idx]
+		}
 	}
 
 	switch {
@@ -95,10 +111,25 @@ func New(source string) (Fetcher, error) {
 // ExpandShorthand converts owner/repo shorthand to github.com/owner/repo.
 // A source is shorthand when it has exactly one slash, no dots, no scheme,
 // and no path separators that suggest a local path.
+//
+// The source may include @ref and :selector suffixes per ADR-010; these are
+// stripped before checking the shorthand pattern and preserved in the output.
 func ExpandShorthand(source string) string {
 	bare := source
-	if idx := strings.LastIndex(source, "#"); idx >= 0 {
-		bare = source[:idx]
+
+	// Strip #ref fragment (legacy) for pattern matching.
+	if idx := strings.LastIndex(bare, "#"); idx >= 0 {
+		bare = bare[:idx]
+	}
+
+	// Strip :selectors (ADR-010) for pattern matching.
+	if idx := strings.Index(bare, ":"); idx >= 0 {
+		bare = bare[:idx]
+	}
+
+	// Strip @ref (ADR-010) for pattern matching.
+	if idx := strings.Index(bare, "@"); idx >= 0 {
+		bare = bare[:idx]
 	}
 
 	if strings.Contains(bare, "://") ||

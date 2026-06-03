@@ -667,6 +667,112 @@ func TestLockfile_RemoveSkill(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
+// TestLockfile_RemoveContent
+// --------------------------------------------------------------------------
+
+func TestLockfile_RemoveContent(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		initial         lock.LockedPackage
+		removeContent   []string
+		wantContent     []string
+		wantFilePaths   []string
+		wantAbsentPaths []string
+	}{
+		{
+			name: "removes named content and prunes matching files",
+			initial: lock.LockedPackage{
+				Name:    "prune-pkg",
+				Source:  "github.com/org/prune",
+				SHA:     "sha1",
+				Content: []string{"skill/k8s", "skill/react", "command/scan"},
+				Targets: []string{"claude-code"},
+				Files: []lock.LockedFile{
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "aaa", Target: "claude-code"},
+					{Path: ".claude/skills/react/SKILL.md", SHA256: "bbb", Target: "claude-code"},
+					{Path: "commands/scan.md", SHA256: "ccc", Target: "claude-code"},
+				},
+			},
+			removeContent:   []string{"skill/react"},
+			wantContent:     []string{"skill/k8s", "command/scan"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md", "commands/scan.md"},
+			wantAbsentPaths: []string{".claude/skills/react/SKILL.md"},
+		},
+		{
+			name: "remove content not in list is a no-op",
+			initial: lock.LockedPackage{
+				Name:    "noop-pkg",
+				Source:  "github.com/org/noop",
+				SHA:     "sha1",
+				Content: []string{"skill/k8s"},
+				Files: []lock.LockedFile{
+					{Path: ".claude/skills/k8s/SKILL.md", SHA256: "aaa", Target: "claude-code"},
+				},
+			},
+			removeContent:   []string{"skill/nonexistent"},
+			wantContent:     []string{"skill/k8s"},
+			wantFilePaths:   []string{".claude/skills/k8s/SKILL.md"},
+			wantAbsentPaths: nil,
+		},
+		{
+			name: "remove content from nonexistent package is a no-op",
+			initial: lock.LockedPackage{
+				Name: "other-pkg",
+			},
+			removeContent:   []string{"skill/k8s"},
+			wantContent:     nil,
+			wantFilePaths:   nil,
+			wantAbsentPaths: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			lf := &lock.Lockfile{LockVersion: 2}
+			lf.Set(tt.initial)
+
+			targetName := tt.initial.Name
+			if tt.name == "remove content from nonexistent package is a no-op" {
+				targetName = "does-not-exist"
+			}
+
+			lf.RemoveContent(targetName, tt.removeContent)
+
+			got := lf.Find(tt.initial.Name)
+			if tt.name == "remove content from nonexistent package is a no-op" {
+				require.NotNil(t, lf.Find(tt.initial.Name))
+				return
+			}
+
+			require.NotNil(t, got)
+
+			if tt.wantContent == nil {
+				assert.Empty(t, got.Content)
+			} else {
+				assert.ElementsMatch(t, tt.wantContent, got.Content)
+			}
+
+			gotPaths := make([]string, len(got.Files))
+			for i, f := range got.Files {
+				gotPaths[i] = f.Path
+			}
+
+			if tt.wantFilePaths != nil {
+				assert.ElementsMatch(t, tt.wantFilePaths, gotPaths)
+			}
+
+			for _, absent := range tt.wantAbsentPaths {
+				assert.NotContains(t, gotPaths, absent)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
 // TestLockfile_RemoveEntry
 // --------------------------------------------------------------------------
 

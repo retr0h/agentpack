@@ -24,9 +24,9 @@
 //
 //	i := install.New()
 //	result, err := i.Run(ctx, install.Options{
-//	    Source: "github.com/org/skills-repo",
-//	    Skills: []string{"review"},    // optional: only install named skills
-//	    OnStep: func(s install.Step) { fmt.Println(s.Name, s.Detail) },
+//	    Source:    "github.com/org/skills-repo",
+//	    Selectors: []install.ContentSelector{{Type: "skill", Name: "review"}},
+//	    OnStep:    func(s install.Step) { fmt.Println(s.Name, s.Detail) },
 //	})
 //
 // Install supports git repos, local .agentpack archives, and HTTP/HTTPS URLs.
@@ -90,13 +90,21 @@ type Options struct {
 	// Dir is the root directory for installation (cwd for local, home for global).
 	Dir string
 
-	// Skills restricts the install to named skills only. Each value is matched
-	// against the skill subdirectory name (e.g. "review" matches
-	// skills/review/SKILL.md). When empty all skills are installed.
+	// Ref is the git ref (tag, branch, SHA) to check out. Passed from the
+	// "@ref" portion of the source string per ADR-010.
+	Ref string
+
+	// Selectors restricts the install to specific content entries. Each
+	// selector is a type/name pair (e.g. ContentSelector{Type: "skill",
+	// Name: "review"}). When empty all content is installed. Per ADR-010.
+	Selectors []ContentSelector
+
+	// Skills restricts the install to named skills only. Deprecated: use
+	// Selectors instead. Maintained for backward compatibility.
 	Skills []string
 
-	// Agents restricts the install to named agents only. When empty all agents
-	// are installed.
+	// Agents restricts the install to named agents only. Deprecated: use
+	// Selectors instead. Maintained for backward compatibility.
 	Agents []string
 
 	// OriginalSource preserves the user-facing source URL when Source is
@@ -175,11 +183,7 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 	gf, _ := f.(*fetcher.GitFetcher)
 
 	cloneURL := opts.Source
-	ref := ""
-	if idx := strings.LastIndex(cloneURL, "#"); idx >= 0 {
-		ref = cloneURL[idx+1:]
-		cloneURL = cloneURL[:idx]
-	}
+	ref := opts.Ref
 
 	sha, err := gf.FetchWithResult(ctx, opts.Source, cloneDir)
 	if err != nil {
@@ -206,14 +210,24 @@ func runFromGit(ctx context.Context, opts Options, f fetcher.Fetcher) (*Result, 
 		version = ref
 	}
 
+	// Derive skill/agent filters from Selectors (ADR-010) or fall back to
+	// the deprecated Skills/Agents fields.
+	skillFilter := opts.Skills
+	agentFilter := opts.Agents
+
+	if len(opts.Selectors) > 0 {
+		skillFilter = SelectorsToSkillFilter(opts.Selectors)
+		agentFilter = SelectorsToAgentFilter(opts.Selectors)
+	}
+
 	archivePath, err := autoPackageWithVersion(
 		ctx,
 		cloneDir,
 		name,
 		sha,
 		version,
-		opts.Skills,
-		opts.Agents,
+		skillFilter,
+		agentFilter,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto-package: %w", err)
@@ -374,8 +388,27 @@ func nameFromSource(source string) string {
 		return base
 	}
 
-	// Strip #ref fragment.
+	// Strip #ref fragment (legacy).
 	if idx := strings.LastIndex(s, "#"); idx >= 0 {
+		s = s[:idx]
+	}
+
+	// Strip :selectors (ADR-010) — only when not part of a scheme (://).
+	if idx := strings.Index(s, ":"); idx >= 0 {
+		// Check if this colon is part of a "://" scheme.
+		if idx+2 < len(s) && s[idx+1] == '/' && s[idx+2] == '/' {
+			// scheme — strip scheme first, then look for selectors in remainder.
+			remainder := s[idx+3:]
+			if selIdx := strings.Index(remainder, ":"); selIdx >= 0 {
+				s = s[:idx+3+selIdx]
+			}
+		} else {
+			s = s[:idx]
+		}
+	}
+
+	// Strip @ref version pin (ADR-010).
+	if idx := strings.Index(s, "@"); idx >= 0 {
 		s = s[:idx]
 	}
 
@@ -418,7 +451,12 @@ func nameFromSource(source string) string {
 
 // UpdateManifests writes the installed package into agentpack-packages.yaml
 // and agentpack.lock in the given directory.
-func UpdateManifests(dir, source string, skills, targets []string, result *Result) error {
+func UpdateManifests(
+	dir, source string,
+	content, targets []string,
+	ref string,
+	result *Result,
+) error {
 	// Update agentpack-packages.yaml.
 	pkgPath := filepath.Join(dir, "agentpack-packages.yaml")
 
@@ -427,7 +465,7 @@ func UpdateManifests(dir, source string, skills, targets []string, result *Resul
 		return fmt.Errorf("load packages: %w", err)
 	}
 
-	pkg := packages.BuildFromSource(result.Name, source, skills, targets)
+	pkg := packages.BuildFromSource(result.Name, source, content, targets, ref)
 	cfg.Add(pkg)
 
 	if err := packages.Save(pkgPath, cfg); err != nil {
@@ -442,12 +480,6 @@ func UpdateManifests(dir, source string, skills, targets []string, result *Resul
 		return fmt.Errorf("load lock: %w", err)
 	}
 
-	// Strip the #ref fragment for the source field in the lock.
-	lockSource := source
-	if idx := strings.LastIndex(lockSource, "#"); idx >= 0 {
-		lockSource = lockSource[:idx]
-	}
-
 	var lockedFiles []lock.LockedFile
 	var lockedTargets []string
 
@@ -459,16 +491,16 @@ func UpdateManifests(dir, source string, skills, targets []string, result *Resul
 
 	lp := lock.LockedPackage{
 		Name:     result.Name,
-		Source:   lockSource,
+		Source:   source,
 		SHA:      result.SHA,
 		Resolved: time.Now().UTC().Format(time.RFC3339),
-		Skills:   skills,
+		Content:  content,
 		Targets:  lockedTargets,
 		Files:    lockedFiles,
 	}
 
-	if pkg.Ref != "" {
-		lp.Ref = pkg.Ref
+	if ref != "" {
+		lp.Ref = ref
 	}
 
 	lf.Set(lp)
@@ -484,28 +516,42 @@ func UpdateManifests(dir, source string, skills, targets []string, result *Resul
 // agentpack.lock, and the hooks section of .claude/settings.json. All
 // operations are best-effort: a missing file or missing entry is not an error,
 // because users may have installed a package without a managed yaml/lock.
-func RemoveManifests(dir, name, skill string) {
+//
+// When selectors is non-empty, only matching content entries are removed from
+// the package (partial removal). When empty the entire package is removed.
+func RemoveManifests(dir, name string, selectors []ContentSelector) {
 	pkgPath := filepath.Join(dir, "agentpack-packages.yaml")
 	lockPath := filepath.Join(dir, "agentpack.lock")
 
-	if skill != "" {
+	if len(selectors) > 0 {
+		// Build set of "type/name" strings to remove.
+		removeSet := make(map[string]bool, len(selectors))
+		for _, s := range selectors {
+			removeSet[s.Type+"/"+s.Name] = true
+		}
+
 		if cfg, loadErr := packages.Load(pkgPath); loadErr == nil {
 			if p := cfg.Find(name); p != nil {
-				remaining := make([]string, 0, len(p.Skills))
-				for _, s := range p.Skills {
-					if s != skill {
-						remaining = append(remaining, s)
+				remaining := make([]string, 0, len(p.Content))
+				for _, c := range p.Content {
+					if !removeSet[c] {
+						remaining = append(remaining, c)
 					}
 				}
 
-				p.Skills = remaining
+				p.Content = remaining
 			}
 
 			_ = packages.Save(pkgPath, cfg)
 		}
 
 		if lf, loadErr := lock.Load(lockPath); loadErr == nil {
-			lf.RemoveSkill(name, skill)
+			contentStrs := make([]string, len(selectors))
+			for i, s := range selectors {
+				contentStrs[i] = s.Type + "/" + s.Name
+			}
+
+			lf.RemoveContent(name, contentStrs)
 			_ = lock.Save(lockPath, lf)
 		}
 
@@ -526,18 +572,106 @@ func RemoveManifests(dir, name, skill string) {
 	_ = configmerge.RemoveHooks(settingsPath, name)
 }
 
-// ParseAtSkill splits "owner/repo@skill" into ("owner/repo", "skill").
-// If no @ is present, returns (source, "").
-func ParseAtSkill(source string) (string, string) {
-	if idx := strings.LastIndex(source, "@"); idx > 0 {
-		before := source[:idx]
-		after := source[idx+1:]
-		if after != "" && !strings.Contains(after, "/") {
-			return before, after
+// ContentSelector represents a typed content selector in the form "type/name".
+type ContentSelector struct {
+	Type string // skill, command, hook, agent, mcp, config
+	Name string // entry name
+}
+
+// ValidContentTypes lists the six recognized content types per ADR-009.
+var ValidContentTypes = []string{"skill", "command", "hook", "agent", "mcp", "config"}
+
+// SourceSpec holds the parsed components of a source string:
+// "owner/repo@v2.0.0:skill/k8s:command/scan".
+type SourceSpec struct {
+	Source    string            // owner/repo or URL
+	Ref       string            // git ref from @ (tag, branch, SHA)
+	Selectors []ContentSelector // from : segments
+}
+
+// ParseSource parses "owner/repo@v2.0.0:skill/k8s:command/scan" into its
+// components. The parsing order follows ADR-010:
+//  1. Split on ":" -- first segment may contain "@", rest are selectors.
+//  2. From the first segment, split on first "@" -- left is source, right is ref.
+//  3. Each selector is validated as "type/name".
+func ParseSource(raw string) SourceSpec {
+	parts := strings.Split(raw, ":")
+	head := parts[0]
+
+	var spec SourceSpec
+
+	// Split the head on the first "@" to separate source from ref.
+	if idx := strings.Index(head, "@"); idx > 0 {
+		spec.Source = head[:idx]
+		spec.Ref = head[idx+1:]
+	} else {
+		spec.Source = head
+	}
+
+	// Remaining parts are selectors in "type/name" form.
+	for _, sel := range parts[1:] {
+		if sel == "" {
+			continue
+		}
+
+		slashIdx := strings.Index(sel, "/")
+		if slashIdx < 0 {
+			continue
+		}
+
+		spec.Selectors = append(spec.Selectors, ContentSelector{
+			Type: sel[:slashIdx],
+			Name: sel[slashIdx+1:],
+		})
+	}
+
+	return spec
+}
+
+// SelectorsToSkillFilter extracts skill names from selectors for backward
+// compatibility with the skill-filter pipeline. Returns nil when no skill
+// selectors are present.
+func SelectorsToSkillFilter(selectors []ContentSelector) []string {
+	var skills []string
+
+	for _, s := range selectors {
+		if s.Type == "skill" {
+			skills = append(skills, s.Name)
 		}
 	}
 
-	return source, ""
+	return skills
+}
+
+// SelectorsToAgentFilter extracts agent names from selectors for backward
+// compatibility with the agent-filter pipeline. Returns nil when no agent
+// selectors are present.
+func SelectorsToAgentFilter(selectors []ContentSelector) []string {
+	var agents []string
+
+	for _, s := range selectors {
+		if s.Type == "agent" {
+			agents = append(agents, s.Name)
+		}
+	}
+
+	return agents
+}
+
+// SelectorsToContent converts selectors to the "type/name" string format
+// used in the packages.yaml content field.
+func SelectorsToContent(selectors []ContentSelector) []string {
+	if len(selectors) == 0 {
+		return nil
+	}
+
+	content := make([]string, len(selectors))
+
+	for i, s := range selectors {
+		content[i] = s.Type + "/" + s.Name
+	}
+
+	return content
 }
 
 // emitStep calls opts.OnStep when the callback is set.
@@ -751,18 +885,20 @@ func installFromDir(
 	}
 
 	manifest := &registry.PackageManifest{
-		Name:           meta.Name,
-		Source:         registrySource(opts),
-		SHA:            meta.GitCommitSHA,
-		Version:        meta.Version,
-		Installed:      time.Now().UTC().Format(time.RFC3339),
-		Scope:          scope,
-		SelectedSkills: opts.Skills,
-		Files:          allFiles,
+		Name:            meta.Name,
+		Source:          registrySource(opts),
+		SHA:             meta.GitCommitSHA,
+		Version:         meta.Version,
+		Installed:       time.Now().UTC().Format(time.RFC3339),
+		Scope:           scope,
+		SelectedContent: SelectorsToContent(opts.Selectors),
+		SelectedSkills:  opts.Skills,
+		Files:           allFiles,
 	}
 
 	if existing, loadErr := registryLoad(meta.Name); loadErr == nil && existing != nil {
 		manifest.Files = mergeFiles(existing.Files, manifest.Files)
+		manifest.SelectedContent = mergeStrings(existing.SelectedContent, manifest.SelectedContent)
 		manifest.SelectedSkills = mergeStrings(existing.SelectedSkills, manifest.SelectedSkills)
 	}
 

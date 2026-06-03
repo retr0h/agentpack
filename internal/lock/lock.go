@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -46,6 +47,7 @@ type LockedPackage struct {
 	Ref      string       `yaml:"ref,omitempty"     json:"ref,omitempty"`
 	SHA      string       `yaml:"sha"               json:"sha"`
 	Resolved string       `yaml:"resolved"          json:"resolved"`
+	Content  []string     `yaml:"content,omitempty" json:"content,omitempty"`
 	Skills   []string     `yaml:"skills,omitempty"  json:"skills,omitempty"`
 	Targets  []string     `yaml:"targets,omitempty" json:"targets,omitempty"`
 	Files    []LockedFile `yaml:"files,omitempty"   json:"files,omitempty"`
@@ -102,6 +104,7 @@ func (lf *Lockfile) Set(p LockedPackage) {
 	for i, existing := range lf.Packages {
 		if existing.Name == p.Name {
 			p.Files = mergeLockedFiles(existing.Files, p.Files)
+			p.Content = mergeStrings(existing.Content, p.Content)
 			p.Skills = mergeStrings(existing.Skills, p.Skills)
 			p.Targets = mergeStrings(existing.Targets, p.Targets)
 			lf.Packages[i] = p
@@ -125,8 +128,52 @@ func (lf *Lockfile) Remove(name string) {
 	lf.Packages = updated
 }
 
+// RemoveContent removes content entries from an existing package and prunes
+// matching files. Each entry in contentStrs is a "type/name" selector (e.g.
+// "skill/k8s"). Per ADR-010 this replaces the old RemoveSkill method.
+func (lf *Lockfile) RemoveContent(name string, contentStrs []string) {
+	p := lf.Find(name)
+	if p == nil {
+		return
+	}
+
+	removeSet := make(map[string]bool, len(contentStrs))
+	for _, c := range contentStrs {
+		removeSet[c] = true
+	}
+
+	// Prune the content list.
+	remaining := make([]string, 0, len(p.Content))
+	for _, c := range p.Content {
+		if !removeSet[c] {
+			remaining = append(remaining, c)
+		}
+	}
+
+	p.Content = remaining
+
+	// Prune files matching any removed content selector.
+	var keptFiles []LockedFile
+	for _, f := range p.Files {
+		keep := true
+		for _, c := range contentStrs {
+			if fileMatchesContent(f.Path, c) {
+				keep = false
+				break
+			}
+		}
+
+		if keep {
+			keptFiles = append(keptFiles, f)
+		}
+	}
+
+	p.Files = keptFiles
+}
+
 // RemoveSkill removes a skill from an existing entry's Skills list and
 // prunes any files containing that skill name in their path.
+// Deprecated: use RemoveContent instead. Maintained for backward compatibility.
 func (lf *Lockfile) RemoveSkill(name, skill string) {
 	p := lf.Find(name)
 	if p == nil {
@@ -161,6 +208,46 @@ func (lf *Lockfile) Find(name string) *LockedPackage {
 	}
 
 	return nil
+}
+
+// fileMatchesContent checks whether a file path matches a "type/name" content
+// selector. The type maps to a directory (e.g. "skill" -> "skills", "command"
+// -> "commands") and the name is matched as a path component.
+func fileMatchesContent(path, content string) bool {
+	parts := strings.SplitN(content, "/", 2)
+	if len(parts) != 2 {
+		return false
+	}
+
+	contentType, contentName := parts[0], parts[1]
+
+	// Map content type to directory name.
+	var dirName string
+	switch contentType {
+	case "skill":
+		dirName = "skills"
+	case "command":
+		dirName = "commands"
+	case "hook":
+		dirName = "hooks"
+	case "agent":
+		dirName = "agents"
+	case "mcp":
+		dirName = "mcp"
+	case "config":
+		dirName = "settings"
+	default:
+		return false
+	}
+
+	normalized := filepath.ToSlash(path)
+
+	// Match patterns like /skills/name/ or skills/name/
+	midNeedle := "/" + dirName + "/" + contentName + "/"
+	leadNeedle := dirName + "/" + contentName + "/"
+
+	return strings.Contains(normalized, midNeedle) ||
+		strings.HasPrefix(normalized, leadNeedle)
 }
 
 func fileMatchesSkill(path, skill string) bool {

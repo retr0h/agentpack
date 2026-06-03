@@ -49,7 +49,12 @@ type Package struct {
 	// the source is not a git repository.
 	Source string `yaml:"source,omitempty"`
 
-	// Skills restricts the install to named skills. Optional.
+	// Content restricts the install to named content entries. Each entry uses
+	// the "type/name" format (e.g. "skill/k8s", "command/scan"). Per ADR-010.
+	Content []string `yaml:"content,omitempty"`
+
+	// Skills restricts the install to named skills. Deprecated: use Content
+	// instead. Maintained for backward compatibility.
 	Skills []string `yaml:"skills,omitempty"`
 
 	// Targets restricts which agent targets to install to. Optional.
@@ -61,8 +66,9 @@ var gitHosts = []string{"github.com", "gitlab.com", "bitbucket.org"}
 
 // BuildFromSource constructs a Package from the install source URL.
 // Git-hosted sources populate the Git (and optionally Ref) fields; everything
-// else populates the Source field.
-func BuildFromSource(name, source string, skills, targets []string) Package {
+// else populates the Source field. The content parameter accepts "type/name"
+// selectors per ADR-010.
+func BuildFromSource(name, source string, content, targets []string, ref string) Package {
 	pkg := Package{Name: name}
 
 	isGit := false
@@ -76,22 +82,14 @@ func BuildFromSource(name, source string, skills, targets []string) Package {
 	}
 
 	if isGit {
-		gitURL := source
-		ref := ""
-
-		if idx := strings.LastIndex(gitURL, "#"); idx >= 0 {
-			ref = gitURL[idx+1:]
-			gitURL = gitURL[:idx]
-		}
-
-		pkg.Git = gitURL
+		pkg.Git = source
 		pkg.Ref = ref
 	} else {
 		pkg.Source = source
 	}
 
-	if len(skills) > 0 {
-		pkg.Skills = skills
+	if len(content) > 0 {
+		pkg.Content = content
 	}
 
 	if len(targets) > 0 {
@@ -149,6 +147,7 @@ func Save(path string, cfg *Config) error {
 func (c *Config) Add(p Package) {
 	for i, existing := range c.Packages {
 		if existing.Name == p.Name {
+			p.Content = mergeStrings(existing.Content, p.Content)
 			p.Skills = mergeStrings(existing.Skills, p.Skills)
 			p.Targets = mergeStrings(existing.Targets, p.Targets)
 			c.Packages[i] = p

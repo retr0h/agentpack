@@ -69,7 +69,7 @@ func TestSearchCmd(t *testing.T) {
 					},
 				},
 			},
-			wantOutput: "retr0h@deploy-skill",
+			wantOutput: "retr0h:skill/deploy-skill",
 		},
 		{
 			name: "search with no results",
@@ -120,7 +120,7 @@ func TestSearchCmd(t *testing.T) {
 					},
 				},
 			},
-			wantOutput: "someone@popular-skill",
+			wantOutput: "someone:skill/popular-skill",
 		},
 	}
 

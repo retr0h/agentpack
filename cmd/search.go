@@ -76,10 +76,10 @@ var searchCmd = &cobra.Command{
 		cli.Printf(
 			out, "\n%s %s\n\n",
 			cli.Mute(out, "Install with"),
-			"agentpack add <source@skill>",
+			"agentpack add <source:skill/name>",
 		)
 		for _, r := range results {
-			installCmd := r.Source + "@" + r.Name
+			installCmd := r.Source + ":skill/" + r.Name
 			installs := cli.Info(out, cli.FormatInstalls(r.Installs))
 			link := cli.Mute(out, "https://skills.sh/"+r.Source+"/"+r.Name)
 			cli.Printf(

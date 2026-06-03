@@ -44,29 +44,27 @@ type installer interface {
 var pkgInstaller installer = install.New()
 
 var (
-	installSkills  []string
 	installTargets []string
 	installTrust   bool
 	installGlobal  bool
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add <source>",
+	Use:   "add <source[@ref][:type/name]...>",
 	Short: "Add a plugin from a git repo, archive, or URL",
 	Long: `Add a plugin into all detected AI coding agents.
-Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
+Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.
+
+Use @ to pin a version: agentpack add owner/repo@v2.0.0
+Use : to select content:  agentpack add owner/repo:skill/k8s:command/scan`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 
-		source, atSkill := install.ParseAtSkill(args[0])
-		skills := installSkills
-		if atSkill != "" {
-			skills = append(skills, atSkill)
-		}
+		spec := install.ParseSource(args[0])
 
-		displayName := cli.SourceBaseName(source)
+		displayName := cli.SourceBaseName(spec.Source)
 
 		var onStep func(install.Step)
 		if outputFormat != "json" {
@@ -82,8 +80,9 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 		}
 
 		result, err := pkgInstaller.Run(ctx, install.Options{
-			Source:       source,
-			Skills:       skills,
+			Source:       spec.Source,
+			Ref:          spec.Ref,
+			Selectors:    spec.Selectors,
 			Targets:      targets,
 			Global:       installGlobal,
 			OnStep:       onStep,
@@ -98,7 +97,8 @@ Source may be a git repo, local .agentpack file, or HTTP/HTTPS URL.`,
 			return fmt.Errorf("get cwd: %w", cwdErr)
 		}
 
-		if updateErr := install.UpdateManifests(cwd, source, skills, installTargets, result); updateErr != nil {
+		content := install.SelectorsToContent(spec.Selectors)
+		if updateErr := install.UpdateManifests(cwd, spec.Source, content, installTargets, spec.Ref, result); updateErr != nil {
 			return updateErr
 		}
 
@@ -206,8 +206,6 @@ func buildContentCheck(cmd *cobra.Command, trust bool) func(*safety.Classificati
 func init() {
 	rootCmd.AddCommand(addCmd)
 
-	addCmd.Flags().
-		StringArrayVar(&installSkills, "skill", nil, "include only named skill subdirs from the source (may be repeated)")
 	addCmd.Flags().
 		StringArrayVar(&installTargets, "target", nil, "install to specific target(s) only (see list --targets)")
 	addCmd.Flags().

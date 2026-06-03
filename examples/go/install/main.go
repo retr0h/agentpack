@@ -12,7 +12,9 @@ import (
 func main() {
 	result, err := install.New().Run(context.Background(), install.Options{
 		Source: "github.com/mukul975/Anthropic-Cybersecurity-Skills",
-		Skills: []string{"acquiring-disk-image-with-dd-and-dcfldd"},
+		Selectors: []install.ContentSelector{
+			{Type: "skill", Name: "acquiring-disk-image-with-dd-and-dcfldd"},
+		},
 		OnStep: func(s install.Step) {
 			fmt.Printf("  %s %s\n", s.Name, s.Detail)
 		},

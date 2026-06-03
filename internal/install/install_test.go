@@ -1631,6 +1631,216 @@ func TestNameFromSource(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
+// TestParseSource
+// --------------------------------------------------------------------------
+
+func TestParseSource(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		raw           string
+		wantSource    string
+		wantRef       string
+		wantSelectors []install.ContentSelector
+	}{
+		{
+			name:       "bare owner/repo returns source only",
+			raw:        "owner/repo",
+			wantSource: "owner/repo",
+		},
+		{
+			name:       "owner/repo with version pin",
+			raw:        "owner/repo@v2.0.0",
+			wantSource: "owner/repo",
+			wantRef:    "v2.0.0",
+		},
+		{
+			name:       "owner/repo with skill selector",
+			raw:        "owner/repo:skill/k8s",
+			wantSource: "owner/repo",
+			wantSelectors: []install.ContentSelector{
+				{Type: "skill", Name: "k8s"},
+			},
+		},
+		{
+			name:       "owner/repo with version and selector",
+			raw:        "owner/repo@v2.0.0:skill/k8s",
+			wantSource: "owner/repo",
+			wantRef:    "v2.0.0",
+			wantSelectors: []install.ContentSelector{
+				{Type: "skill", Name: "k8s"},
+			},
+		},
+		{
+			name:       "owner/repo with multiple selectors",
+			raw:        "owner/repo:skill/k8s:command/scan",
+			wantSource: "owner/repo",
+			wantSelectors: []install.ContentSelector{
+				{Type: "skill", Name: "k8s"},
+				{Type: "command", Name: "scan"},
+			},
+		},
+		{
+			name:       "full format with version and multiple selectors",
+			raw:        "owner/repo@v2.0.0:skill/k8s:command/scan",
+			wantSource: "owner/repo",
+			wantRef:    "v2.0.0",
+			wantSelectors: []install.ContentSelector{
+				{Type: "skill", Name: "k8s"},
+				{Type: "command", Name: "scan"},
+			},
+		},
+		{
+			name:       "github.com full URL with ref",
+			raw:        "github.com/org/repo@main",
+			wantSource: "github.com/org/repo",
+			wantRef:    "main",
+		},
+		{
+			name:       "SHA ref",
+			raw:        "owner/repo@abc1234",
+			wantSource: "owner/repo",
+			wantRef:    "abc1234",
+		},
+		{
+			name:       "all six content types",
+			raw:        "owner/repo:skill/a:command/b:hook/c:agent/d:mcp/e:config/f",
+			wantSource: "owner/repo",
+			wantSelectors: []install.ContentSelector{
+				{Type: "skill", Name: "a"},
+				{Type: "command", Name: "b"},
+				{Type: "hook", Name: "c"},
+				{Type: "agent", Name: "d"},
+				{Type: "mcp", Name: "e"},
+				{Type: "config", Name: "f"},
+			},
+		},
+		{
+			name:       "empty selector segments are skipped",
+			raw:        "owner/repo:skill/k8s:",
+			wantSource: "owner/repo",
+			wantSelectors: []install.ContentSelector{
+				{Type: "skill", Name: "k8s"},
+			},
+		},
+		{
+			name:       "selector without slash is skipped",
+			raw:        "owner/repo:invalid",
+			wantSource: "owner/repo",
+		},
+		{
+			name:       "local path without selectors",
+			raw:        "/path/to/file.agentpack",
+			wantSource: "/path/to/file.agentpack",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			spec := install.ParseSource(tt.raw)
+			assert.Equal(t, tt.wantSource, spec.Source)
+			assert.Equal(t, tt.wantRef, spec.Ref)
+
+			if tt.wantSelectors == nil {
+				assert.Empty(t, spec.Selectors)
+			} else {
+				assert.Equal(t, tt.wantSelectors, spec.Selectors)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestSelectorsToContent
+// --------------------------------------------------------------------------
+
+func TestSelectorsToContent(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		selectors []install.ContentSelector
+		want      []string
+	}{
+		{
+			name: "converts selectors to type/name strings",
+			selectors: []install.ContentSelector{
+				{Type: "skill", Name: "k8s"},
+				{Type: "command", Name: "scan"},
+			},
+			want: []string{"skill/k8s", "command/scan"},
+		},
+		{
+			name:      "nil selectors returns nil",
+			selectors: nil,
+			want:      nil,
+		},
+		{
+			name:      "empty selectors returns nil",
+			selectors: []install.ContentSelector{},
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := install.SelectorsToContent(tt.selectors)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestSelectorsToSkillFilter
+// --------------------------------------------------------------------------
+
+func TestSelectorsToSkillFilter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		selectors []install.ContentSelector
+		want      []string
+	}{
+		{
+			name: "extracts skill names from mixed selectors",
+			selectors: []install.ContentSelector{
+				{Type: "skill", Name: "k8s"},
+				{Type: "command", Name: "scan"},
+				{Type: "skill", Name: "react"},
+			},
+			want: []string{"k8s", "react"},
+		},
+		{
+			name: "returns nil when no skill selectors",
+			selectors: []install.ContentSelector{
+				{Type: "command", Name: "scan"},
+			},
+			want: nil,
+		},
+		{
+			name:      "nil selectors returns nil",
+			selectors: nil,
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := install.SelectorsToSkillFilter(tt.selectors)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
 // TestHumanSize
 // --------------------------------------------------------------------------
 
