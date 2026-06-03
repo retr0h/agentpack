@@ -30,7 +30,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/retr0h/agentpack/internal/cli"
-	"github.com/retr0h/agentpack/internal/driver"
+	"github.com/retr0h/agentpack/pkg/drivers"
 )
 
 var outputFormat string
@@ -43,7 +43,7 @@ var rootCmd = &cobra.Command{
 
 // Execute runs the root command; invoked by main.
 func Execute() {
-	driver.RegisterAll()
+	drivers.RegisterAll()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

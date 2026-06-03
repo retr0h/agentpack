@@ -35,7 +35,7 @@ import (
 
 	toml "github.com/pelletier/go-toml/v2"
 
-	"github.com/retr0h/agentpack/internal/driver/fs"
+	"github.com/retr0h/agentpack/internal/driver"
 	"github.com/retr0h/agentpack/internal/target"
 )
 
@@ -132,7 +132,7 @@ func (c *Codex) installFromEntries(
 				return nil, err
 			}
 
-			if err := fs.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+			if err := driver.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
 				return nil, err
 			}
 
@@ -162,7 +162,7 @@ func (c *Codex) installFromDirs(
 		return nil, err
 	}
 
-	baseDir, skillsDir, err := fs.ResolveDirs(
+	baseDir, skillsDir, err := driver.ResolveDirs(
 		opts,
 		".codex/skills",
 		".agents/skills",
@@ -180,11 +180,11 @@ func (c *Codex) installFromDirs(
 	}
 
 	skillsSrc := filepath.Join(opts.SourceDir, "skills")
-	if err := fs.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
+	if err := driver.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
 		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
-	files, err := fs.EnumerateFiles(ctx, destDir, baseDir)
+	files, err := driver.EnumerateFiles(ctx, destDir, baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate installed files: %w", err)
 	}
@@ -194,7 +194,7 @@ func (c *Codex) installFromDirs(
 		return nil, hooksErr
 	}
 
-	if err := fs.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+	if err := driver.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
 		return nil, err
 	}
 
@@ -217,7 +217,7 @@ func (c *Codex) installSkillEntry(
 	opts target.InstallOpts,
 	entry target.ContentEntry,
 ) ([]target.InstalledFile, error) {
-	baseDir, skillsDir, err := fs.ResolveDirs(
+	baseDir, skillsDir, err := driver.ResolveDirs(
 		opts,
 		".codex/skills",
 		".agents/skills",
@@ -228,7 +228,7 @@ func (c *Codex) installSkillEntry(
 		return nil, err
 	}
 
-	return fs.InstallSkillEntry(ctx, entry, skillsDir, baseDir, c.mkdirAllFunc)
+	return driver.InstallSkillEntry(ctx, entry, skillsDir, baseDir, c.mkdirAllFunc)
 }
 
 // hooksPath returns the hooks.json path for the install scope. Project

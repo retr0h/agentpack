@@ -18,10 +18,12 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// Package fs provides shared filesystem operations used by target drivers.
-// It consolidates CopyFile, CopyTreeIfExists, and EnumerateFiles so that
-// every driver delegates to a single implementation.
-package fs
+// Package driver provides the shared building blocks every target driver
+// delegates to: filesystem operations (CopyFile, CopyTreeIfExists,
+// EnumerateFiles), directory resolution (ResolveDirs), and content install
+// helpers (InstallSkillEntry, InstallMCP, InstallHooksJSON). Concrete drivers
+// live in subpackages and are wired up by pkg/drivers.
+package driver
 
 import (
 	"context"

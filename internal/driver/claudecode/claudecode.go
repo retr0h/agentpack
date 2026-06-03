@@ -35,7 +35,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/configmerge"
-	"github.com/retr0h/agentpack/internal/driver/fs"
+	"github.com/retr0h/agentpack/internal/driver"
 	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/target"
@@ -399,7 +399,7 @@ func copyTreeTracked(
 			return mkdirAll(tgt, 0o755)
 		}
 
-		if copyErr := fs.CopyFile(path, tgt); copyErr != nil {
+		if copyErr := driver.CopyFile(path, tgt); copyErr != nil {
 			return copyErr
 		}
 

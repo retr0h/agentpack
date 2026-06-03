@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/retr0h/agentpack/internal/driver"
 	"github.com/retr0h/agentpack/internal/driver/claudecode"
-	"github.com/retr0h/agentpack/internal/driver/fs"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/target"
 )
@@ -809,7 +809,7 @@ func TestCopyFile(t *testing.T) {
 			t.Parallel()
 
 			src, dst := tt.setup(t)
-			err := fs.CopyFile(src, dst)
+			err := driver.CopyFile(src, dst)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

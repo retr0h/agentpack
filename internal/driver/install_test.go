@@ -18,7 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package fs_test
+package driver_test
 
 import (
 	"context"
@@ -31,286 +31,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/retr0h/agentpack/internal/driver/fs"
+	"github.com/retr0h/agentpack/internal/driver"
 	"github.com/retr0h/agentpack/internal/target"
 )
-
-func TestCopyFile(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		setup   func(t *testing.T) (src, dst string)
-		wantErr string
-	}{
-		{
-			name: "copies file preserving content and permissions",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				src := filepath.Join(t.TempDir(), "src.txt")
-				require.NoError(t, os.WriteFile(src, []byte("hello"), 0o644))
-
-				return src, filepath.Join(t.TempDir(), "dst.txt")
-			},
-		},
-		{
-			name: "error when source does not exist",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-
-				return filepath.Join(t.TempDir(), "missing.txt"),
-					filepath.Join(t.TempDir(), "dst.txt")
-			},
-			wantErr: "stat",
-		},
-		{
-			name: "error when source is a symlink",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				dir := t.TempDir()
-				target := filepath.Join(dir, "real.txt")
-				require.NoError(t, os.WriteFile(target, []byte("secret"), 0o644))
-				link := filepath.Join(dir, "link.txt")
-				require.NoError(t, os.Symlink(target, link))
-
-				return link, filepath.Join(t.TempDir(), "dst.txt")
-			},
-			wantErr: "symlinks not allowed",
-		},
-		{
-			name: "error when destination is a directory",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				src := filepath.Join(t.TempDir(), "src.txt")
-				require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
-				dstDir := t.TempDir()
-
-				return src, dstDir
-			},
-			wantErr: "is a directory",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			src, dst := tt.setup(t)
-			err := fs.CopyFile(src, dst)
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			srcData, _ := os.ReadFile(src)
-			dstData, _ := os.ReadFile(dst)
-			assert.Equal(t, srcData, dstData)
-		})
-	}
-}
-
-func TestCopyTreeIfExists(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		setup   func(t *testing.T) (src, dst string)
-		wantErr string
-		check   func(t *testing.T, dst string)
-	}{
-		{
-			name: "copies directory tree recursively",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				src := t.TempDir()
-				require.NoError(t, os.MkdirAll(filepath.Join(src, "sub"), 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(src, "a.txt"), []byte("a"), 0o644))
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(src, "sub", "b.txt"), []byte("b"), 0o644),
-				)
-
-				return src, filepath.Join(t.TempDir(), "out")
-			},
-			check: func(t *testing.T, dst string) {
-				t.Helper()
-				data, err := os.ReadFile(filepath.Join(dst, "a.txt"))
-				require.NoError(t, err)
-				assert.Equal(t, []byte("a"), data)
-
-				data, err = os.ReadFile(filepath.Join(dst, "sub", "b.txt"))
-				require.NoError(t, err)
-				assert.Equal(t, []byte("b"), data)
-			},
-		},
-		{
-			name: "skips symlinks in source tree",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				src := t.TempDir()
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(src, "real.txt"), []byte("ok"), 0o644),
-				)
-				require.NoError(
-					t,
-					os.Symlink(filepath.Join(src, "real.txt"), filepath.Join(src, "link.txt")),
-				)
-
-				return src, filepath.Join(t.TempDir(), "out")
-			},
-			check: func(t *testing.T, dst string) {
-				t.Helper()
-				// Real file was copied.
-				_, err := os.Stat(filepath.Join(dst, "real.txt"))
-				require.NoError(t, err)
-				// Symlink was skipped.
-				_, err = os.Stat(filepath.Join(dst, "link.txt"))
-				assert.True(t, os.IsNotExist(err))
-			},
-		},
-		{
-			name: "no-op when source does not exist",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-
-				return filepath.Join(t.TempDir(), "nope"), filepath.Join(t.TempDir(), "out")
-			},
-			check: func(t *testing.T, dst string) {
-				t.Helper()
-				_, err := os.Stat(dst)
-				assert.True(t, os.IsNotExist(err))
-			},
-		},
-		{
-			name: "respects context cancellation",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				src := t.TempDir()
-				require.NoError(t, os.WriteFile(filepath.Join(src, "f.txt"), []byte("x"), 0o644))
-
-				return src, filepath.Join(t.TempDir(), "out")
-			},
-			wantErr: "context canceled",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			src, dst := tt.setup(t)
-
-			ctx := context.Background()
-			if tt.wantErr == "context canceled" {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(ctx)
-				cancel()
-			}
-
-			err := fs.CopyTreeIfExists(ctx, src, dst)
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			if tt.check != nil {
-				tt.check(t, dst)
-			}
-		})
-	}
-}
-
-func TestEnumerateFiles(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		setup   func(t *testing.T) (destDir, baseDir string)
-		want    int
-		wantErr string
-	}{
-		{
-			name: "enumerates files with relative paths and SHA256",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				base := t.TempDir()
-				dest := filepath.Join(base, "skills", "demo")
-				require.NoError(t, os.MkdirAll(dest, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(dest, "a.md"), []byte("# A"), 0o644))
-				require.NoError(t, os.WriteFile(filepath.Join(dest, "b.md"), []byte("# B"), 0o644))
-
-				return dest, base
-			},
-			want: 2,
-		},
-		{
-			name: "empty directory returns no files",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				base := t.TempDir()
-				dest := filepath.Join(base, "empty")
-				require.NoError(t, os.MkdirAll(dest, 0o755))
-
-				return dest, base
-			},
-			want: 0,
-		},
-		{
-			name: "respects context cancellation",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				base := t.TempDir()
-				dest := filepath.Join(base, "skills")
-				require.NoError(t, os.MkdirAll(dest, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(dest, "f.md"), []byte("x"), 0o644))
-
-				return dest, base
-			},
-			wantErr: "context canceled",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			destDir, baseDir := tt.setup(t)
-
-			ctx := context.Background()
-			if tt.wantErr == "context canceled" {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(ctx)
-				cancel()
-			}
-
-			files, err := fs.EnumerateFiles(ctx, destDir, baseDir)
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Len(t, files, tt.want)
-
-			for _, f := range files {
-				assert.NotEmpty(t, f.Path)
-				assert.NotEmpty(t, f.SHA256)
-				assert.Len(t, f.SHA256, 64)
-			}
-		})
-	}
-}
 
 func TestInstallMCP(t *testing.T) {
 	t.Parallel()
@@ -448,7 +171,7 @@ func TestInstallMCP(t *testing.T) {
 			t.Parallel()
 
 			srcDir, mcpPath := tt.setup(t)
-			err := fs.InstallMCP(context.Background(), srcDir, mcpPath)
+			err := driver.InstallMCP(context.Background(), srcDir, mcpPath)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -580,7 +303,7 @@ func TestInstallHooksJSON(t *testing.T) {
 			t.Parallel()
 
 			srcDir, hooksPath := tt.setup(t)
-			err := fs.InstallHooksJSON(context.Background(), srcDir, hooksPath, "test-plugin")
+			err := driver.InstallHooksJSON(context.Background(), srcDir, hooksPath, "test-plugin")
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -593,105 +316,6 @@ func TestInstallHooksJSON(t *testing.T) {
 			if tt.check != nil {
 				tt.check(t, hooksPath)
 			}
-		})
-	}
-}
-
-func TestResolveDirs(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name       string
-		opts       target.InstallOpts
-		globalDir  string
-		localDir   string
-		homeFn     func() (string, error)
-		cwdFn      func() (string, error)
-		wantBase   string
-		wantSkills string
-		wantErr    string
-	}{
-		{
-			name:       "global install uses homeFn and globalDir",
-			opts:       target.InstallOpts{Global: true},
-			globalDir:  ".cursor/skills",
-			localDir:   ".agents/skills",
-			homeFn:     func() (string, error) { return "/home/user", nil },
-			cwdFn:      func() (string, error) { return "/proj", nil },
-			wantBase:   "/home/user",
-			wantSkills: filepath.Join("/home/user", ".cursor/skills"),
-		},
-		{
-			name:       "local install with opts.Dir uses Dir and localDir",
-			opts:       target.InstallOpts{Dir: "/my/project"},
-			globalDir:  ".cursor/skills",
-			localDir:   ".agents/skills",
-			homeFn:     func() (string, error) { return "/home/user", nil },
-			cwdFn:      func() (string, error) { return "/other", nil },
-			wantBase:   "/my/project",
-			wantSkills: filepath.Join("/my/project", ".agents/skills"),
-		},
-		{
-			name:       "local install without Dir falls back to cwdFn",
-			opts:       target.InstallOpts{},
-			globalDir:  ".cursor/skills",
-			localDir:   ".agents/skills",
-			homeFn:     func() (string, error) { return "/home/user", nil },
-			cwdFn:      func() (string, error) { return "/cwd/dir", nil },
-			wantBase:   "/cwd/dir",
-			wantSkills: filepath.Join("/cwd/dir", ".agents/skills"),
-		},
-		{
-			name:      "global install with homeFn error",
-			opts:      target.InstallOpts{Global: true},
-			globalDir: ".cursor/skills",
-			localDir:  ".agents/skills",
-			homeFn:    func() (string, error) { return "", errors.New("no home") },
-			cwdFn:     func() (string, error) { return "/cwd", nil },
-			wantErr:   "home dir",
-		},
-		{
-			name:      "local install with cwdFn error",
-			opts:      target.InstallOpts{},
-			globalDir: ".cursor/skills",
-			localDir:  ".agents/skills",
-			homeFn:    func() (string, error) { return "/home", nil },
-			cwdFn:     func() (string, error) { return "", errors.New("no cwd") },
-			wantErr:   "getwd",
-		},
-		{
-			name:       "windsurf-style different local dir",
-			opts:       target.InstallOpts{Dir: "/proj"},
-			globalDir:  ".codeium/windsurf/skills",
-			localDir:   ".windsurf/skills",
-			homeFn:     func() (string, error) { return "/home/user", nil },
-			cwdFn:      func() (string, error) { return "/other", nil },
-			wantBase:   "/proj",
-			wantSkills: filepath.Join("/proj", ".windsurf/skills"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			base, skills, err := fs.ResolveDirs(
-				tt.opts,
-				tt.globalDir,
-				tt.localDir,
-				tt.homeFn,
-				tt.cwdFn,
-			)
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantBase, base)
-			assert.Equal(t, tt.wantSkills, skills)
 		})
 	}
 }
@@ -753,7 +377,7 @@ func TestInstallSkillEntry(t *testing.T) {
 			t.Parallel()
 
 			entry, skillsDir, baseDir, mkdirAll := tt.setup(t)
-			files, err := fs.InstallSkillEntry(
+			files, err := driver.InstallSkillEntry(
 				context.Background(),
 				entry,
 				skillsDir,

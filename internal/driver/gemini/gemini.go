@@ -29,7 +29,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/retr0h/agentpack/internal/driver/fs"
+	"github.com/retr0h/agentpack/internal/driver"
 	"github.com/retr0h/agentpack/internal/target"
 )
 
@@ -118,7 +118,7 @@ func (g *Gemini) installFromEntries(
 				return nil, err
 			}
 
-			if err := fs.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
+			if err := driver.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
 				return nil, err
 			}
 		}
@@ -138,7 +138,7 @@ func (g *Gemini) installFromDirs(
 		return nil, err
 	}
 
-	baseDir, skillsDir, err := fs.ResolveDirs(
+	baseDir, skillsDir, err := driver.ResolveDirs(
 		opts,
 		".gemini/skills",
 		".agents/skills",
@@ -156,11 +156,11 @@ func (g *Gemini) installFromDirs(
 	}
 
 	skillsSrc := filepath.Join(opts.SourceDir, "skills")
-	if err := fs.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
+	if err := driver.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
 		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
-	files, err := fs.EnumerateFiles(ctx, destDir, baseDir)
+	files, err := driver.EnumerateFiles(ctx, destDir, baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate installed files: %w", err)
 	}
@@ -170,7 +170,7 @@ func (g *Gemini) installFromDirs(
 		return nil, mcpErr
 	}
 
-	if err := fs.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
+	if err := driver.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
 		return nil, err
 	}
 
@@ -184,7 +184,7 @@ func (g *Gemini) installSkillEntry(
 	opts target.InstallOpts,
 	entry target.ContentEntry,
 ) ([]target.InstalledFile, error) {
-	baseDir, skillsDir, err := fs.ResolveDirs(
+	baseDir, skillsDir, err := driver.ResolveDirs(
 		opts,
 		".gemini/skills",
 		".agents/skills",
@@ -195,7 +195,7 @@ func (g *Gemini) installSkillEntry(
 		return nil, err
 	}
 
-	return fs.InstallSkillEntry(ctx, entry, skillsDir, baseDir, g.mkdirAllFunc)
+	return driver.InstallSkillEntry(ctx, entry, skillsDir, baseDir, g.mkdirAllFunc)
 }
 
 // mcpSettingsPath returns the path to .gemini/settings.json for the install root.

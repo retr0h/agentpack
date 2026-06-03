@@ -30,7 +30,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/retr0h/agentpack/internal/driver/fs"
+	"github.com/retr0h/agentpack/internal/driver"
 	"github.com/retr0h/agentpack/internal/target"
 )
 
@@ -119,7 +119,7 @@ func (r *RovoDev) installFromEntries(
 				return nil, err
 			}
 
-			if err := fs.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
+			if err := driver.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
 				return nil, err
 			}
 		}
@@ -139,7 +139,7 @@ func (r *RovoDev) installFromDirs(
 		return nil, err
 	}
 
-	baseDir, skillsDir, err := fs.ResolveDirs(
+	baseDir, skillsDir, err := driver.ResolveDirs(
 		opts,
 		".rovodev/skills",
 		".agents/skills",
@@ -157,11 +157,11 @@ func (r *RovoDev) installFromDirs(
 	}
 
 	skillsSrc := filepath.Join(opts.SourceDir, "skills")
-	if err := fs.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
+	if err := driver.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
 		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
-	files, err := fs.EnumerateFiles(ctx, destDir, baseDir)
+	files, err := driver.EnumerateFiles(ctx, destDir, baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate installed files: %w", err)
 	}
@@ -171,7 +171,7 @@ func (r *RovoDev) installFromDirs(
 		return nil, mcpErr
 	}
 
-	if err := fs.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
+	if err := driver.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
 		return nil, err
 	}
 
@@ -185,7 +185,7 @@ func (r *RovoDev) installSkillEntry(
 	opts target.InstallOpts,
 	entry target.ContentEntry,
 ) ([]target.InstalledFile, error) {
-	baseDir, skillsDir, err := fs.ResolveDirs(
+	baseDir, skillsDir, err := driver.ResolveDirs(
 		opts,
 		".rovodev/skills",
 		".agents/skills",
@@ -196,7 +196,7 @@ func (r *RovoDev) installSkillEntry(
 		return nil, err
 	}
 
-	return fs.InstallSkillEntry(ctx, entry, skillsDir, baseDir, r.mkdirAllFunc)
+	return driver.InstallSkillEntry(ctx, entry, skillsDir, baseDir, r.mkdirAllFunc)
 }
 
 // mcpSettingsPath returns the path to .rovodev/mcp.json for the install root.

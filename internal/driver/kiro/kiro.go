@@ -30,7 +30,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/retr0h/agentpack/internal/driver/fs"
+	"github.com/retr0h/agentpack/internal/driver"
 	"github.com/retr0h/agentpack/internal/target"
 )
 
@@ -119,7 +119,7 @@ func (k *Kiro) installFromEntries(
 				return nil, err
 			}
 
-			if err := fs.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
+			if err := driver.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
 				return nil, err
 			}
 
@@ -129,7 +129,7 @@ func (k *Kiro) installFromEntries(
 				return nil, err
 			}
 
-			if err := fs.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+			if err := driver.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
 				return nil, err
 			}
 		}
@@ -149,7 +149,7 @@ func (k *Kiro) installFromDirs(
 		return nil, err
 	}
 
-	baseDir, skillsDir, err := fs.ResolveDirs(
+	baseDir, skillsDir, err := driver.ResolveDirs(
 		opts,
 		".kiro/skills",
 		".agents/skills",
@@ -167,11 +167,11 @@ func (k *Kiro) installFromDirs(
 	}
 
 	skillsSrc := filepath.Join(opts.SourceDir, "skills")
-	if err := fs.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
+	if err := driver.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
 		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
-	files, err := fs.EnumerateFiles(ctx, destDir, baseDir)
+	files, err := driver.EnumerateFiles(ctx, destDir, baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate installed files: %w", err)
 	}
@@ -181,7 +181,7 @@ func (k *Kiro) installFromDirs(
 		return nil, mcpErr
 	}
 
-	if err := fs.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
+	if err := driver.InstallMCP(ctx, opts.SourceDir, mcpPath); err != nil {
 		return nil, err
 	}
 
@@ -190,7 +190,7 @@ func (k *Kiro) installFromDirs(
 		return nil, hooksErr
 	}
 
-	if err := fs.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
+	if err := driver.InstallHooksJSON(ctx, opts.SourceDir, hooksPath, opts.Name); err != nil {
 		return nil, err
 	}
 
@@ -204,7 +204,7 @@ func (k *Kiro) installSkillEntry(
 	opts target.InstallOpts,
 	entry target.ContentEntry,
 ) ([]target.InstalledFile, error) {
-	baseDir, skillsDir, err := fs.ResolveDirs(
+	baseDir, skillsDir, err := driver.ResolveDirs(
 		opts,
 		".kiro/skills",
 		".agents/skills",
@@ -215,7 +215,7 @@ func (k *Kiro) installSkillEntry(
 		return nil, err
 	}
 
-	return fs.InstallSkillEntry(ctx, entry, skillsDir, baseDir, k.mkdirAllFunc)
+	return driver.InstallSkillEntry(ctx, entry, skillsDir, baseDir, k.mkdirAllFunc)
 }
 
 // mcpConfigPath returns the project-level MCP config path. Kiro MCP config

@@ -43,13 +43,13 @@ import (
 	"github.com/retr0h/agentpack/internal/lock"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/packages"
+	"github.com/retr0h/agentpack/internal/target"
+	"github.com/retr0h/agentpack/internal/target/mocks"
 	"github.com/retr0h/agentpack/internal/testutil"
 	"github.com/retr0h/agentpack/pkg/build"
 	"github.com/retr0h/agentpack/pkg/install"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/remove"
-	"github.com/retr0h/agentpack/internal/target"
-	"github.com/retr0h/agentpack/internal/target/mocks"
 )
 
 // initBareGitRepo creates a bare git repository at the given path that can be

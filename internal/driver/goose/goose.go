@@ -31,7 +31,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/retr0h/agentpack/internal/driver/fs"
+	"github.com/retr0h/agentpack/internal/driver"
 	"github.com/retr0h/agentpack/internal/target"
 	"gopkg.in/yaml.v3"
 )
@@ -143,7 +143,7 @@ func (g *Goose) installFromDirs(
 		return nil, err
 	}
 
-	baseDir, skillsDir, err := fs.ResolveDirs(
+	baseDir, skillsDir, err := driver.ResolveDirs(
 		opts,
 		".config/goose/skills",
 		".agents/skills",
@@ -161,11 +161,11 @@ func (g *Goose) installFromDirs(
 	}
 
 	skillsSrc := filepath.Join(opts.SourceDir, "skills")
-	if err := fs.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
+	if err := driver.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
 		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
-	files, err := fs.EnumerateFiles(ctx, destDir, baseDir)
+	files, err := driver.EnumerateFiles(ctx, destDir, baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate installed files: %w", err)
 	}
@@ -189,7 +189,7 @@ func (g *Goose) installSkillEntry(
 	opts target.InstallOpts,
 	entry target.ContentEntry,
 ) ([]target.InstalledFile, error) {
-	baseDir, skillsDir, err := fs.ResolveDirs(
+	baseDir, skillsDir, err := driver.ResolveDirs(
 		opts,
 		".config/goose/skills",
 		".agents/skills",
@@ -200,7 +200,7 @@ func (g *Goose) installSkillEntry(
 		return nil, err
 	}
 
-	return fs.InstallSkillEntry(ctx, entry, skillsDir, baseDir, g.mkdirAllFunc)
+	return driver.InstallSkillEntry(ctx, entry, skillsDir, baseDir, g.mkdirAllFunc)
 }
 
 // gooseConfigPath returns the path to Goose's global config file at

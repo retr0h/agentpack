@@ -31,7 +31,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/retr0h/agentpack/internal/driver/fs"
+	"github.com/retr0h/agentpack/internal/driver"
 	"github.com/retr0h/agentpack/internal/target"
 )
 
@@ -295,7 +295,7 @@ func (a *agent) Install(
 
 	skillsSrc := filepath.Join(opts.SourceDir, "skills")
 
-	if err := fs.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
+	if err := driver.CopyTreeIfExists(ctx, skillsSrc, destDir); err != nil {
 		return nil, fmt.Errorf("copy skills: %w", err)
 	}
 
@@ -376,7 +376,7 @@ func (a *agent) installFromEntries(
 			return nil, fmt.Errorf("mkdir agents skills dir: %w", err)
 		}
 
-		if err := fs.CopyTreeIfExists(ctx, srcDir, destDir); err != nil {
+		if err := driver.CopyTreeIfExists(ctx, srcDir, destDir); err != nil {
 			return nil, fmt.Errorf("copy skills: %w", err)
 		}
 

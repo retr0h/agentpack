@@ -4,10 +4,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/retr0h/agentpack/internal/driver"
+	"github.com/retr0h/agentpack/pkg/drivers"
 )
 
 func TestMain(m *testing.M) {
-	driver.RegisterAll()
+	drivers.RegisterAll()
 	os.Exit(m.Run())
 }

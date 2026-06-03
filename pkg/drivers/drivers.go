@@ -1,5 +1,7 @@
-// Package driver provides RegisterAll to register every built-in target driver.
-package driver
+// Package drivers wires up and registers every built-in target driver. It is
+// the composition root: import it to make all built-in drivers available via
+// the target registry.
+package drivers
 
 import (
 	"sync"
