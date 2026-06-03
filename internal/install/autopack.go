@@ -24,6 +24,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -35,6 +36,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/archive"
+	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/safety"
 )
@@ -112,7 +114,7 @@ func autoPackageWithVersion(
 		}
 
 		contentPath := filepath.Join(cloneDir, content)
-		if _, err := os.Stat(contentPath); os.IsNotExist(err) {
+		if _, err := os.Stat(contentPath); errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 
@@ -225,7 +227,7 @@ func storeArchive(ctx context.Context, srcPath, name, sha string) (string, error
 		return "", err
 	}
 
-	baseName := fmt.Sprintf("%s@%s", name, shortSHA(sha))
+	baseName := fmt.Sprintf("%s@%s", name, gitutil.ShortSHA(sha))
 	dstPath := filepath.Join(dir, baseName+".agentpack")
 
 	if err := copyFileAtomic(srcPath, dstPath); err != nil {

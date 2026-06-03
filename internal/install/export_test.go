@@ -27,6 +27,7 @@ import (
 	"os"
 
 	"github.com/retr0h/agentpack/internal/archive"
+	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/registry"
 	"github.com/retr0h/agentpack/pkg/target"
@@ -61,9 +62,9 @@ func SetArchivesDirHome(fn func() (string, error)) func() {
 	return func() { archivesDirHome = orig }
 }
 
-// ShortSHA exposes shortSHA for testing.
+// ShortSHA exposes gitutil.ShortSHA for testing.
 func ShortSHA(sha string) string {
-	return shortSHA(sha)
+	return gitutil.ShortSHA(sha)
 }
 
 // CopyDir exposes copyDir for testing.

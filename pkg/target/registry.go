@@ -71,7 +71,7 @@ func Resolve(names []string) ([]Target, error) {
 func Detected() []Target {
 	var out []Target
 
-	for _, t := range registry {
+	for _, t := range All() {
 		if t.Detect() {
 			out = append(out, t)
 		}

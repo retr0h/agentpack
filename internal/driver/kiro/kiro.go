@@ -27,6 +27,7 @@ package kiro
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -296,7 +297,7 @@ func (k *Kiro) hooksPath(opts target.InstallOpts) (string, error) {
 // installMCP merges all mcp/*.json files from srcDir into mcpPath.
 func (k *Kiro) installMCP(_ context.Context, srcDir, mcpPath string) error {
 	mcpDir := filepath.Join(srcDir, "mcp")
-	if _, err := os.Stat(mcpDir); os.IsNotExist(err) {
+	if _, err := os.Stat(mcpDir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 
@@ -341,7 +342,7 @@ func (k *Kiro) installHooks(
 	srcDir, hooksPath, pluginName string,
 ) error {
 	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
-	if _, err := os.Stat(hooksFile); os.IsNotExist(err) {
+	if _, err := os.Stat(hooksFile); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 

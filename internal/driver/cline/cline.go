@@ -27,6 +27,7 @@ package cline
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -273,7 +274,7 @@ func (c *Cline) hooksDir(opts target.InstallOpts) (string, error) {
 // installMCP merges all mcp/*.json files from srcDir into mcpPath.
 func (c *Cline) installMCP(_ context.Context, srcDir, mcpPath string) error {
 	mcpDir := filepath.Join(srcDir, "mcp")
-	if _, err := os.Stat(mcpDir); os.IsNotExist(err) {
+	if _, err := os.Stat(mcpDir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 
@@ -316,7 +317,7 @@ func (c *Cline) installMCP(_ context.Context, srcDir, mcpPath string) error {
 // Cline hooks are executable scripts (not JSON) that receive JSON on stdin
 // and return JSON on stdout. Each file is copied and made executable.
 func (c *Cline) installHooks(_ context.Context, srcDir, hooksDir string) error {
-	if _, err := os.Stat(srcDir); os.IsNotExist(err) {
+	if _, err := os.Stat(srcDir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 

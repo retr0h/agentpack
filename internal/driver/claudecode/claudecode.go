@@ -28,6 +28,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,6 +36,7 @@ import (
 
 	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/driver/fs"
+	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/target"
 )
@@ -178,7 +180,7 @@ func (c *ClaudeCode) installFromDirs(
 		}
 
 		srcDir := filepath.Join(opts.SourceDir, content)
-		if _, err := os.Stat(srcDir); os.IsNotExist(err) {
+		if _, err := os.Stat(srcDir); errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 
@@ -212,7 +214,7 @@ func (c *ClaudeCode) installFromDirs(
 // installMCP merges all mcp/*.json files from srcDir into settingsPath.
 func (c *ClaudeCode) installMCP(ctx context.Context, srcDir, settingsPath string) error {
 	mcpDir := filepath.Join(srcDir, "mcp")
-	if _, err := os.Stat(mcpDir); os.IsNotExist(err) {
+	if _, err := os.Stat(mcpDir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 
@@ -261,7 +263,7 @@ func (c *ClaudeCode) installHooks(
 	srcDir, settingsPath, pluginName string,
 ) error {
 	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
-	if _, err := os.Stat(hooksFile); os.IsNotExist(err) {
+	if _, err := os.Stat(hooksFile); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 
@@ -285,7 +287,7 @@ func (c *ClaudeCode) installHooks(
 // installSettings merges all settings/*.json files from srcDir into settingsPath.
 func (c *ClaudeCode) installSettings(ctx context.Context, srcDir, settingsPath string) error {
 	settingsDir := filepath.Join(srcDir, "settings")
-	if _, err := os.Stat(settingsDir); os.IsNotExist(err) {
+	if _, err := os.Stat(settingsDir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 
@@ -333,7 +335,7 @@ func (c *ClaudeCode) List() ([]target.InstalledPlugin, error) {
 
 	dirEntries, err := os.ReadDir(marketplacesDir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 
@@ -363,7 +365,7 @@ func (c *ClaudeCode) List() ([]target.InstalledPlugin, error) {
 		plugins = append(plugins, target.InstalledPlugin{
 			Name:      meta.Name,
 			Version:   meta.Version,
-			SHA:       shortSHA(meta.GitCommitSHA),
+			SHA:       gitutil.ShortSHA(meta.GitCommitSHA),
 			Installed: formatDate(meta.BuildTimestamp),
 			Dir:       dir,
 			Target:    c.DisplayName(),
@@ -371,28 +373,6 @@ func (c *ClaudeCode) List() ([]target.InstalledPlugin, error) {
 	}
 
 	return plugins, nil
-}
-
-// copyTree recursively copies everything from src into dst.
-func copyTree(mkdirAll func(string, os.FileMode) error, src, dst string) error {
-	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-
-		tgt := filepath.Join(dst, rel)
-
-		if d.IsDir() {
-			return mkdirAll(tgt, 0o755)
-		}
-
-		return fs.CopyFile(path, tgt)
-	})
 }
 
 // copyTreeTracked copies src to dst and returns the files written with
@@ -443,14 +423,6 @@ func copyTreeTracked(
 	})
 
 	return files, err
-}
-
-func shortSHA(sha string) string {
-	if len(sha) >= 7 {
-		return sha[:7]
-	}
-
-	return sha
 }
 
 func formatDate(ts string) string {

@@ -26,6 +26,7 @@ package copilot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -242,7 +243,7 @@ func (c *Copilot) mcpSettingsPath(opts target.InstallOpts) (string, error) {
 // installMCP merges all mcp/*.json files from srcDir into mcpPath.
 func (c *Copilot) installMCP(_ context.Context, srcDir, mcpPath string) error {
 	mcpDir := filepath.Join(srcDir, "mcp")
-	if _, err := os.Stat(mcpDir); os.IsNotExist(err) {
+	if _, err := os.Stat(mcpDir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 

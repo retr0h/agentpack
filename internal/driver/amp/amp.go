@@ -26,6 +26,7 @@ package amp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -243,7 +244,7 @@ func (a *Amp) mcpSettingsPath(opts target.InstallOpts) (string, error) {
 // installMCP merges all mcp/*.json files from srcDir into mcpPath.
 func (a *Amp) installMCP(_ context.Context, srcDir, mcpPath string) error {
 	mcpDir := filepath.Join(srcDir, "mcp")
-	if _, err := os.Stat(mcpDir); os.IsNotExist(err) {
+	if _, err := os.Stat(mcpDir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 

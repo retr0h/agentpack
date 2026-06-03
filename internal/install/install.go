@@ -51,6 +51,7 @@ import (
 	"github.com/retr0h/agentpack/internal/checksum"
 	"github.com/retr0h/agentpack/internal/configmerge"
 	"github.com/retr0h/agentpack/internal/fetcher"
+	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/lock"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/packages"
@@ -782,7 +783,7 @@ func installFromDir(
 	return &Result{
 		Name:                  meta.Name,
 		Version:               meta.Version,
-		SHA:                   shortSHA(meta.GitCommitSHA),
+		SHA:                   gitutil.ShortSHA(meta.GitCommitSHA),
 		Dirs:                  dirs,
 		FileCounts:            fileCounts,
 		ContentClassification: meta.Content,
@@ -842,12 +843,6 @@ func findChecksums(ctx context.Context, dir string) (string, error) {
 // hasMetadataYAML returns true when the extracted archive contains a
 // .agentpack/metadata.yaml file, indicating the new ADR-009 format.
 func hasMetadataYAML(dir string) bool {
-	matches, _ := filepath.Glob(filepath.Join(dir, "**", ".agentpack", "metadata.yaml"))
-	if len(matches) > 0 {
-		return true
-	}
-
-	// Also check the top-level .agentpack directory directly.
 	_, err := os.Stat(filepath.Join(dir, ".agentpack", "metadata.yaml"))
 
 	return err == nil
@@ -964,15 +959,6 @@ func copyFile(src string, dst string) error {
 	}
 
 	return nil
-}
-
-// shortSHA returns the first 7 characters of a git commit SHA.
-func shortSHA(sha string) string {
-	if len(sha) >= 7 {
-		return sha[:7]
-	}
-
-	return sha
 }
 
 func hasContentDirs(dir string) bool {

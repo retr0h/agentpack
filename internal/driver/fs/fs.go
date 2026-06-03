@@ -27,6 +27,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -57,7 +58,7 @@ func CopyFile(src, dst string) error {
 // If src does not exist the call is a no-op. The context is checked
 // on every file to support cancellation.
 func CopyTreeIfExists(ctx context.Context, src, dst string) error {
-	if _, err := os.Stat(src); os.IsNotExist(err) {
+	if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 

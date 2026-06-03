@@ -18,43 +18,34 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package claudecode
+package gitutil_test
 
 import (
-	"context"
-	"os"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/retr0h/agentpack/internal/gitutil"
 )
 
-// SetUserHome replaces userHomeFunc for testing.
-func SetUserHome(cc *ClaudeCode, fn func() (string, error)) {
-	cc.userHomeFunc = fn
-}
+func TestShortSHA(t *testing.T) {
+	t.Parallel()
 
-// SetOsMkdirAll replaces mkdirAllFunc for testing.
-func SetOsMkdirAll(cc *ClaudeCode, fn func(string, os.FileMode) error) {
-	cc.mkdirAllFunc = fn
-}
+	tests := []struct {
+		name string
+		sha  string
+		want string
+	}{
+		{"full SHA", "abc1234567890", "abc1234"},
+		{"short input", "abc", "abc"},
+		{"empty", "", ""},
+		{"exactly seven", "abcdefg", "abcdefg"},
+	}
 
-// FormatDate exposes formatDate for testing.
-func FormatDate(ts string) string {
-	return formatDate(ts)
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
-	return cc.installMCP(ctx, srcDir, settingsPath)
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	cc *ClaudeCode,
-	srcDir, settingsPath, pluginName string,
-) error {
-	return cc.installHooks(ctx, srcDir, settingsPath, pluginName)
-}
-
-// InstallSettings exposes installSettings for testing.
-func InstallSettings(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
-	return cc.installSettings(ctx, srcDir, settingsPath)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, gitutil.ShortSHA(tt.sha))
+		})
+	}
 }

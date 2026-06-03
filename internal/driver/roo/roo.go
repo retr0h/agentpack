@@ -26,6 +26,7 @@ package roo
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -244,7 +245,7 @@ func (r *Roo) roomodesPath(opts target.InstallOpts) (string, error) {
 // The config file is created when absent. Existing keys are preserved.
 func (r *Roo) installConfig(srcDir, roomodesPath string) error {
 	settingsDir := filepath.Join(srcDir, "settings")
-	if _, err := os.Stat(settingsDir); os.IsNotExist(err) {
+	if _, err := os.Stat(settingsDir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 
@@ -297,7 +298,7 @@ func mergeRoomodes(path string, patch map[string]any) error {
 func readYAMLConfig(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return map[string]any{}, nil
 		}
 

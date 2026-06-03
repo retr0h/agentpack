@@ -23,6 +23,7 @@
 package lock
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,7 +62,7 @@ type Lockfile struct {
 func Load(path string) (*Lockfile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return &Lockfile{LockVersion: 2}, nil
 		}
 

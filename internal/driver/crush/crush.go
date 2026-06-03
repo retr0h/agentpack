@@ -26,6 +26,7 @@ package crush
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -256,7 +257,7 @@ func (c *Crush) installHooks(
 	srcDir, hooksPath, pluginName string,
 ) error {
 	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
-	if _, err := os.Stat(hooksFile); os.IsNotExist(err) {
+	if _, err := os.Stat(hooksFile); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 

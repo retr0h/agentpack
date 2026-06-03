@@ -26,6 +26,7 @@ package hermes
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -244,7 +245,7 @@ func (h *Hermes) installHooks(
 	srcDir, configPath, pluginName string,
 ) error {
 	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
-	if _, err := os.Stat(hooksFile); os.IsNotExist(err) {
+	if _, err := os.Stat(hooksFile); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 
@@ -312,7 +313,7 @@ func mergeHooksYAML(path, pluginName string, hooks map[string]any) error {
 func readYAMLConfig(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return map[string]any{}, nil
 		}
 

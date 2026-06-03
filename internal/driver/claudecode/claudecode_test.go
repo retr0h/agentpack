@@ -821,56 +821,6 @@ func TestCopyFile(t *testing.T) {
 	}
 }
 
-func TestCopyTree(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		setup   func(t *testing.T) (src, dst string)
-		wantErr string
-	}{
-		{
-			name: "copies files recursively",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				src := t.TempDir()
-				writeFile(t, filepath.Join(src, "sub", "a.md"), "a")
-				return src, t.TempDir()
-			},
-		},
-		{
-			name: "walkDir error on unreadable subdirectory",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				src := t.TempDir()
-				unreadable := filepath.Join(src, "locked")
-				require.NoError(t, os.MkdirAll(unreadable, 0o755))
-				writeFile(t, filepath.Join(unreadable, "x.md"), "x")
-				require.NoError(t, os.Chmod(unreadable, 0o000))
-				t.Cleanup(func() { _ = os.Chmod(unreadable, 0o755) })
-				return src, t.TempDir()
-			},
-			wantErr: "permission denied",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			src, dst := tt.setup(t)
-			err := claudecode.CopyTree(os.MkdirAll, src, dst)
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-
-			require.NoError(t, err)
-		})
-	}
-}
-
 func TestInstallMCP(t *testing.T) {
 	t.Parallel()
 
@@ -1170,21 +1120,6 @@ func TestInstallSettings(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-		})
-	}
-}
-
-func TestShortSHA(t *testing.T) {
-	t.Parallel()
-	tests := []struct{ name, sha, want string }{
-		{"full", "abc1234567890", "abc1234"},
-		{"short", "abc", "abc"},
-		{"empty", "", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.want, claudecode.ShortSHA(tt.sha))
 		})
 	}
 }

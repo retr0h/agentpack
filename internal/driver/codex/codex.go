@@ -288,7 +288,7 @@ func (c *Codex) installHooks(
 	srcDir, hooksPath, pluginName string,
 ) error {
 	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
-	if _, err := os.Stat(hooksFile); os.IsNotExist(err) {
+	if _, err := os.Stat(hooksFile); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 
@@ -341,7 +341,7 @@ func (c *Codex) codexConfigPath(opts target.InstallOpts) (string, error) {
 // in the fragment are preserved.
 func (c *Codex) installConfig(ctx context.Context, srcDir, cfgPath string) error {
 	settingsDir := filepath.Join(srcDir, "settings")
-	if _, err := os.Stat(settingsDir); os.IsNotExist(err) {
+	if _, err := os.Stat(settingsDir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 

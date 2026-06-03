@@ -23,6 +23,7 @@
 package packages
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -110,7 +111,7 @@ type Config struct {
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return &Config{}, nil
 		}
 

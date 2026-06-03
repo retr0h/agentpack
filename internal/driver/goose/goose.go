@@ -26,6 +26,7 @@ package goose
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -243,7 +244,7 @@ func (g *Goose) gooseConfigPath() (string, error) {
 // already exists.
 func (g *Goose) installMCP(ctx context.Context, srcDir, configPath string) error {
 	mcpDir := filepath.Join(srcDir, "mcp")
-	if _, err := os.Stat(mcpDir); os.IsNotExist(err) {
+	if _, err := os.Stat(mcpDir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 
@@ -312,7 +313,7 @@ func mergeGooseExtension(path, name string, config map[string]any) error {
 func readYAMLConfig(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return map[string]any{}, nil
 		}
 

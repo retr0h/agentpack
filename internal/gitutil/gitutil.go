@@ -18,43 +18,15 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-package claudecode
+// Package gitutil provides shared git-related utility functions.
+package gitutil
 
-import (
-	"context"
-	"os"
-)
+// ShortSHA returns the first 7 characters of a git commit SHA.
+// If the input is shorter than 7 characters, it is returned as-is.
+func ShortSHA(sha string) string {
+	if len(sha) >= 7 {
+		return sha[:7]
+	}
 
-// SetUserHome replaces userHomeFunc for testing.
-func SetUserHome(cc *ClaudeCode, fn func() (string, error)) {
-	cc.userHomeFunc = fn
-}
-
-// SetOsMkdirAll replaces mkdirAllFunc for testing.
-func SetOsMkdirAll(cc *ClaudeCode, fn func(string, os.FileMode) error) {
-	cc.mkdirAllFunc = fn
-}
-
-// FormatDate exposes formatDate for testing.
-func FormatDate(ts string) string {
-	return formatDate(ts)
-}
-
-// InstallMCP exposes installMCP for testing.
-func InstallMCP(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
-	return cc.installMCP(ctx, srcDir, settingsPath)
-}
-
-// InstallHooks exposes installHooks for testing.
-func InstallHooks(
-	ctx context.Context,
-	cc *ClaudeCode,
-	srcDir, settingsPath, pluginName string,
-) error {
-	return cc.installHooks(ctx, srcDir, settingsPath, pluginName)
-}
-
-// InstallSettings exposes installSettings for testing.
-func InstallSettings(ctx context.Context, cc *ClaudeCode, srcDir, settingsPath string) error {
-	return cc.installSettings(ctx, srcDir, settingsPath)
+	return sha
 }

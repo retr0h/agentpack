@@ -272,6 +272,10 @@ func ensureDirs(tw *tar.Writer, archivePath string, seen map[string]bool) error 
 	return nil
 }
 
+// maxFileSize is the maximum allowed size for a single extracted file (100 MB).
+// Files exceeding this limit are rejected to prevent zip-bomb attacks.
+const maxFileSize = 100 * 1024 * 1024
+
 func extractFile(r io.Reader, target string, mode os.FileMode) error {
 	if mode == 0 {
 		mode = 0o644
@@ -282,9 +286,17 @@ func extractFile(r io.Reader, target string, mode os.FileMode) error {
 		return fmt.Errorf("create %s: %w", target, err)
 	}
 
-	if _, err := io.Copy(f, r); err != nil {
+	limited := io.LimitReader(r, maxFileSize+1)
+
+	n, err := io.Copy(f, limited)
+	if err != nil {
 		_ = f.Close()
 		return fmt.Errorf("extract %s: %w", target, err)
+	}
+
+	if n > maxFileSize {
+		_ = f.Close()
+		return fmt.Errorf("file exceeds maximum size of %d bytes: %s", maxFileSize, target)
 	}
 
 	if err := f.Close(); err != nil {

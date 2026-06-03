@@ -33,12 +33,14 @@ package list
 import (
 	"cmp"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/retr0h/agentpack/internal/driver/agents"
+	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/registry"
 )
 
@@ -166,7 +168,7 @@ func (l *Lister) RunWithRegistry(reg Registry) ([]Entry, error) {
 		entries = append(entries, Entry{
 			Name:           m.Name,
 			Version:        shortVersion(m.Version),
-			SHA:            shortSHA(m.SHA),
+			SHA:            gitutil.ShortSHA(m.SHA),
 			Source:         shortSource(m.Source),
 			Targets:        targets,
 			Contents:       extractContentItems(m),
@@ -207,7 +209,7 @@ func (l *Lister) RunGlobal() ([]GlobalEntry, error) {
 		skillsDir := filepath.Join(home, def.GlobalSkillsDir)
 
 		dirEntries, readErr := os.ReadDir(skillsDir)
-		if os.IsNotExist(readErr) {
+		if errors.Is(readErr, os.ErrNotExist) {
 			continue
 		}
 
@@ -320,14 +322,6 @@ func extractContentItems(m *registry.PackageManifest) []ContentItem {
 	})
 
 	return items
-}
-
-func shortSHA(sha string) string {
-	if len(sha) >= 7 {
-		return sha[:7]
-	}
-
-	return sha
 }
 
 func formatDate(ts string) string {

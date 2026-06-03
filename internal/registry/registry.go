@@ -45,6 +45,7 @@
 package registry
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -192,7 +193,7 @@ func (r *Registry) Load(name string) (*PackageManifest, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("package %q not found in registry", name)
 		}
 
@@ -216,7 +217,7 @@ func (r *Registry) Remove(name string) error {
 	}
 
 	path := filepath.Join(dir, registryFileName(name))
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove manifest %s: %w", path, err)
 	}
 
@@ -232,7 +233,7 @@ func (r *Registry) List() ([]*PackageManifest, error) {
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 

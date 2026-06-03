@@ -42,6 +42,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -198,7 +199,8 @@ func (r *Remover) Run(ctx context.Context, opts Options) (*Result, error) {
 			continue
 		}
 
-		if removeErr := os.Remove(absPath); removeErr != nil && !os.IsNotExist(removeErr) {
+		if removeErr := os.Remove(absPath); removeErr != nil &&
+			!errors.Is(removeErr, os.ErrNotExist) {
 			return nil, fmt.Errorf("remove %s: %w", absPath, removeErr)
 		}
 
