@@ -7,6 +7,11 @@ docs/bun.lock
 
 /agentpack
 coverage.out
+coverage.txt
+cov*.out
+cov*.txt
+cov*.html
+.tmp/
 *.agentpack
 examples/*/.git/
 skills-lock.json
