@@ -24,6 +24,8 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -174,7 +176,7 @@ func TestFilteredSubdirs(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestStoreArchive(t *testing.T) {
-	// NOTE: not parallel — subtests mutate shared package-level state.
+	t.Parallel()
 
 	tests := []struct {
 		name    string
@@ -207,6 +209,13 @@ func TestStoreArchive(t *testing.T) {
 					t,
 					strings.HasPrefix(base, "my-plugin@") && strings.HasSuffix(base, ".agentpack"),
 				)
+
+				// The .sha256 sidecar must be written next to the archive —
+				// without it, reinstall verification is silently skipped.
+				sidecar, err := os.ReadFile(dstPath + ".sha256")
+				require.NoError(t, err)
+				sum := sha256.Sum256(data)
+				assert.Equal(t, hex.EncodeToString(sum[:])+"\n", string(sidecar))
 			},
 		},
 		{
@@ -239,13 +248,14 @@ func TestStoreArchive(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Not parallel: mutates archivesDirFunc package-level var.
+			t.Parallel()
 
 			srcPath, storeDir := tt.setup(t)
 
-			// Override archivesDir via the exported test hook.
-			restore := install.SetArchivesDir(func() (string, error) { return storeDir, nil })
-			defer restore()
+			// Each installer owns its archives-dir seam, so subtests are
+			// parallel-safe — no shared package state to mutate.
+			i := install.New()
+			i.SetArchivesDir(func() (string, error) { return storeDir, nil })
 
 			ctx := context.Background()
 			if tt.wantErr == "context canceled" {
@@ -254,7 +264,7 @@ func TestStoreArchive(t *testing.T) {
 				ctx = cancelCtx
 			}
 
-			dstPath, err := install.StoreArchive(ctx, srcPath, tt.pkgName, tt.sha)
+			dstPath, err := i.StoreArchive(ctx, srcPath, tt.pkgName, tt.sha)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -275,7 +285,7 @@ func TestStoreArchive(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestArchivesDir(t *testing.T) {
-	// NOTE: not parallel — subtests mutate shared package-level state.
+	t.Parallel()
 
 	tests := []struct {
 		name    string
@@ -316,24 +326,20 @@ func TestArchivesDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Not parallel: mutates archivesDirHome package-level var.
+			t.Parallel()
 
-			var restore func()
+			var homeFn func() (string, error)
 
 			if tt.homeDir != "" {
 				capturedHome := tt.homeDir
-				restore = install.SetArchivesDirHome(
-					func() (string, error) { return capturedHome, nil },
-				)
+				homeFn = func() (string, error) { return capturedHome, nil }
 			} else {
-				restore = install.SetArchivesDirHome(func() (string, error) {
+				homeFn = func() (string, error) {
 					return "", errors.New("simulated home dir failure")
-				})
+				}
 			}
 
-			defer restore()
-
-			dir, err := install.ArchivesDir()
+			dir, err := install.ArchivesDirForHome(homeFn)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -859,6 +865,49 @@ func TestAutoPackageGeneratesEntries(t *testing.T) {
 				assert.Equal(t, "agent", meta.Entries[0].Type)
 			},
 		},
+		{
+			name: "mixed skill and agent filters keep both kinds",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+
+				for _, name := range []string{"k8s", "react"} {
+					skillDir := filepath.Join(dir, "skills", name)
+					require.NoError(t, os.MkdirAll(skillDir, 0o755))
+					require.NoError(t, os.WriteFile(
+						filepath.Join(skillDir, "SKILL.md"),
+						[]byte("# "+name+"\n"),
+						0o644,
+					))
+				}
+
+				for _, name := range []string{"reviewer", "planner"} {
+					agentDir := filepath.Join(dir, "agents", name)
+					require.NoError(t, os.MkdirAll(agentDir, 0o755))
+					require.NoError(t, os.WriteFile(
+						filepath.Join(agentDir, "AGENT.md"),
+						[]byte("# "+name+"\n"),
+						0o644,
+					))
+				}
+
+				return dir
+			},
+			skillFilter: []string{"k8s"},
+			agentFilter: []string{"reviewer"},
+			check: func(t *testing.T, meta *metadata.Metadata) {
+				t.Helper()
+				require.Len(t, meta.Entries, 2)
+
+				entryMap := make(map[string]string, len(meta.Entries))
+				for _, e := range meta.Entries {
+					entryMap[e.Name] = e.Type
+				}
+
+				assert.Equal(t, "skill", entryMap["k8s"])
+				assert.Equal(t, "agent", entryMap["reviewer"])
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -944,7 +993,7 @@ func buildArchiveChecksums(
 }
 
 func TestContentCheckCallback(t *testing.T) {
-	// NOTE: not parallel — subtests mutate the shared registrySave package-level var.
+	t.Parallel()
 
 	tests := []struct {
 		name         string
@@ -997,12 +1046,7 @@ func TestContentCheckCallback(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Not parallel: mutates registrySave package-level var.
-
-			restoreSave := install.SetRegistrySave(
-				func(_ *registry.PackageManifest) error { return nil },
-			)
-			defer restoreSave()
+			t.Parallel()
 
 			archivePath := buildArchiveWithContentClassification(t)
 
@@ -1018,11 +1062,13 @@ func TestContentCheckCallback(t *testing.T) {
 				{Path: "skills/intro.md", SHA256: "dummy"},
 			}, nil).AnyTimes()
 
-			r, err := install.NewWithTargets([]target.Target{mockTarget}).
-				Run(context.Background(), install.Options{
-					Source:       archivePath,
-					ContentCheck: tt.contentCheck,
-				})
+			i := install.NewWithTargets([]target.Target{mockTarget})
+			i.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
+
+			r, err := i.Run(context.Background(), install.Options{
+				Source:       archivePath,
+				ContentCheck: tt.contentCheck,
+			})
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

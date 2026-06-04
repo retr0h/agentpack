@@ -51,6 +51,7 @@ import (
 	"github.com/retr0h/agentpack/internal/checksum"
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/internal/configmerge"
+	"github.com/retr0h/agentpack/internal/driver"
 	"github.com/retr0h/agentpack/internal/fetcher"
 	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/lock"
@@ -60,22 +61,6 @@ import (
 	"github.com/retr0h/agentpack/internal/target"
 	"github.com/retr0h/agentpack/pkg/registry"
 	"github.com/retr0h/agentpack/pkg/safety"
-)
-
-// Swappable OS functions for testing.
-var (
-	// osCreateTemp is a swappable wrapper so tests can inject temp-file
-	// creation failures.
-	osCreateTemp = os.CreateTemp
-	osMkdirTemp  = os.MkdirTemp
-
-	// registrySave is a swappable wrapper around registry.New().Save so tests
-	// can prevent writes to the real ~/.config/agentpack/packages/ directory.
-	registrySave = registry.New().Save
-
-	// registryLoad is a swappable wrapper around registry.New().Load so tests
-	// can inject a pre-existing manifest without touching the real registry.
-	registryLoad = registry.New().Load
 )
 
 // defaultResolveTargets maps requested target names to driver instances. When
@@ -89,16 +74,40 @@ func defaultResolveTargets(names []string) ([]target.Target, error) {
 }
 
 // Installer orchestrates the agentpack install pipeline.
+//
+// Every collaborator that tests need to swap (target resolution, temp-file
+// creation, registry I/O, the archives cache directory) is held as a field
+// rather than a package-level var, so each Installer owns its own seams and
+// parallel tests never race on shared mutable state.
 type Installer struct {
-	// resolveTargets maps requested target names to driver instances. Held per
-	// installer (not as a package global) so tests can inject mock targets
-	// without shared mutable state, keeping parallel tests safe.
+	// resolveTargets maps requested target names to driver instances.
 	resolveTargets func(names []string) ([]target.Target, error)
+
+	// createTemp / mkdirTemp wrap os.CreateTemp / os.MkdirTemp so tests can
+	// inject temp-creation failures.
+	createTemp func(dir, pattern string) (*os.File, error)
+	mkdirTemp  func(dir, pattern string) (string, error)
+
+	// registrySave / registryLoad wrap registry.New().Save / .Load so tests can
+	// avoid touching the real ~/.config/agentpack/packages/ directory.
+	registrySave func(*registry.PackageManifest) error
+	registryLoad func(string) (*registry.PackageManifest, error)
+
+	// archivesDir resolves the archive cache directory
+	// (~/.config/agentpack/archives), swappable so tests can redirect it.
+	archivesDir func() (string, error)
 }
 
 // New returns a new Installer ready to run install pipelines.
 func New() *Installer {
-	return &Installer{resolveTargets: defaultResolveTargets}
+	return &Installer{
+		resolveTargets: defaultResolveTargets,
+		createTemp:     os.CreateTemp,
+		mkdirTemp:      os.MkdirTemp,
+		registrySave:   registry.New().Save,
+		registryLoad:   registry.New().Load,
+		archivesDir:    defaultArchivesDir,
+	}
 }
 
 // Options configures an install run.
@@ -201,7 +210,7 @@ func (i *Installer) runFromGit(
 	opts Options,
 	f fetcher.Fetcher,
 ) (*Result, error) {
-	cloneDir, err := osMkdirTemp("", "agentpack-git-*")
+	cloneDir, err := i.mkdirTemp("", "agentpack-git-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
@@ -273,9 +282,18 @@ func (i *Installer) runFromGit(
 		return nil, err
 	}
 
-	storedPath, err := storeArchive(ctx, archivePath, name, sha)
+	// storeArchive caches the built archive (and its .sha256 sidecar) for
+	// future reinstalls. A failure here is non-fatal — we install from the
+	// freshly built temp archive instead — but it must not be silent, or an
+	// operator has no way to know the cache (and its tamper-detection sidecar)
+	// was never written.
+	storedPath, err := i.storeArchive(ctx, archivePath, name, sha)
 	if err != nil {
 		storedPath = archivePath
+		emitStep(opts, Step{
+			Name:   "cache archive",
+			Detail: fmt.Sprintf("skipped: %v", err),
+		})
 	}
 
 	archiveOpts := opts
@@ -302,7 +320,7 @@ func (i *Installer) runFromArchive(
 	opts Options,
 	f fetcher.Fetcher,
 ) (*Result, error) {
-	tmpFile, err := osCreateTemp("", "agentpack-install-*.agentpack")
+	tmpFile, err := i.createTemp("", "agentpack-install-*.agentpack")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
@@ -319,13 +337,13 @@ func (i *Installer) runFromArchive(
 		return nil, err
 	}
 
-	tmpDir, err := osMkdirTemp("", "agentpack-install-*")
+	tmpDir, err := i.mkdirTemp("", "agentpack-install-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	verified, err := verifyArchiveSidecar(ctx, opts.Source, tmpArchive)
+	verified, err := verifyArchiveSidecar(ctx, f, opts.Source, tmpArchive)
 	if err != nil {
 		return nil, err
 	}
@@ -406,8 +424,37 @@ func (i *Installer) runFromArchive(
 // archives distributed without one still install (npm/Go-style optional
 // integrity); a present sidecar that does not match aborts the install before
 // any file is written. It returns true when a sidecar was found and matched.
-func verifyArchiveSidecar(ctx context.Context, source, archivePath string) (bool, error) {
-	data, err := os.ReadFile(source + ".sha256")
+//
+// The sidecar is retrieved through the same fetcher as the archive, so the
+// check works for every backend — a local "<path>.sha256", or an HTTP
+// "<url>.sha256" alongside a remote archive. (A previous version read the
+// sidecar with os.ReadFile on the raw source string, which silently no-oped
+// for HTTP sources because a URL is not a local file.) archivePath must be a
+// freshly fetched temp path distinct from source so the sidecar download
+// cannot overwrite the source's own sidecar.
+func verifyArchiveSidecar(
+	ctx context.Context,
+	f fetcher.Fetcher,
+	source, archivePath string,
+) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+
+	sidecarPath := archivePath + ".sha256"
+	if err := f.Fetch(ctx, source+".sha256", sidecarPath); err != nil {
+		// No sidecar published (missing local file, HTTP 404, …). Distinguish a
+		// genuine cancellation from an absent sidecar so a cancelled install
+		// does not look like a clean skip.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return false, ctxErr
+		}
+
+		return false, nil
+	}
+	defer func() { _ = os.Remove(sidecarPath) }()
+
+	data, err := os.ReadFile(sidecarPath)
 	if err != nil {
 		return false, nil
 	}
@@ -891,7 +938,7 @@ func (i *Installer) installFromDir(
 			return nil, err
 		}
 
-		srcDir, err := copyToTemp(ctx, sourceDir)
+		srcDir, err := i.copyToTemp(ctx, sourceDir)
 		if err != nil {
 			return nil, fmt.Errorf("prepare source for %s: %w", tgt.Name(), err)
 		}
@@ -964,13 +1011,13 @@ func (i *Installer) installFromDir(
 		Files:           allFiles,
 	}
 
-	if existing, loadErr := registryLoad(meta.Name); loadErr == nil && existing != nil {
+	if existing, loadErr := i.registryLoad(meta.Name); loadErr == nil && existing != nil {
 		manifest.Files = mergeFiles(existing.Files, manifest.Files)
 		manifest.SelectedContent = merge.Strings(existing.SelectedContent, manifest.SelectedContent)
 		manifest.SelectedSkills = merge.Strings(existing.SelectedSkills, manifest.SelectedSkills)
 	}
 
-	if saveErr := registrySave(manifest); saveErr != nil {
+	if saveErr := i.registrySave(manifest); saveErr != nil {
 		return nil, fmt.Errorf("save registry manifest: %w", saveErr)
 	}
 
@@ -987,13 +1034,16 @@ func (i *Installer) installFromDir(
 
 // copyToTemp makes a fresh copy of src into a new temp directory and returns
 // the path to the new directory.
-func copyToTemp(ctx context.Context, src string) (string, error) {
-	dst, err := osMkdirTemp("", "agentpack-target-*")
+func (i *Installer) copyToTemp(ctx context.Context, src string) (string, error) {
+	dst, err := i.mkdirTemp("", "agentpack-target-*")
 	if err != nil {
 		return "", fmt.Errorf("create target temp dir: %w", err)
 	}
 
-	if copyErr := copyDir(ctx, src, dst); copyErr != nil {
+	// Delegate to the shared driver helper so the extracted-archive copy honors
+	// the same symlink guard every driver uses — a symlink that survived
+	// extraction is skipped rather than followed to a file outside the tree.
+	if copyErr := driver.CopyTreeIfExists(ctx, src, dst); copyErr != nil {
 		_ = os.RemoveAll(dst)
 
 		return "", fmt.Errorf("copy to target dir: %w", copyErr)
@@ -1109,51 +1159,6 @@ func findAndReadMetadata(ctx context.Context, dir string) (*metadata.Metadata, e
 	}
 
 	return nil, fmt.Errorf("metadata.json not found in archive")
-}
-
-// copyDir recursively copies src to dst.
-func copyDir(ctx context.Context, src string, dst string) error {
-	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return fmt.Errorf("rel path: %w", err)
-		}
-
-		tgtPath := filepath.Join(dst, rel)
-
-		if d.IsDir() {
-			return os.MkdirAll(tgtPath, 0o755)
-		}
-
-		return copyFile(path, tgtPath)
-	})
-}
-
-// copyFile copies a single file from src to dst.
-func copyFile(src string, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", src, err)
-	}
-
-	info, err := os.Stat(src)
-	if err != nil {
-		return fmt.Errorf("stat %s: %w", src, err)
-	}
-
-	if err := os.WriteFile(dst, data, info.Mode()); err != nil {
-		return fmt.Errorf("write %s: %w", dst, err)
-	}
-
-	return nil
 }
 
 func hasContentDirs(dir string) bool {

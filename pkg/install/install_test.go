@@ -40,6 +40,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/archive"
+	"github.com/retr0h/agentpack/internal/fetcher"
+	fetchermocks "github.com/retr0h/agentpack/internal/fetcher/mocks"
 	"github.com/retr0h/agentpack/internal/lock"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/packages"
@@ -310,7 +312,7 @@ func TestRun(t *testing.T) {
 		noParallel  bool
 		global      bool
 		customCtx   context.Context
-		injectFuncs func(t *testing.T)
+		injectFuncs func(t *testing.T, i *install.Installer)
 		wantErr     string
 		checkResult func(t *testing.T, r *install.Result)
 		onStep      func(s install.Step)
@@ -343,12 +345,9 @@ skills:
 
 				return archivePath, []target.Target{m}
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetRegistrySave(
-					func(_ *registry.PackageManifest) error { return nil },
-				)
-				t.Cleanup(restore)
+				i.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -387,12 +386,9 @@ skills:
 
 				return archivePath, []target.Target{m}
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetRegistrySave(
-					func(_ *registry.PackageManifest) error { return nil },
-				)
-				t.Cleanup(restore)
+				i.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -437,12 +433,9 @@ skills:
 
 				return archivePath, []target.Target{m1, m2}
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetRegistrySave(
-					func(_ *registry.PackageManifest) error { return nil },
-				)
-				t.Cleanup(restore)
+				i.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -487,12 +480,9 @@ skills:
 
 				return archivePath, []target.Target{m}
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetRegistrySave(
-					func(_ *registry.PackageManifest) error { return nil },
-				)
-				t.Cleanup(restore)
+				i.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
 			},
 			checkSteps: func(t *testing.T, steps []install.Step) {
 				t.Helper()
@@ -660,10 +650,9 @@ skills:
 
 				return "/some/path.agentpack", nil
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetOsCreateTemp(install.CreateTempAlwaysFails)
-				t.Cleanup(restore)
+				i.SetCreateTemp(install.CreateTempAlwaysFails)
 			},
 			wantErr: "create temp file",
 		},
@@ -684,10 +673,9 @@ skills:
 
 				return archivePath, nil
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetOsMkdirTemp(install.MkdirTempAlwaysFails)
-				t.Cleanup(restore)
+				i.SetMkdirTemp(install.MkdirTempAlwaysFails)
 			},
 			wantErr: "create temp dir",
 		},
@@ -796,12 +784,11 @@ skills:
 
 				return archivePath, []target.Target{m}
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				// Succeed on the first osMkdirTemp call (extract temp dir) and
+				// Succeed on the first mkdirTemp call (extract temp dir) and
 				// fail on the second (inside copyToTemp).
-				restore := install.SetOsMkdirTemp(install.MkdirTempFailAfterN(1))
-				t.Cleanup(restore)
+				i.SetMkdirTemp(install.MkdirTempFailAfterN(1))
 			},
 			wantErr: "create target temp dir",
 		},
@@ -933,12 +920,9 @@ skills:
 
 				return archivePath, []target.Target{m}
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetRegistrySave(
-					func(_ *registry.PackageManifest) error { return nil },
-				)
-				t.Cleanup(restore)
+				i.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -981,12 +965,13 @@ skills:
 				t.Parallel()
 			}
 
-			if tt.injectFuncs != nil {
-				tt.injectFuncs(t)
-			}
-
 			ctrl := gomock.NewController(t)
 			archivePath, targets := tt.setup(t, ctrl)
+
+			i := install.NewWithTargets(targets)
+			if tt.injectFuncs != nil {
+				tt.injectFuncs(t, i)
+			}
 
 			var ctx context.Context
 			var cancel context.CancelFunc
@@ -1011,7 +996,7 @@ skills:
 				onStep = func(s install.Step) { steps = append(steps, s) }
 			}
 
-			r, err := install.NewWithTargets(targets).Run(ctx, install.Options{
+			r, err := i.Run(ctx, install.Options{
 				Source: archivePath,
 				OnStep: onStep,
 				Global: tt.global,
@@ -1075,207 +1060,6 @@ func TestShortSHA(t *testing.T) {
 
 			got := install.ShortSHA(tt.sha)
 			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// --------------------------------------------------------------------------
-// TestCopyFile
-// --------------------------------------------------------------------------
-
-func TestCopyFile(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		setup   func(t *testing.T) (src string, dst string)
-		wantErr string
-		check   func(t *testing.T, dst string)
-	}{
-		{
-			name: "copies file content and mode",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				dir := t.TempDir()
-				src := filepath.Join(dir, "src.txt")
-
-				require.NoError(t, os.WriteFile(src, []byte("hello copy"), 0o644))
-
-				return src, filepath.Join(dir, "dst.txt")
-			},
-			check: func(t *testing.T, dst string) {
-				t.Helper()
-				data, err := os.ReadFile(dst)
-				require.NoError(t, err)
-				assert.Equal(t, "hello copy", string(data))
-			},
-		},
-		{
-			name: "returns error when src does not exist",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				dir := t.TempDir()
-
-				return filepath.Join(dir, "nonexistent.txt"), filepath.Join(dir, "dst.txt")
-			},
-			wantErr: "read",
-		},
-		{
-			name: "returns error when dst dir does not exist",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				dir := t.TempDir()
-				src := filepath.Join(dir, "src.txt")
-
-				require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
-
-				return src, filepath.Join(dir, "nonexistent", "dst.txt")
-			},
-			wantErr: "write",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			src, dst := tt.setup(t)
-			err := install.CopyFile(src, dst)
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-
-			require.NoError(t, err)
-
-			if tt.check != nil {
-				tt.check(t, dst)
-			}
-		})
-	}
-}
-
-// --------------------------------------------------------------------------
-// TestCopyDir
-// --------------------------------------------------------------------------
-
-func TestCopyDir(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		setup     func(t *testing.T) (src string, dst string)
-		cancelCtx bool
-		wantErr   string
-		check     func(t *testing.T, dst string)
-	}{
-		{
-			name: "copies directory tree recursively",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				dir := t.TempDir()
-				src := filepath.Join(dir, "src")
-
-				require.NoError(t, os.MkdirAll(filepath.Join(src, "subdir"), 0o755))
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(src, "file.txt"), []byte("root"), 0o644),
-				)
-				require.NoError(
-					t,
-					os.WriteFile(
-						filepath.Join(src, "subdir", "nested.txt"),
-						[]byte("nested"),
-						0o644,
-					),
-				)
-
-				return src, filepath.Join(dir, "dst")
-			},
-			check: func(t *testing.T, dst string) {
-				t.Helper()
-				data, err := os.ReadFile(filepath.Join(dst, "file.txt"))
-				require.NoError(t, err)
-				assert.Equal(t, "root", string(data))
-
-				data2, err := os.ReadFile(filepath.Join(dst, "subdir", "nested.txt"))
-				require.NoError(t, err)
-				assert.Equal(t, "nested", string(data2))
-			},
-		},
-		{
-			name: "returns error when context is cancelled",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				dir := t.TempDir()
-				src := filepath.Join(dir, "src")
-
-				require.NoError(t, os.MkdirAll(src, 0o755))
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(src, "file.txt"), []byte("data"), 0o644),
-				)
-
-				return src, filepath.Join(dir, "dst")
-			},
-			cancelCtx: true,
-			wantErr:   "context canceled",
-		},
-		{
-			name: "returns error when walkdir encounters permission denied in src",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				dir := t.TempDir()
-				src := filepath.Join(dir, "src")
-				subdir := filepath.Join(src, "subdir")
-
-				require.NoError(t, os.MkdirAll(subdir, 0o755))
-				require.NoError(
-					t,
-					os.WriteFile(filepath.Join(subdir, "file.txt"), []byte("x"), 0o644),
-				)
-				require.NoError(t, os.Chmod(subdir, 0o000))
-
-				t.Cleanup(func() { _ = os.Chmod(subdir, 0o755) })
-
-				return src, filepath.Join(dir, "dst")
-			},
-			wantErr: "permission denied",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			src, dst := tt.setup(t)
-
-			var ctx context.Context
-			var cancel context.CancelFunc
-
-			if tt.cancelCtx {
-				ctx, cancel = context.WithCancel(context.Background())
-				cancel()
-			} else {
-				ctx = context.Background()
-				cancel = func() {}
-			}
-
-			defer cancel()
-
-			err := install.CopyDir(ctx, src, dst)
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-
-			require.NoError(t, err)
-
-			if tt.check != nil {
-				tt.check(t, dst)
-			}
 		})
 	}
 }
@@ -2102,33 +1886,83 @@ func TestVerifyArchiveSidecar(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		writeSidecar bool
-		sidecar      func(realHash string) string
+		name string
+		// setup returns the fetcher and source string to verify against. The
+		// archive at archivePath (content hashing to realHash) is created by the
+		// harness; the sidecar is supplied through the fetcher.
+		setup        func(t *testing.T, dir, archivePath, realHash string) (fetcher.Fetcher, string)
 		wantVerified bool
 		wantErr      string
 	}{
 		{
-			name:         "matching sidecar verifies",
-			writeSidecar: true,
-			sidecar:      func(h string) string { return h + "\n" },
+			name: "matching local sidecar verifies",
+			setup: func(t *testing.T, dir, _, realHash string) (fetcher.Fetcher, string) {
+				t.Helper()
+				source := filepath.Join(dir, "remote.agentpack")
+				require.NoError(t, os.WriteFile(source+".sha256", []byte(realHash+"\n"), 0o644))
+				return &fetcher.FileFetcher{}, source
+			},
 			wantVerified: true,
 		},
 		{
-			name:         "mismatching sidecar aborts",
-			writeSidecar: true,
-			sidecar:      func(string) string { return "deadbeefdeadbeef\n" },
-			wantErr:      "sidecar mismatch",
+			name: "mismatching local sidecar aborts",
+			setup: func(t *testing.T, dir, _, _ string) (fetcher.Fetcher, string) {
+				t.Helper()
+				source := filepath.Join(dir, "remote.agentpack")
+				require.NoError(
+					t,
+					os.WriteFile(source+".sha256", []byte("deadbeefdeadbeef\n"), 0o644),
+				)
+				return &fetcher.FileFetcher{}, source
+			},
+			wantErr: "sidecar mismatch",
 		},
 		{
-			name:         "no sidecar is a no-op",
-			writeSidecar: false,
+			name: "missing local sidecar is a no-op",
+			setup: func(t *testing.T, dir, _, _ string) (fetcher.Fetcher, string) {
+				t.Helper()
+				return &fetcher.FileFetcher{}, filepath.Join(dir, "remote.agentpack")
+			},
 			wantVerified: false,
 		},
 		{
-			name:         "empty sidecar is a no-op",
-			writeSidecar: true,
-			sidecar:      func(string) string { return "\n" },
+			name: "empty local sidecar is a no-op",
+			setup: func(t *testing.T, dir, _, _ string) (fetcher.Fetcher, string) {
+				t.Helper()
+				source := filepath.Join(dir, "remote.agentpack")
+				require.NoError(t, os.WriteFile(source+".sha256", []byte("\n"), 0o644))
+				return &fetcher.FileFetcher{}, source
+			},
+			wantVerified: false,
+		},
+		{
+			// The core of the HTTP fix: the sidecar must be retrieved via the
+			// fetcher, not os.ReadFile on a URL string.
+			name: "remote sidecar is fetched through the fetcher",
+			setup: func(t *testing.T, _, _, realHash string) (fetcher.Fetcher, string) {
+				t.Helper()
+				ctrl := gomock.NewController(t)
+				mf := fetchermocks.NewMockFetcher(ctrl)
+				mf.EXPECT().
+					Fetch(gomock.Any(), "https://example.com/p.agentpack.sha256", gomock.Any()).
+					DoAndReturn(func(_ context.Context, _, dest string) error {
+						return os.WriteFile(dest, []byte(realHash+"\n"), 0o644)
+					})
+				return mf, "https://example.com/p.agentpack"
+			},
+			wantVerified: true,
+		},
+		{
+			name: "remote sidecar fetch failure is a no-op",
+			setup: func(t *testing.T, _, _, _ string) (fetcher.Fetcher, string) {
+				t.Helper()
+				ctrl := gomock.NewController(t)
+				mf := fetchermocks.NewMockFetcher(ctrl)
+				mf.EXPECT().
+					Fetch(gomock.Any(), "https://example.com/p.agentpack.sha256", gomock.Any()).
+					Return(errors.New("http 404: not found"))
+				return mf, "https://example.com/p.agentpack"
+			},
 			wantVerified: false,
 		},
 	}
@@ -2145,14 +1979,10 @@ func TestVerifyArchiveSidecar(t *testing.T) {
 			sum := sha256.Sum256(content)
 			realHash := hex.EncodeToString(sum[:])
 
-			if tt.writeSidecar {
-				require.NoError(t, os.WriteFile(
-					archivePath+".sha256", []byte(tt.sidecar(realHash)), 0o644,
-				))
-			}
+			f, source := tt.setup(t, dir, archivePath, realHash)
 
 			verified, err := install.VerifyArchiveSidecar(
-				context.Background(), archivePath, archivePath,
+				context.Background(), f, source, archivePath,
 			)
 
 			if tt.wantErr != "" {
@@ -2373,7 +2203,7 @@ func TestRunFromGit(t *testing.T) {
 		noParallel  bool
 		ref         string
 		setup       func(t *testing.T, ctrl *gomock.Controller) (source string, targets []target.Target)
-		injectFuncs func(t *testing.T)
+		injectFuncs func(t *testing.T, i *install.Installer)
 		wantErr     string
 		checkResult func(t *testing.T, r *install.Result)
 	}{
@@ -2385,10 +2215,9 @@ func TestRunFromGit(t *testing.T) {
 				bareRepo := initBareGitRepo(t)
 				return bareRepo, nil
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetOsMkdirTemp(install.MkdirTempAlwaysFails)
-				t.Cleanup(restore)
+				i.SetMkdirTemp(install.MkdirTempAlwaysFails)
 			},
 			wantErr: "create temp dir",
 		},
@@ -2420,18 +2249,12 @@ func TestRunFromGit(t *testing.T) {
 
 				return bareRepo, []target.Target{m}
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetRegistrySave(
-					func(_ *registry.PackageManifest) error { return nil },
-				)
-				t.Cleanup(restore)
+				i.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
 				// Redirect archives dir so storeArchive doesn't write to real home.
 				archivesDir := t.TempDir()
-				restoreArchives := install.SetArchivesDir(
-					func() (string, error) { return archivesDir, nil },
-				)
-				t.Cleanup(restoreArchives)
+				i.SetArchivesDir(func() (string, error) { return archivesDir, nil })
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -2459,17 +2282,11 @@ func TestRunFromGit(t *testing.T) {
 
 				return bareRepo + "#main", []target.Target{m}
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetRegistrySave(
-					func(_ *registry.PackageManifest) error { return nil },
-				)
-				t.Cleanup(restore)
+				i.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
 				archivesDir := t.TempDir()
-				restoreArchives := install.SetArchivesDir(
-					func() (string, error) { return archivesDir, nil },
-				)
-				t.Cleanup(restoreArchives)
+				i.SetArchivesDir(func() (string, error) { return archivesDir, nil })
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -2484,7 +2301,7 @@ func TestRunFromGit(t *testing.T) {
 				bareRepo := initBareGitRepo(t)
 				return bareRepo, nil
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, _ *install.Installer) {
 				t.Helper()
 				// Use cancelAfterN to cancel just after FetchWithResult succeeds.
 				// The exact count may vary; this covers the ctx.Err() check at
@@ -2529,13 +2346,10 @@ func TestRunFromGit(t *testing.T) {
 
 				return bare, nil
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
 				archivesDir := t.TempDir()
-				restore := install.SetArchivesDir(
-					func() (string, error) { return archivesDir, nil },
-				)
-				t.Cleanup(restore)
+				i.SetArchivesDir(func() (string, error) { return archivesDir, nil })
 			},
 			wantErr: "no installable content",
 		},
@@ -2560,17 +2374,11 @@ func TestRunFromGit(t *testing.T) {
 
 				return bareRepo, []target.Target{m}
 			},
-			injectFuncs: func(t *testing.T) {
+			injectFuncs: func(t *testing.T, i *install.Installer) {
 				t.Helper()
-				restore := install.SetRegistrySave(
-					func(_ *registry.PackageManifest) error { return nil },
-				)
-				t.Cleanup(restore)
+				i.SetRegistrySave(func(_ *registry.PackageManifest) error { return nil })
 				archivesDir := t.TempDir()
-				restoreArchives := install.SetArchivesDir(
-					func() (string, error) { return archivesDir, nil },
-				)
-				t.Cleanup(restoreArchives)
+				i.SetArchivesDir(func() (string, error) { return archivesDir, nil })
 			},
 			checkResult: func(t *testing.T, r *install.Result) {
 				t.Helper()
@@ -2586,14 +2394,15 @@ func TestRunFromGit(t *testing.T) {
 				t.Parallel()
 			}
 
-			if tt.injectFuncs != nil {
-				tt.injectFuncs(t)
-			}
-
 			ctrl := gomock.NewController(t)
 			source, targets := tt.setup(t, ctrl)
 
-			r, err := install.NewWithTargets(targets).Run(context.Background(), install.Options{
+			i := install.NewWithTargets(targets)
+			if tt.injectFuncs != nil {
+				tt.injectFuncs(t, i)
+			}
+
+			r, err := i.Run(context.Background(), install.Options{
 				Source: source,
 				Ref:    tt.ref,
 			})
@@ -3023,8 +2832,8 @@ func collectTargetNames(files []registry.InstalledFile) []string {
 // TestLifecycleFullAddListDelete exercises the complete install -> list -> delete
 // lifecycle across two targets, a partial skill removal, and a full removal.
 //
-// This test is sequential (no t.Parallel) because it mutates the package-level
-// swappable vars registrySave, registryLoad, and osUserHomeDir.
+// This test is sequential (no t.Parallel) because withTempRegistry redirects
+// the registry package's process-wide home-dir lookup (osUserHomeDir).
 func TestLifecycleFullAddListDelete(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -3089,12 +2898,6 @@ func testLifecycleFull(t *testing.T) {
 
 	reg, restoreHome := withTempRegistry(t)
 	defer restoreHome()
-
-	restoreSave := install.SetRegistrySave(reg.Save)
-	defer restoreSave()
-
-	restoreLoad := install.SetRegistryLoad(reg.Load)
-	defer restoreLoad()
 
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
@@ -3243,12 +3046,6 @@ func testLifecycleWholeRepo(t *testing.T) {
 	reg, restoreHome := withTempRegistry(t)
 	defer restoreHome()
 
-	restoreSave := install.SetRegistrySave(reg.Save)
-	defer restoreSave()
-
-	restoreLoad := install.SetRegistryLoad(reg.Load)
-	defer restoreLoad()
-
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
@@ -3327,12 +3124,6 @@ func testLifecycleSkillFilter(t *testing.T) {
 
 	reg, restoreHome := withTempRegistry(t)
 	defer restoreHome()
-
-	restoreSave := install.SetRegistrySave(reg.Save)
-	defer restoreSave()
-
-	restoreLoad := install.SetRegistryLoad(reg.Load)
-	defer restoreLoad()
 
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
@@ -3439,12 +3230,6 @@ func testLifecycleWholeRepoAllContent(t *testing.T) {
 	reg, restoreHome := withTempRegistry(t)
 	defer restoreHome()
 
-	restoreSave := install.SetRegistrySave(reg.Save)
-	defer restoreSave()
-
-	restoreLoad := install.SetRegistryLoad(reg.Load)
-	defer restoreLoad()
-
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
@@ -3483,12 +3268,6 @@ func testLifecycleSkillThenWholeRepo(t *testing.T) {
 
 	reg, restoreHome := withTempRegistry(t)
 	defer restoreHome()
-
-	restoreSave := install.SetRegistrySave(reg.Save)
-	defer restoreSave()
-
-	restoreLoad := install.SetRegistryLoad(reg.Load)
-	defer restoreLoad()
 
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
@@ -3617,21 +3396,16 @@ func newManifestEnv(t *testing.T) (*manifestEnv, func()) {
 
 	sandboxDir := t.TempDir()
 
+	// withTempRegistry redirects the registry's home dir for the whole test, so
+	// every install.New()'s default registry seams resolve to this temp
+	// registry — no per-installer injection needed.
 	reg, restoreHome := withTempRegistry(t)
-	restoreSave := install.SetRegistrySave(reg.Save)
-	restoreLoad := install.SetRegistryLoad(reg.Load)
-
-	restore := func() {
-		restoreLoad()
-		restoreSave()
-		restoreHome()
-	}
 
 	return &manifestEnv{
 		reg:      reg,
 		yamlPath: filepath.Join(sandboxDir, "agentpack-packages.yaml"),
 		lockPath: filepath.Join(sandboxDir, "agentpack.lock"),
-	}, restore
+	}, restoreHome
 }
 
 // simulateAddManifests mirrors what cmd/add.updateManifests does: writes the
@@ -4280,12 +4054,12 @@ func TestCopyToTemp(t *testing.T) {
 
 			src := tt.setup(t)
 
+			i := install.New()
 			if tt.noParallel {
-				restore := install.SetOsMkdirTemp(install.MkdirTempAlwaysFails)
-				defer restore()
+				i.SetMkdirTemp(install.MkdirTempAlwaysFails)
 			}
 
-			dst, err := install.CopyToTemp(context.Background(), src)
+			dst, err := i.CopyToTemp(context.Background(), src)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

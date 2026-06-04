@@ -28,15 +28,16 @@ import (
 
 	"github.com/retr0h/agentpack/internal/archive"
 	"github.com/retr0h/agentpack/internal/cli"
+	"github.com/retr0h/agentpack/internal/fetcher"
 	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/internal/target"
 	"github.com/retr0h/agentpack/pkg/registry"
 )
 
-// StoreArchive exposes storeArchive for testing.
-func StoreArchive(ctx context.Context, srcPath, name, sha string) (string, error) {
-	return storeArchive(ctx, srcPath, name, sha)
+// StoreArchive exposes the storeArchive method for testing.
+func (i *Installer) StoreArchive(ctx context.Context, srcPath, name, sha string) (string, error) {
+	return i.storeArchive(ctx, srcPath, name, sha)
 }
 
 // FilteredSubdirs exposes filteredSubdirs for testing.
@@ -44,38 +45,25 @@ func FilteredSubdirs(contentDir string, filter []string) []string {
 	return filteredSubdirs(contentDir, filter)
 }
 
-// ArchivesDir exposes archivesDir for testing.
-func ArchivesDir() (string, error) {
-	return archivesDir()
+// ArchivesDir exposes the archivesDir seam for testing.
+func (i *Installer) ArchivesDir() (string, error) {
+	return i.archivesDir()
 }
 
-// SetArchivesDir replaces archivesDirFunc for testing and returns a restore fn.
-func SetArchivesDir(fn func() (string, error)) func() {
-	orig := archivesDirFunc
-	archivesDirFunc = fn
-	return func() { archivesDirFunc = orig }
+// SetArchivesDir replaces the installer's archives-dir resolver for testing.
+func (i *Installer) SetArchivesDir(fn func() (string, error)) {
+	i.archivesDir = fn
 }
 
-// SetArchivesDirHome replaces archivesDirHome for testing and returns a restore fn.
-func SetArchivesDirHome(fn func() (string, error)) func() {
-	orig := archivesDirHome
-	archivesDirHome = fn
-	return func() { archivesDirHome = orig }
+// ArchivesDirForHome exposes archivesDirForHome for testing the default
+// archives-dir resolution against a controlled home directory.
+func ArchivesDirForHome(homeFn func() (string, error)) (string, error) {
+	return archivesDirForHome(homeFn)
 }
 
 // ShortSHA exposes gitutil.ShortSHA for testing.
 func ShortSHA(sha string) string {
 	return gitutil.ShortSHA(sha)
-}
-
-// CopyDir exposes copyDir for testing.
-func CopyDir(ctx context.Context, src string, dst string) error {
-	return copyDir(ctx, src, dst)
-}
-
-// CopyFile exposes copyFile for testing.
-func CopyFile(src string, dst string) error {
-	return copyFile(src, dst)
 }
 
 // FindChecksums exposes findChecksums for testing.
@@ -88,34 +76,28 @@ func FindAndReadMetadata(ctx context.Context, dir string) (*metadata.Metadata, e
 	return findAndReadMetadata(ctx, dir)
 }
 
-// SetOsCreateTemp replaces osCreateTemp for testing.
-func SetOsCreateTemp(fn func(string, string) (*os.File, error)) func() {
-	orig := osCreateTemp
-	osCreateTemp = fn
-
-	return func() { osCreateTemp = orig }
+// SetCreateTemp replaces the installer's temp-file creator for testing.
+func (i *Installer) SetCreateTemp(fn func(string, string) (*os.File, error)) {
+	i.createTemp = fn
 }
 
-// SetOsMkdirTemp replaces osMkdirTemp for testing.
-func SetOsMkdirTemp(fn func(string, string) (string, error)) func() {
-	orig := osMkdirTemp
-	osMkdirTemp = fn
-
-	return func() { osMkdirTemp = orig }
+// SetMkdirTemp replaces the installer's temp-dir creator for testing.
+func (i *Installer) SetMkdirTemp(fn func(string, string) (string, error)) {
+	i.mkdirTemp = fn
 }
 
-// CreateTempAlwaysFails is an osCreateTemp that always returns an error.
+// CreateTempAlwaysFails is a createTemp seam that always returns an error.
 func CreateTempAlwaysFails(_, _ string) (*os.File, error) {
 	return nil, errors.New("simulated create temp failure")
 }
 
-// MkdirTempAlwaysFails is an osMkdirTemp that always returns an error.
+// MkdirTempAlwaysFails is a mkdirTemp seam that always returns an error.
 func MkdirTempAlwaysFails(_, _ string) (string, error) {
 	return "", errors.New("simulated mkdir temp failure")
 }
 
-// MkdirTempFailAfterN returns a replacement for osMkdirTemp that succeeds
-// on the first n calls and then returns an error.
+// MkdirTempFailAfterN returns a mkdirTemp seam that succeeds on the first n
+// calls and then returns an error.
 func MkdirTempFailAfterN(n int) func(string, string) (string, error) {
 	call := 0
 	return func(dir, pattern string) (string, error) {
@@ -127,31 +109,21 @@ func MkdirTempFailAfterN(n int) func(string, string) (string, error) {
 	}
 }
 
-// CopyToTemp exposes copyToTemp for testing.
-func CopyToTemp(ctx context.Context, src string) (string, error) {
-	return copyToTemp(ctx, src)
+// CopyToTemp exposes the copyToTemp method for testing.
+func (i *Installer) CopyToTemp(ctx context.Context, src string) (string, error) {
+	return i.copyToTemp(ctx, src)
 }
 
-// SetRegistrySave replaces the registrySave function for testing. It returns
-// a restore function that callers should defer so each test cleans up after
-// itself. Use this in non-parallel tests to prevent registry writes from
-// polluting the real ~/.config/agentpack/packages/ directory.
-func SetRegistrySave(fn func(*registry.PackageManifest) error) func() {
-	orig := registrySave
-	registrySave = fn
-
-	return func() { registrySave = orig }
+// SetRegistrySave replaces the installer's registry-save seam for testing,
+// preventing writes to the real ~/.config/agentpack/packages/ directory.
+func (i *Installer) SetRegistrySave(fn func(*registry.PackageManifest) error) {
+	i.registrySave = fn
 }
 
-// SetRegistryLoad replaces the registryLoad function for testing. It returns
-// a restore function that callers should defer so each test cleans up after
-// itself. Use this in non-parallel tests to prevent reads from the real
-// ~/.config/agentpack/packages/ directory.
-func SetRegistryLoad(fn func(string) (*registry.PackageManifest, error)) func() {
-	orig := registryLoad
-	registryLoad = fn
-
-	return func() { registryLoad = orig }
+// SetRegistryLoad replaces the installer's registry-load seam for testing,
+// preventing reads from the real ~/.config/agentpack/packages/ directory.
+func (i *Installer) SetRegistryLoad(fn func(string) (*registry.PackageManifest, error)) {
+	i.registryLoad = fn
 }
 
 // NameFromSource exposes nameFromSource for testing.
@@ -203,8 +175,12 @@ func BuildContentEntries(meta *metadata.Metadata, sourceDir string) []target.Con
 }
 
 // VerifyArchiveSidecar exposes verifyArchiveSidecar for testing.
-func VerifyArchiveSidecar(ctx context.Context, source, archivePath string) (bool, error) {
-	return verifyArchiveSidecar(ctx, source, archivePath)
+func VerifyArchiveSidecar(
+	ctx context.Context,
+	f fetcher.Fetcher,
+	source, archivePath string,
+) (bool, error) {
+	return verifyArchiveSidecar(ctx, f, source, archivePath)
 }
 
 // HasMetadataYAML exposes hasMetadataYAML for testing.

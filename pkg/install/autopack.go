@@ -56,19 +56,18 @@ var dirToType = map[string]string{
 	"settings": "config",
 }
 
-// Swappable functions for testing.
-var (
-	// archivesDirFunc returns ~/.config/agentpack/archives. Swappable in tests.
-	archivesDirFunc = defaultArchivesDir
-
-	// archivesDirHome is the home-dir lookup used by defaultArchivesDir.
-	// Swappable in tests to avoid writes to the real home directory.
-	archivesDirHome = os.UserHomeDir
-)
-
-// defaultArchivesDir returns ~/.config/agentpack/archives, creating it if needed.
+// defaultArchivesDir returns ~/.config/agentpack/archives, creating it if
+// needed. It is the default for Installer.archivesDir; tests inject a
+// replacement on the Installer instead of mutating a package global.
 func defaultArchivesDir() (string, error) {
-	home, err := archivesDirHome()
+	return archivesDirForHome(os.UserHomeDir)
+}
+
+// archivesDirForHome resolves and creates the archives directory under the home
+// returned by homeFn. Taking homeFn as a parameter (rather than a swappable
+// global) keeps it a pure function tests can drive directly.
+func archivesDirForHome(homeFn func() (string, error)) (string, error) {
+	home, err := homeFn()
 	if err != nil {
 		return "", fmt.Errorf("home dir: %w", err)
 	}
@@ -79,11 +78,6 @@ func defaultArchivesDir() (string, error) {
 	}
 
 	return dir, nil
-}
-
-// archivesDir calls archivesDirFunc, which is swappable for tests.
-func archivesDir() (string, error) {
-	return archivesDirFunc()
 }
 
 func autoPackageWithVersion(
@@ -103,9 +97,19 @@ func autoPackageWithVersion(
 
 	var entries []metadata.ContentEntry
 
+	// A selective install (skill/ or agent/ selectors) packages only the
+	// requested content types. When both kinds of selector are present we must
+	// keep both dirs — restricting to "skills" alone silently drops the
+	// requested agents.
 	dirs := contentDirs
-	if len(skillFilter) > 0 {
-		dirs = []string{"skills"}
+	if len(skillFilter) > 0 || len(agentFilter) > 0 {
+		dirs = nil
+		if len(skillFilter) > 0 {
+			dirs = append(dirs, "skills")
+		}
+		if len(agentFilter) > 0 {
+			dirs = append(dirs, "agents")
+		}
 	}
 
 	for _, content := range dirs {
@@ -217,12 +221,12 @@ func autoPackageWithVersion(
 // storeArchive copies the archive at srcPath to the archives directory and
 // returns the stored path. The naming follows ADR-001:
 // {name}@{sha}.agentpack for git sources.
-func storeArchive(ctx context.Context, srcPath, name, sha string) (string, error) {
+func (i *Installer) storeArchive(ctx context.Context, srcPath, name, sha string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
 
-	dir, err := archivesDir()
+	dir, err := i.archivesDir()
 	if err != nil {
 		return "", err
 	}
@@ -235,11 +239,20 @@ func storeArchive(ctx context.Context, srcPath, name, sha string) (string, error
 	}
 
 	// Write the archive SHA256 alongside the package for tamper detection.
+	// A missing sidecar silently disables verification on reinstall, so a
+	// failure to compute or write it is reported rather than swallowed.
 	data, err := os.ReadFile(dstPath)
-	if err == nil {
-		h := sha256.Sum256(data)
-		shaPath := filepath.Join(dir, baseName+".sha256")
-		_ = os.WriteFile(shaPath, []byte(hex.EncodeToString(h[:])+"\n"), 0o644)
+	if err != nil {
+		return "", fmt.Errorf("read stored archive for sidecar: %w", err)
+	}
+
+	h := sha256.Sum256(data)
+	// The sidecar must sit at "<archive>.sha256" — the same convention the
+	// verifier (verifyArchiveSidecar) and `agentpack verify` look up. Writing
+	// "<base>.sha256" instead leaves it where nothing reads it.
+	shaPath := dstPath + ".sha256"
+	if err := os.WriteFile(shaPath, []byte(hex.EncodeToString(h[:])+"\n"), 0o644); err != nil {
+		return "", fmt.Errorf("write archive sidecar: %w", err)
 	}
 
 	return dstPath, nil
