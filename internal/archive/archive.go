@@ -158,8 +158,20 @@ func Extract(ctx context.Context, archivePath string, destDir string) error {
 			return fmt.Errorf("symlinks not allowed: %s", hdr.Name)
 		}
 
-		target := filepath.Join(destDir, filepath.Clean(hdr.Name))
-		if !strings.HasPrefix(target, cleanDest+string(filepath.Separator)) && target != cleanDest {
+		// Reject absolute paths and any ".." element before joining. This is the
+		// platform-independent guard: filepath.Join silently absorbs an absolute
+		// entry (e.g. "/etc/passwd" → destDir/etc/passwd) so it would slip past
+		// the prefix check below, and Clean collapses interior ".." leaving any
+		// real traversal as a leading "..".
+		clean := filepath.Clean(hdr.Name)
+		if filepath.IsAbs(clean) ||
+			clean == ".." ||
+			strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("path traversal detected: %s", hdr.Name)
+		}
+
+		target := filepath.Join(destDir, clean)
+		if target != cleanDest && !strings.HasPrefix(target, cleanDest+string(filepath.Separator)) {
 			return fmt.Errorf("path traversal detected: %s", hdr.Name)
 		}
 

@@ -649,6 +649,14 @@ func TestExtract(t *testing.T) {
 			wantErr: "path traversal detected",
 		},
 		{
+			name: "rejects absolute path entry",
+			buildTar: func(t *testing.T) string {
+				t.Helper()
+				return buildTarWithAbsolutePath(t)
+			},
+			wantErr: "path traversal detected",
+		},
+		{
 			name: "fails on missing archive",
 			buildTar: func(t *testing.T) string {
 				t.Helper()
@@ -1009,10 +1017,25 @@ func buildTarWithTraversal(t *testing.T) string {
 	t.Helper()
 
 	outPath := filepath.Join(t.TempDir(), "traversal.agentpack")
+
+	return writeSingleEntryTar(t, outPath, "../../../etc/evil")
+}
+
+func buildTarWithAbsolutePath(t *testing.T) string {
+	t.Helper()
+
+	outPath := filepath.Join(t.TempDir(), "absolute.agentpack")
+
+	return writeSingleEntryTar(t, outPath, "/etc/evil")
+}
+
+// writeSingleEntryTar writes a gzipped tar at outPath containing one regular
+// file entry with the given (potentially hostile) name and returns outPath.
+func writeSingleEntryTar(t *testing.T, outPath, name string) string {
+	t.Helper()
+
 	f, err := os.Create(outPath)
-	if err != nil {
-		require.NoError(t, err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = f.Close() }()
 
 	gw := gzip.NewWriter(f)
@@ -1022,17 +1045,14 @@ func buildTarWithTraversal(t *testing.T) string {
 	defer func() { _ = tw.Close() }()
 
 	content := []byte("pwned")
-	if err := tw.WriteHeader(&tar.Header{
-		Name:     "../../../etc/evil",
+	require.NoError(t, tw.WriteHeader(&tar.Header{
+		Name:     name,
 		Size:     int64(len(content)),
 		Mode:     0o644,
 		Typeflag: tar.TypeReg,
-	}); err != nil {
-		require.NoError(t, err)
-	}
-	if _, err := tw.Write(content); err != nil {
-		require.NoError(t, err)
-	}
+	}))
+	_, err = tw.Write(content)
+	require.NoError(t, err)
 
 	return outPath
 }
