@@ -399,7 +399,7 @@ func TestAntigravity_Install(t *testing.T) {
 				home := t.TempDir()
 				return func() (string, error) { return home, nil }
 			}(),
-			wantErr: `missing or invalid "name" field`,
+			wantErr: "mcp server name is empty",
 		},
 		{
 			name: "returns error on mcp name conflict",

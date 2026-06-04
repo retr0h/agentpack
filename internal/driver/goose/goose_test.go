@@ -743,7 +743,20 @@ func TestGoose_InstallMCP(t *testing.T) {
 				})
 				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
 			},
-			wantErr: "missing or invalid \"name\" field",
+			wantErr: "mcp server name is empty",
+		},
+		{
+			name: "returns error when mcp name has unsafe characters",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "evil.json"), map[string]any{
+					"name": "../../evil",
+					"type": "stdio",
+				})
+				return src, filepath.Join(t.TempDir(), "goose", "config.yaml")
+			},
+			wantErr: "invalid mcp server name",
 		},
 		{
 			name: "returns error on extension name conflict",

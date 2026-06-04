@@ -312,7 +312,20 @@ func TestInstall(t *testing.T) {
 				})
 				return src, t.TempDir()
 			},
-			wantErr: `missing or invalid "name" field`,
+			wantErr: "mcp server name is empty",
+		},
+		{
+			name: "returns error when mcp name has unsafe characters",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				writeJSON(t, filepath.Join(src, "mcp", "evil.json"), map[string]any{
+					"name": "../../evil",
+					"type": "remote",
+				})
+				return src, t.TempDir()
+			},
+			wantErr: "invalid mcp server name",
 		},
 		{
 			name: "installs from entries when provided",

@@ -249,9 +249,9 @@ func (g *Goose) installMCP(ctx context.Context, srcDir, configPath string) error
 			return fmt.Errorf("parse mcp/%s: %w", de.Name(), err)
 		}
 
-		name, ok := raw["name"].(string)
-		if !ok || name == "" {
-			return fmt.Errorf("mcp/%s: missing or invalid \"name\" field", de.Name())
+		name, _ := raw["name"].(string)
+		if err := driver.ValidateMCPName(name); err != nil {
+			return fmt.Errorf("mcp/%s: %w", de.Name(), err)
 		}
 
 		delete(raw, "name")

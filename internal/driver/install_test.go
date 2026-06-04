@@ -35,6 +35,60 @@ import (
 	"github.com/retr0h/agentpack/internal/target"
 )
 
+func TestValidateMCPName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{
+			name:  "accepts a plain identifier",
+			input: "my-server",
+		},
+		{
+			name:  "accepts dots underscores and digits",
+			input: "my_server.v2-3",
+		},
+		{
+			name:    "rejects an empty name",
+			input:   "",
+			wantErr: "mcp server name is empty",
+		},
+		{
+			name:    "rejects path traversal",
+			input:   "../../evil",
+			wantErr: "invalid mcp server name",
+		},
+		{
+			name:    "rejects a path separator",
+			input:   "a/b",
+			wantErr: "invalid mcp server name",
+		},
+		{
+			name:    "rejects whitespace",
+			input:   "a b",
+			wantErr: "invalid mcp server name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := driver.ValidateMCPName(tt.input)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func TestInstallMCP(t *testing.T) {
 	t.Parallel()
 
@@ -114,7 +168,7 @@ func TestInstallMCP(t *testing.T) {
 
 				return src, filepath.Join(t.TempDir(), "mcp.json")
 			},
-			wantErr: "missing or invalid \"name\" field",
+			wantErr: "mcp server name is empty",
 		},
 		{
 			name: "returns error when name has unsafe characters",
@@ -134,7 +188,7 @@ func TestInstallMCP(t *testing.T) {
 
 				return src, filepath.Join(t.TempDir(), "mcp.json")
 			},
-			wantErr: "invalid server name",
+			wantErr: "invalid mcp server name",
 		},
 		{
 			name: "skips directories and non-json entries in mcp dir",

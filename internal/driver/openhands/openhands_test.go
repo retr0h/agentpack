@@ -393,7 +393,7 @@ func TestOpenHands_Install(t *testing.T) {
 				})
 				return src, t.TempDir()
 			},
-			wantErr: `missing or invalid "name" field`,
+			wantErr: "mcp server name is empty",
 		},
 		{
 			name: "returns error on mcp name conflict",
