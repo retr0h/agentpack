@@ -126,6 +126,12 @@ func Create(ctx context.Context, vfs avfs.VFS, outputPath string, files []FileEn
 // It uses the real OS filesystem for extraction since archives are always
 // extracted to real disk locations.
 func Extract(ctx context.Context, archivePath string, destDir string) error {
+	return extract(ctx, archivePath, destDir, maxFileSize)
+}
+
+// extract is Extract with the per-file size limit injected, so tests can drive
+// the limit with a small value instead of a 100 MB fixture.
+func extract(ctx context.Context, archivePath, destDir string, maxSize int64) error {
 	f, err := os.Open(archivePath)
 	if err != nil {
 		return fmt.Errorf("open archive: %w", err)
@@ -181,10 +187,19 @@ func Extract(ctx context.Context, archivePath string, destDir string) error {
 				return fmt.Errorf("mkdir %s: %w", hdr.Name, err)
 			}
 		case tar.TypeReg:
+			// Reject an over-size entry by its declared header size before
+			// writing anything, so a zip-bomb header never causes up to maxSize
+			// bytes of wasted I/O. extractFile re-checks the actual stream as a
+			// guard against a header that under-declares its size.
+			if hdr.Size > maxSize {
+				return fmt.Errorf(
+					"file exceeds maximum size of %d bytes: %s", maxSize, hdr.Name,
+				)
+			}
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return fmt.Errorf("mkdir for %s: %w", hdr.Name, err)
 			}
-			if err := extractFile(tr, target, os.FileMode(hdr.Mode)); err != nil {
+			if err := extractFile(tr, target, os.FileMode(hdr.Mode), maxSize); err != nil {
 				return err
 			}
 		}
@@ -283,7 +298,7 @@ func ensureDirs(tw *tar.Writer, archivePath string, seen map[string]bool) error 
 // Files exceeding this limit are rejected to prevent zip-bomb attacks.
 const maxFileSize = 100 * 1024 * 1024
 
-func extractFile(r io.Reader, target string, mode os.FileMode) error {
+func extractFile(r io.Reader, target string, mode os.FileMode, maxSize int64) error {
 	if mode == 0 {
 		mode = 0o644
 	}
@@ -293,7 +308,7 @@ func extractFile(r io.Reader, target string, mode os.FileMode) error {
 		return fmt.Errorf("create %s: %w", target, err)
 	}
 
-	limited := io.LimitReader(r, maxFileSize+1)
+	limited := io.LimitReader(r, maxSize+1)
 
 	n, err := io.Copy(f, limited)
 	if err != nil {
@@ -301,9 +316,11 @@ func extractFile(r io.Reader, target string, mode os.FileMode) error {
 		return fmt.Errorf("extract %s: %w", target, err)
 	}
 
-	if n > maxFileSize {
+	if n > maxSize {
 		_ = f.Close()
-		return fmt.Errorf("file exceeds maximum size of %d bytes: %s", maxFileSize, target)
+		// Don't leave the partially written over-size file behind.
+		_ = os.Remove(target)
+		return fmt.Errorf("file exceeds maximum size of %d bytes: %s", maxSize, target)
 	}
 
 	if err := f.Close(); err != nil {

@@ -21,11 +21,20 @@
 // Package archive export_test.go exposes private helpers for white-box testing.
 package archive
 
-import "archive/tar"
+import (
+	"archive/tar"
+	"context"
+)
 
 // AddVirtualFile exposes addVirtualFile for testing. It allows direct testing
 // with a custom tar.Writer (without a gzip layer) so that write errors can be
 // injected without gzip's internal buffering masking them.
 func AddVirtualFile(tw *tar.Writer, fe FileEntry) error {
 	return addVirtualFile(tw, fe)
+}
+
+// ExtractWithMaxSize exposes extract with an injectable per-file size limit so
+// the size guard can be tested without a 100 MB fixture.
+func ExtractWithMaxSize(ctx context.Context, archivePath, destDir string, maxSize int64) error {
+	return extract(ctx, archivePath, destDir, maxSize)
 }

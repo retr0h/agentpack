@@ -1057,6 +1057,94 @@ func writeSingleEntryTar(t *testing.T, outPath, name string) string {
 	return outPath
 }
 
+// writeTarWithFileSize writes a gzipped tar at outPath containing one regular
+// file entry of size bytes (named "big.bin") and returns outPath.
+func writeTarWithFileSize(t *testing.T, size int) string {
+	t.Helper()
+
+	outPath := filepath.Join(t.TempDir(), "sized.agentpack")
+
+	f, err := os.Create(outPath)
+	require.NoError(t, err)
+	defer func() { _ = f.Close() }()
+
+	gw := gzip.NewWriter(f)
+	defer func() { _ = gw.Close() }()
+
+	tw := tar.NewWriter(gw)
+	defer func() { _ = tw.Close() }()
+
+	content := make([]byte, size)
+	require.NoError(t, tw.WriteHeader(&tar.Header{
+		Name:     "big.bin",
+		Size:     int64(size),
+		Mode:     0o644,
+		Typeflag: tar.TypeReg,
+	}))
+	_, err = tw.Write(content)
+	require.NoError(t, err)
+
+	return outPath
+}
+
+// --------------------------------------------------------------------------
+// TestExtractFileSizeLimit
+// --------------------------------------------------------------------------
+
+func TestExtractFileSizeLimit(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		size    int
+		maxSize int64
+		wantErr string
+	}{
+		{
+			name:    "file within the limit extracts",
+			size:    8,
+			maxSize: 16,
+		},
+		{
+			name:    "file at the limit extracts",
+			size:    16,
+			maxSize: 16,
+		},
+		{
+			name:    "file over the limit is rejected by header size",
+			size:    32,
+			maxSize: 16,
+			wantErr: "exceeds maximum size",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			archivePath := writeTarWithFileSize(t, tt.size)
+			destDir := t.TempDir()
+
+			err := archive.ExtractWithMaxSize(
+				context.Background(), archivePath, destDir, tt.maxSize,
+			)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				// No partial file must be left behind.
+				_, statErr := os.Stat(filepath.Join(destDir, "big.bin"))
+				assert.True(t, os.IsNotExist(statErr))
+				return
+			}
+
+			require.NoError(t, err)
+			info, statErr := os.Stat(filepath.Join(destDir, "big.bin"))
+			require.NoError(t, statErr)
+			assert.Equal(t, int64(tt.size), info.Size())
+		})
+	}
+}
+
 // --------------------------------------------------------------------------
 // TestAddVirtualFile — white-box test via export_test.go
 // --------------------------------------------------------------------------
