@@ -93,10 +93,11 @@ func TestInstallMCP(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T) (srcDir, mcpPath string)
-		wantErr string
-		check   func(t *testing.T, mcpPath string)
+		name      string
+		setup     func(t *testing.T) (srcDir, mcpPath string)
+		cancelCtx bool
+		wantErr   string
+		check     func(t *testing.T, mcpPath string)
 	}{
 		{
 			name: "no-op when mcp dir is absent",
@@ -105,6 +106,20 @@ func TestInstallMCP(t *testing.T) {
 
 				return t.TempDir(), filepath.Join(t.TempDir(), "mcp.json")
 			},
+		},
+		{
+			name: "returns error when context is cancelled in the entry loop",
+			setup: func(t *testing.T) (string, string) {
+				t.Helper()
+				src := t.TempDir()
+				p := filepath.Join(src, "mcp", "srv.json")
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte(`{"name":"srv"}`), 0o644))
+
+				return src, filepath.Join(t.TempDir(), "mcp.json")
+			},
+			cancelCtx: true,
+			wantErr:   "context canceled",
 		},
 		{
 			name: "returns error when mcp dir is unreadable",
@@ -276,7 +291,15 @@ func TestInstallMCP(t *testing.T) {
 			t.Parallel()
 
 			srcDir, mcpPath := tt.setup(t)
-			err := driver.InstallMCP(context.Background(), srcDir, mcpPath)
+
+			ctx := context.Background()
+			if tt.cancelCtx {
+				cancelCtx, cancel := context.WithCancel(ctx)
+				cancel()
+				ctx = cancelCtx
+			}
+
+			err := driver.InstallMCP(ctx, srcDir, mcpPath)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

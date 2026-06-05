@@ -84,7 +84,7 @@ func InstallSkillEntry(
 // Each JSON file must contain a "name" field identifying the MCP server;
 // the remaining fields are passed to configmerge.MergeMCP.
 // If srcDir/mcp/ does not exist the call is a no-op.
-func InstallMCP(_ context.Context, srcDir, mcpPath string) error {
+func InstallMCP(ctx context.Context, srcDir, mcpPath string) error {
 	mcpDir := filepath.Join(srcDir, "mcp")
 	if _, err := os.Stat(mcpDir); errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -96,6 +96,10 @@ func InstallMCP(_ context.Context, srcDir, mcpPath string) error {
 	}
 
 	for _, de := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
 			continue
 		}

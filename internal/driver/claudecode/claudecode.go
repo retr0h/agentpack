@@ -212,76 +212,20 @@ func (c *ClaudeCode) installFromDirs(
 }
 
 // installMCP merges all mcp/*.json files from srcDir into settingsPath.
+// Claude Code stores MCP servers in settings.json, so the shared
+// driver.InstallMCP (which merges into any config path via configmerge) does
+// the job — delegating keeps the parse/validate/merge logic in one place.
 func (c *ClaudeCode) installMCP(ctx context.Context, srcDir, settingsPath string) error {
-	mcpDir := filepath.Join(srcDir, "mcp")
-	if _, err := os.Stat(mcpDir); errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-
-	entries, err := os.ReadDir(mcpDir)
-	if err != nil {
-		return fmt.Errorf("read mcp dir: %w", err)
-	}
-
-	for _, de := range entries {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
-			continue
-		}
-
-		data, err := os.ReadFile(filepath.Join(mcpDir, de.Name()))
-		if err != nil {
-			return fmt.Errorf("read mcp/%s: %w", de.Name(), err)
-		}
-
-		var raw map[string]any
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return fmt.Errorf("parse mcp/%s: %w", de.Name(), err)
-		}
-
-		name, _ := raw["name"].(string)
-		if err := driver.ValidateMCPName(name); err != nil {
-			return fmt.Errorf("mcp/%s: %w", de.Name(), err)
-		}
-
-		delete(raw, "name")
-
-		if err := configmerge.MergeMCP(settingsPath, name, raw); err != nil {
-			return fmt.Errorf("merge mcp %q: %w", name, err)
-		}
-	}
-
-	return nil
+	return driver.InstallMCP(ctx, srcDir, settingsPath)
 }
 
-// installHooks merges hooks/hooks.json from srcDir into settingsPath.
+// installHooks merges hooks/hooks.json from srcDir into settingsPath via the
+// shared driver helper.
 func (c *ClaudeCode) installHooks(
-	_ context.Context,
+	ctx context.Context,
 	srcDir, settingsPath, pluginName string,
 ) error {
-	hooksFile := filepath.Join(srcDir, "hooks", "hooks.json")
-	if _, err := os.Stat(hooksFile); errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-
-	data, err := os.ReadFile(hooksFile)
-	if err != nil {
-		return fmt.Errorf("read hooks/hooks.json: %w", err)
-	}
-
-	var hooks map[string]any
-	if err := json.Unmarshal(data, &hooks); err != nil {
-		return fmt.Errorf("parse hooks/hooks.json: %w", err)
-	}
-
-	if err := configmerge.MergeHooks(settingsPath, pluginName, hooks); err != nil {
-		return fmt.Errorf("merge hooks: %w", err)
-	}
-
-	return nil
+	return driver.InstallHooksJSON(ctx, srcDir, settingsPath, pluginName)
 }
 
 // installSettings merges all settings/*.json files from srcDir into settingsPath.
