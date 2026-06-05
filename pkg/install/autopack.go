@@ -22,8 +22,6 @@ package install
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -36,6 +34,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/retr0h/agentpack/internal/archive"
+	"github.com/retr0h/agentpack/internal/checksum"
 	"github.com/retr0h/agentpack/internal/gitutil"
 	"github.com/retr0h/agentpack/internal/metadata"
 	"github.com/retr0h/agentpack/pkg/safety"
@@ -240,18 +239,18 @@ func (i *Installer) storeArchive(ctx context.Context, srcPath, name, sha string)
 
 	// Write the archive SHA256 alongside the package for tamper detection.
 	// A missing sidecar silently disables verification on reinstall, so a
-	// failure to compute or write it is reported rather than swallowed.
-	data, err := os.ReadFile(dstPath)
+	// failure to compute or write it is reported rather than swallowed. The
+	// hash is streamed (not read whole) so a large archive cannot OOM.
+	sum, err := checksum.ComputeFile(ctx, osfs.NewWithNoIdm(), dstPath)
 	if err != nil {
-		return "", fmt.Errorf("read stored archive for sidecar: %w", err)
+		return "", fmt.Errorf("hash stored archive for sidecar: %w", err)
 	}
 
-	h := sha256.Sum256(data)
 	// The sidecar must sit at "<archive>.sha256" — the same convention the
 	// verifier (verifyArchiveSidecar) and `agentpack verify` look up. Writing
 	// "<base>.sha256" instead leaves it where nothing reads it.
 	shaPath := dstPath + ".sha256"
-	if err := os.WriteFile(shaPath, []byte(hex.EncodeToString(h[:])+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(shaPath, []byte(sum+"\n"), 0o644); err != nil {
 		return "", fmt.Errorf("write archive sidecar: %w", err)
 	}
 

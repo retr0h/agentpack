@@ -454,9 +454,12 @@ func verifyArchiveSidecar(
 	}
 	defer func() { _ = os.Remove(sidecarPath) }()
 
+	// The sidecar was just fetched successfully, so a read failure here is a
+	// real I/O error, not an absent sidecar — surface it rather than silently
+	// skipping verification.
 	data, err := os.ReadFile(sidecarPath)
 	if err != nil {
-		return false, nil
+		return false, fmt.Errorf("read fetched sidecar: %w", err)
 	}
 
 	expected := strings.TrimSpace(string(data))

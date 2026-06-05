@@ -1992,6 +1992,21 @@ func TestVerifyArchiveSidecar(t *testing.T) {
 			},
 			wantVerified: false,
 		},
+		{
+			// A fetch that reports success but leaves no file behind is a real
+			// I/O error, not an absent sidecar — it must not be swallowed.
+			name: "fetch succeeds but writes no sidecar errors",
+			setup: func(t *testing.T, _, _, _ string) (fetcher.Fetcher, string) {
+				t.Helper()
+				ctrl := gomock.NewController(t)
+				mf := fetchermocks.NewMockFetcher(ctrl)
+				mf.EXPECT().
+					Fetch(gomock.Any(), "https://example.com/p.agentpack.sha256", gomock.Any()).
+					Return(nil)
+				return mf, "https://example.com/p.agentpack"
+			},
+			wantErr: "read fetched sidecar",
+		},
 	}
 
 	for _, tt := range tests {

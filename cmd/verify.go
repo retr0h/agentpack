@@ -22,14 +22,14 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/spf13/cobra"
 
+	"github.com/retr0h/agentpack/internal/checksum"
 	"github.com/retr0h/agentpack/internal/cli"
 	"github.com/retr0h/agentpack/pkg/verify"
 )
@@ -65,17 +65,15 @@ publishes the SHA256 alongside the archive (like goreleaser checksums.txt).`,
 			}
 		}
 
-		// External SHA256 verification (tamper detection).
+		// External SHA256 verification (tamper detection). Streamed via the
+		// shared checksum helper so a large archive is not read whole into RAM.
 		if verifySHA256 != "" {
-			data, err := os.ReadFile(archivePath)
+			actual, err := checksum.ComputeFile(ctx, osfs.NewWithNoIdm(), archivePath)
 			if err != nil {
 				return fmt.Errorf("read archive: %w", err)
 			}
 
-			h := sha256.Sum256(data)
-			actual := hex.EncodeToString(h[:])
-
-			if actual != verifySHA256 {
+			if !strings.EqualFold(actual, verifySHA256) {
 				return fmt.Errorf(
 					"archive SHA256 mismatch\n  expected: %s\n  actual:   %s",
 					verifySHA256, actual,
