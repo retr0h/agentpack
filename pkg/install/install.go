@@ -718,8 +718,11 @@ type SourceSpec struct {
 //  1. Split on ":" -- first segment may contain "@", rest are selectors.
 //  2. From the first segment, split on first "@" -- left is source, right is ref.
 //  3. Each selector is validated as "type/name".
+//
+// A "://" scheme separator is not a selector boundary, so "https://" sources
+// keep their scheme and any trailing ":type/name" selectors still split off.
 func ParseSource(raw string) SourceSpec {
-	parts := strings.Split(raw, ":")
+	parts := splitSelectors(raw)
 	head := parts[0]
 
 	var spec SourceSpec
@@ -750,6 +753,31 @@ func ParseSource(raw string) SourceSpec {
 	}
 
 	return spec
+}
+
+// splitSelectors splits a source string on ":" boundaries while treating a
+// "://" scheme separator as part of the source, not a boundary. The first
+// element is the "source@ref" head; the rest are "type/name" selectors.
+func splitSelectors(raw string) []string {
+	var segments []string
+
+	start := 0
+	for i := 0; i < len(raw); i++ {
+		if raw[i] != ':' {
+			continue
+		}
+
+		// A "://" scheme separator belongs to the source URL — skip past it.
+		if i+2 < len(raw) && raw[i+1] == '/' && raw[i+2] == '/' {
+			i += 2
+			continue
+		}
+
+		segments = append(segments, raw[start:i])
+		start = i + 1
+	}
+
+	return append(segments, raw[start:])
 }
 
 // SelectorsToSkillFilter extracts skill names from selectors for backward

@@ -1544,6 +1544,33 @@ func TestParseSource(t *testing.T) {
 			raw:        "/path/to/file.agentpack",
 			wantSource: "/path/to/file.agentpack",
 		},
+		{
+			name:       "https URL without selectors keeps the scheme",
+			raw:        "https://example.com/plugin.agentpack",
+			wantSource: "https://example.com/plugin.agentpack",
+		},
+		{
+			name:       "http URL without selectors keeps the scheme",
+			raw:        "http://example.com/plugin.agentpack",
+			wantSource: "http://example.com/plugin.agentpack",
+		},
+		{
+			name:       "https URL with selector splits only on the selector colon",
+			raw:        "https://example.com/plugin.agentpack:skill/k8s",
+			wantSource: "https://example.com/plugin.agentpack",
+			wantSelectors: []install.ContentSelector{
+				{Type: "skill", Name: "k8s"},
+			},
+		},
+		{
+			name:       "https URL with ref and selector",
+			raw:        "https://example.com/plugin.agentpack@v2.0.0:skill/k8s",
+			wantSource: "https://example.com/plugin.agentpack",
+			wantRef:    "v2.0.0",
+			wantSelectors: []install.ContentSelector{
+				{Type: "skill", Name: "k8s"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
