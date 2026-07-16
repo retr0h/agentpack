@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/jdx/go-netrc v1.0.0
-	github.com/mattn/go-isatty v0.0.20
+	github.com/mattn/go-isatty v0.0.23
 	github.com/muesli/termenv v0.16.0
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/spf13/cobra v1.10.2
