@@ -1,7 +1,6 @@
----
-name: rollback
-description: Rollback a Kubernetes deployment
----
+______________________________________________________________________
+
+## name: rollback description: Rollback a Kubernetes deployment
 
 # /rollback
 

@@ -1,7 +1,6 @@
----
-status: accepted
-date: 2026-06-01
----
+______________________________________________________________________
+
+## status: accepted date: 2026-06-01
 
 # ADR-009: Metadata-Driven Package Format
 

@@ -81,11 +81,15 @@ alongside the interface they mock.
 
 Generate with `//go:generate` directives in `mocks/generate.go`:
 
-    //go:generate go tool go.uber.org/mock/mockgen -destination=target.gen.go -package=mocks github.com/retr0h/agentpack/internal/target Target
+```
+//go:generate go tool go.uber.org/mock/mockgen -destination=target.gen.go -package=mocks github.com/retr0h/agentpack/internal/target Target
+```
 
 Regenerate all mocks:
 
-    go generate ./...
+```
+go generate ./...
+```
 
 VFS error-injecting wrappers (wrapping `avfs.VFS` to return errors) are NOT
 mocks — they are test decorators and are fine hand-rolled.

@@ -1,7 +1,6 @@
----
-name: pod-debug
-description: Debug failing Kubernetes pods
----
+______________________________________________________________________
+
+## name: pod-debug description: Debug failing Kubernetes pods
 
 # Pod Debugging
 

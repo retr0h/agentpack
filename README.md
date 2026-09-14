@@ -58,19 +58,26 @@ agentpack build                                   # build .agentpack archives
 agentpack install                                 # install from manifest
 ```
 
-See [Usage][] for full details.
+See [Usage] for full details.
 
 ## ✨ Features
 
-- 📦 **[.agentpack format][Format]** — one package, every agent. Typed metadata with skills, commands, hooks, MCP, agents, and config
-- 🤖 **50+ agents** — Claude Code, Cursor, Copilot, Codex, Gemini CLI, Windsurf, Goose, Roo, and more
-- 🔒 **Content safety** — binary detection at build time, executable prompts at install
-- 🔄 **Reproducible installs** — lockfile pins exact SHAs, `install` from manifest
+- 📦 **[.agentpack format][format]** — one package, every agent. Typed metadata
+  with skills, commands, hooks, MCP, agents, and config
+- 🤖 **50+ agents** — Claude Code, Cursor, Copilot, Codex, Gemini CLI, Windsurf,
+  Goose, Roo, and more
+- 🔒 **Content safety** — binary detection at build time, executable prompts at
+  install
+- 🔄 **Reproducible installs** — lockfile pins exact SHAs, `install` from
+  manifest
 - 🌐 **Global + local** — project-level or user-level installs (`-g`)
-- ⚙️ **Config merging** — MCP servers, hooks, and settings merge into `.claude/settings.json`
-- ✈️ **No toolchain required** — `.agentpack` files install without git, npm, or Go
+- ⚙️ **Config merging** — MCP servers, hooks, and settings merge into
+  `.claude/settings.json`
+- ✈️ **No toolchain required** — `.agentpack` files install without git, npm, or
+  Go
 - 📋 **JSON everywhere** — `-o json` on every command for scripting
-- 📚 **55+ agents** — built-in drivers for Claude Code, Cursor, Copilot, Codex, and dozens more
+- 📚 **55+ agents** — built-in drivers for Claude Code, Cursor, Copilot, Codex,
+  and dozens more
 
 ## 📐 The .agentpack format
 
@@ -88,7 +95,7 @@ supports, wherever it belongs.
 
 Package authors write content once. Drivers install only the types they support.
 When an agent adds support for a new type, existing packages work automatically.
-See the [full specification][Format] and the [feature matrix][Matrix].
+See the [full specification][format] and the [feature matrix][matrix].
 
 ## 🔍 Discover Skills
 
@@ -102,11 +109,11 @@ Browse the full catalog at [skills.sh](https://skills.sh).
 
 ## 📖 Documentation
 
-- [Usage][] — add, install, build, verify, info, examples
-- [Format (ADR-009)][Format] — the .agentpack specification
-- [Architecture][] — driver design, install flow, capability model
-- [Development][] — dev setup, testing conventions
-- [Contributing][] — commit style, PR checklist
+- [Usage] — add, install, build, verify, info, examples
+- [Format (ADR-009)][format] — the .agentpack specification
+- [Architecture] — driver design, install flow, capability model
+- [Development] — dev setup, testing conventions
+- [Contributing] — commit style, PR checklist
 
 ## 🙏 Acknowledgments
 
@@ -116,12 +123,12 @@ Agent detection paths and skill directory conventions inspired by
 
 ## 📄 License
 
-[MIT][]
+[MIT]
 
-[MIT]: LICENSE
-[Usage]: docs/usage.md
-[Format]: docs/adr/009-metadata-driven-format.md
-[Architecture]: docs/architecture.md
-[Development]: docs/development.md
-[Contributing]: docs/contributing.md
-[Matrix]: docs/feature-matrix.md
+[architecture]: docs/architecture.md
+[contributing]: docs/contributing.md
+[development]: docs/development.md
+[format]: docs/adr/009-metadata-driven-format.md
+[matrix]: docs/feature-matrix.md
+[mit]: LICENSE
+[usage]: docs/usage.md

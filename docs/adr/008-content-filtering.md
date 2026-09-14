@@ -1,7 +1,6 @@
----
-status: 'superseded by [ADR-010](010-content-selectors.md)'
-date: 2026-05-25
----
+______________________________________________________________________
+
+## status: 'superseded by [ADR-010](010-content-selectors.md)' date: 2026-05-25
 
 # ADR-008: Content Type Filtering in Manifest
 

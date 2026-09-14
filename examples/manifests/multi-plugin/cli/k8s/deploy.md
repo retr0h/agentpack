@@ -1,7 +1,6 @@
----
-name: deploy
-description: Deploy to Kubernetes with pre-flight checks
----
+______________________________________________________________________
+
+## name: deploy description: Deploy to Kubernetes with pre-flight checks
 
 # /deploy
 
