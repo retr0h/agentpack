@@ -1,7 +1,6 @@
----
-name: report
-description: Generate a security report
----
+______________________________________________________________________
+
+## name: report description: Generate a security report
 
 # /report
 

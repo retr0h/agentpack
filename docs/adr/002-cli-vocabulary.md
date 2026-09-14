@@ -1,8 +1,6 @@
----
-status:
-  'accepted, partially superseded by [ADR-003](003-dependency-management.md)'
-date: 2026-05-25
----
+______________________________________________________________________
+
+## status: 'accepted, partially superseded by [ADR-003](003-dependency-management.md)' date: 2026-05-25
 
 # ADR-002: CLI Command Vocabulary
 

@@ -1,7 +1,6 @@
----
-name: security-reviewer
-description: Agent that performs security-focused code reviews
----
+______________________________________________________________________
+
+## name: security-reviewer description: Agent that performs security-focused code reviews
 
 You are a security-focused code reviewer. When asked to review code:
 

@@ -1,7 +1,6 @@
----
-status: accepted
-date: 2026-06-02
----
+______________________________________________________________________
+
+## status: accepted date: 2026-06-02
 
 # ADR-010: Content Selectors and Version Pinning Syntax
 

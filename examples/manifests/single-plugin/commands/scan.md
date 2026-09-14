@@ -1,7 +1,6 @@
----
-name: scan
-description: Run ACME security scan on the current project
----
+______________________________________________________________________
+
+## name: scan description: Run ACME security scan on the current project
 
 # /scan
 

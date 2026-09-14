@@ -1,7 +1,6 @@
----
-status: 'superseded by [ADR-009](009-metadata-driven-format.md)'
-date: 2026-05-25
----
+______________________________________________________________________
+
+## status: 'superseded by [ADR-009](009-metadata-driven-format.md)' date: 2026-05-25
 
 # ADR-001: .agentpack Package Format
 

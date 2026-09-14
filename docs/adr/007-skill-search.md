@@ -1,7 +1,6 @@
----
-status: accepted
-date: 2026-05-25
----
+______________________________________________________________________
+
+## status: accepted date: 2026-05-25
 
 # ADR-007: Skill Search and Discovery
 

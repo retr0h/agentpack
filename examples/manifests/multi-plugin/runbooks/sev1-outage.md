@@ -1,7 +1,6 @@
----
-name: sev1-outage
-description: SEV1 outage response runbook
----
+______________________________________________________________________
+
+## name: sev1-outage description: SEV1 outage response runbook
 
 # SEV1 Outage Response
 

@@ -1,7 +1,6 @@
----
-name: database-failover
-description: Database failover procedure
----
+______________________________________________________________________
+
+## name: database-failover description: Database failover procedure
 
 # Database Failover
 
