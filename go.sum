@@ -133,6 +133,8 @@ github.com/bombsimon/wsl/v4 v4.7.0 h1:1Ilm9JBPRczjyUs6hvOPKvd7VL1Q++PL8M0SXBDf+j
 github.com/bombsimon/wsl/v4 v4.7.0/go.mod h1:uV/+6BkffuzSAVYD+yGyld1AChO7/EuLrCF/8xTiapg=
 github.com/bombsimon/wsl/v5 v5.9.0 h1:WCrgZ7RQnZO5oEwbVTlYgBdU3wL294kR1BSWV8vTfsU=
 github.com/bombsimon/wsl/v5 v5.9.0/go.mod h1:kjo4HiAV5FDkHC8/uzJq9mBffEEd6WT/nvN7DoMovDM=
+github.com/boumenot/gocover-cobertura v1.5.0 h1:S2eXZ5snlTl+IGLXiM0litlpy9gf8AU8NagMaxX3nZM=
+github.com/boumenot/gocover-cobertura v1.5.0/go.mod h1:iB1/+oDwfRlsDzABskkid0cNdQ1A+u3O91XUJZWqgtg=
 github.com/breml/bidichk v0.3.4 h1:70G6w80G6GDZTUURHTC5gBKVjMLMw2736CzXquSf5Ek=
 github.com/breml/bidichk v0.3.4/go.mod h1:GOHprnh4i0V7HrvWjtbvbpicTUcqoYt9zYESKcJkk4M=
 github.com/breml/errchkjson v0.4.1 h1:keFSS8D7A2T0haP9kzZTi7o26r7kE3vymjZNeNDRDwg=
