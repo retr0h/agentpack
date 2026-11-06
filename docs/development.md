@@ -38,6 +38,25 @@ just run            # build and run
 just clean          # remove binary
 ```
 
+## Code conventions
+
+`cmd/` is a thin shim. A command parses flags, creates the context and the VFS,
+calls into `pkg/`, and formats the result. Logic that needs a test lives in
+`pkg/`, and `cmd/` exposes no `pkg/` type beyond what cobra needs.
+
+All output goes through `internal/cli/`, so the theme applies everywhere. No raw
+`fmt.Fprintf` in `cmd/`.
+
+A function that iterates or does I/O takes a `context.Context` and an
+`avfs.VFS`, and checks `ctx.Err()` inside its loops. A pure function takes
+neither.
+
+Handle every error. Never silence one with `//nolint:errcheck`.
+
+If a function would be identical in two packages, put it in a shared package
+from the start. For drivers that package is `internal/driver/`, see
+[Driver development](#driver-development).
+
 ## Testing conventions
 
 **Every public function MUST have a table-driven test.** One table per function,
