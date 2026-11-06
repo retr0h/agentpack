@@ -10,10 +10,11 @@ import? '.just/remote/just.just'
 
 md_site_dir := ""
 
-# Coverage measured 95.5% when the shared 100% gate was adopted. Declaring the
-# real floor keeps the gate on and stops regressions without failing on day one.
+# Coverage measured 94.8% on Go 1.27.3, which counts a multi-line statement once
+# where 1.27.1 counted each line (95.5% then). Declaring the real floor keeps the
+# gate on and stops regressions.
 
-go_coverage_target := "95"
+go_coverage_target := "94"
 
 # --- Fetch ---
 
