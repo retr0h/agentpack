@@ -34,7 +34,7 @@ Or via just:
 just build          # build binary
 just test           # run tests
 just ready          # fmt + vet + lint (pre-commit gate)
-just run            # build and run
+just go-run         # build and run
 just clean          # remove binary
 ```
 
